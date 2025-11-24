@@ -39,6 +39,9 @@ impl Dbc {
 
     /// Create a new DBC instance with the given parameters
     ///
+    /// This method validates all input data before creating the DBC instance.
+    /// Use this when programmatically creating DBC files rather than parsing from text.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -72,6 +75,13 @@ impl Dbc {
     /// let dbc = Dbc::new(version, nodes, vec![message])?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`parse`](Self::parse) - Parse from string slice
+    /// - [`Version::new`](crate::Version::new) - Create version
+    /// - [`Nodes::new`](crate::Nodes::new) - Create nodes
+    /// - [`Message::new`](crate::Message::new) - Create message
     pub fn new(version: Version, nodes: Nodes, messages: Vec<Message>) -> Result<Self, Error> {
         Self::validate(&version, &nodes, &messages)?;
 
@@ -104,6 +114,15 @@ impl Dbc {
     ///
     /// This is the core parsing method that works in both `std` and `no_std` environments.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file is empty
+    /// - The version line is missing or invalid
+    /// - Nodes are not defined
+    /// - Any message or signal fails to parse
+    /// - Validation fails (duplicate IDs, invalid senders, etc.)
+    ///
     /// # Examples
     ///
     /// ```
@@ -113,6 +132,12 @@ impl Dbc {
     /// let dbc = Dbc::parse(content)?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes
+    /// - [`parse_from`](Self::parse_from) - Parse from owned String
+    /// - [`from_reader`](Self::from_reader) - Parse from `std::io::Read` (requires `std` feature)
     pub fn parse(data: &str) -> Result<Self, Error> {
         let mut lines = data.lines().peekable();
 
@@ -208,6 +233,12 @@ impl Dbc {
     /// let dbc = Dbc::parse_from(content)?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`parse`](Self::parse) - Parse from string slice
+    /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes
+    /// - [`from_reader`](Self::from_reader) - Parse from `std::io::Read` (requires `std` feature)
     pub fn parse_from<S: AsRef<str>>(data: S) -> Result<Self, Error> {
         Self::parse(data.as_ref())
     }
@@ -232,6 +263,12 @@ impl Dbc {
     /// // The saved content should be equivalent to the original
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`parse`](Self::parse) - Parse a DBC file from string
+    /// - [`Version::to_dbc_string`](crate::Version::to_dbc_string) - Serialize version
+    /// - [`Message::to_dbc_string_with_signals`](crate::Message::to_dbc_string_with_signals) - Serialize message
     pub fn save(&self) -> String {
         // Pre-allocate with estimated capacity
         // Estimate: ~50 chars per message + ~100 chars per signal
@@ -298,6 +335,12 @@ impl Dbc {
     /// let dbc = Dbc::from_reader(cursor)?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    ///
+    /// # See Also
+    ///
+    /// - [`parse`](Self::parse) - Parse from string slice (works in `no_std`)
+    /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes (works in `no_std`)
+    /// - [`parse_from`](Self::parse_from) - Parse from owned string types (works in `no_std`)
     pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Self, Error> {
         use alloc::string::String;
 

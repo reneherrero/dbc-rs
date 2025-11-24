@@ -1,0 +1,39 @@
+name: dbc-cli CI
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'dbc-cli/**'
+      - 'dbc/**'
+      - '.github/workflows/dbc-cli.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'dbc-cli/**'
+      - 'dbc/**'
+      - '.github/workflows/dbc-cli.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+  MSRV: "1.74.0"
+
+jobs:
+  test:
+    name: Test (latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build and test
+        run: cargo test --verbose -p dbc-cli
+
+  test-msrv:
+    name: Test (MSRV)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.74.0
+      - name: Build and test
+        run: cargo test --verbose -p dbc-cli
+

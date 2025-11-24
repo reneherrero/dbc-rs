@@ -1,13 +1,14 @@
-# dbc-rs Workspace
+# dbc-rs
 
-[![CI](https://github.com/reneherrero/dbc-rs/workflows/CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions)
+[![dbc-rs CI](https://github.com/reneherrero/dbc-rs/workflows/dbc-rs%20Library%20CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions/workflows/dbc-rs.yml)
+[![dbc-cli CI](https://github.com/reneherrero/dbc-rs/workflows/dbc-cli%20CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions/workflows/dbc-cli.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/reneherrero/dbc-rs/blob/main/LICENSING.md)
 
 A Rust workspace containing the DBC (CAN Database) file parser library and command-line tools.
 
 ## Projects
 
-### [`dbc`](./dbc/)
+### [`dbc-rs`](./dbc/)
 
 The core library for parsing, editing, and writing DBC files. Supports both `std` and `no_std` environments.
 
