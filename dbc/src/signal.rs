@@ -1,4 +1,4 @@
-use crate::{Error, error::messages};
+use crate::{error::messages, Error};
 use alloc::{
     boxed::Box,
     string::{String, ToString},
@@ -77,7 +77,7 @@ impl Signal {
     /// # Examples
     ///
     /// ```
-    /// use dbc::{Signal, ByteOrder, Receivers};
+    /// use dbc_rs::{Signal, ByteOrder, Receivers};
     ///
     /// let signal = Signal::new(
     ///     "RPM",
@@ -92,7 +92,7 @@ impl Signal {
     ///     Some("rpm" as &str),
     ///     Receivers::Broadcast,
     /// )?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new(
         name: impl AsRef<str>,
@@ -389,7 +389,7 @@ impl Signal {
     /// # Examples
     ///
     /// ```
-    /// use dbc::{Signal, ByteOrder, Receivers};
+    /// use dbc_rs::{Signal, ByteOrder, Receivers};
     ///
     /// let signal = Signal::new(
     ///     "RPM",
@@ -405,7 +405,7 @@ impl Signal {
     ///     Receivers::Broadcast,
     /// )?;
     /// assert_eq!(signal.to_dbc_string(), " SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *");
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn to_dbc_string(&self) -> String {
         use alloc::format;

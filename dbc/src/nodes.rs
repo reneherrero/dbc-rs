@@ -12,7 +12,7 @@ impl Nodes {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Nodes;
+    /// use dbc_rs::Nodes;
     ///
     /// let nodes = Nodes::new(&["ECM", "TCM", "BCM"]);
     /// assert!(nodes.contains("ECM"));
@@ -33,7 +33,7 @@ impl Nodes {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Nodes;
+    /// use dbc_rs::Nodes;
     ///
     /// let nodes = Nodes::empty();
     /// assert!(nodes.is_empty());
@@ -94,7 +94,7 @@ impl Nodes {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Nodes;
+    /// use dbc_rs::Nodes;
     ///
     /// let nodes = Nodes::new(&["ECM", "TCM"]);
     /// assert_eq!(nodes.to_dbc_string(), "BU_: ECM TCM");

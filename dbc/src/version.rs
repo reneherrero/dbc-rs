@@ -4,7 +4,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::{Error, error::messages};
+use crate::{error::messages, Error};
 
 #[derive(Debug)]
 pub struct Version {
@@ -24,12 +24,12 @@ impl Version {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Version;
+    /// use dbc_rs::Version;
     ///
     /// let v1 = Version::new(1, None, None)?;
     /// let v2 = Version::new(1, Some(0), None)?;
     /// let v3 = Version::new(1, Some(2), Some(3))?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new(major: u8, minor: Option<u8>, patch: Option<u8>) -> Result<Self, Error> {
         if minor.is_none() && patch.is_some() {
@@ -123,11 +123,11 @@ impl Version {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Version;
+    /// use dbc_rs::Version;
     ///
     /// let version = Version::new(1, Some(0), None)?;
     /// assert_eq!(version.to_dbc_string(), "VERSION \"1.0\"");
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn to_dbc_string(&self) -> String {
         format!("VERSION \"{}\"", self.to_string())
@@ -137,7 +137,7 @@ impl Version {
 #[cfg(test)]
 mod tests {
     use super::Version;
-    use crate::{Error, error::messages};
+    use crate::{error::messages, Error};
 
     #[test]
     fn test_read_version() {

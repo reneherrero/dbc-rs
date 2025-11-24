@@ -1,4 +1,4 @@
-use crate::{Error, Signal, error::messages};
+use crate::{error::messages, Error, Signal};
 use alloc::{boxed::Box, format, string::String, string::ToString, vec::Vec};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,7 +115,7 @@ impl Message {
     /// # Examples
     ///
     /// ```
-    /// use dbc::{Message, Signal, ByteOrder, Receivers};
+    /// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
     ///
     /// let signal = Signal::new(
     ///     "RPM",
@@ -138,7 +138,7 @@ impl Message {
     ///     "ECM",
     ///     vec![signal],
     /// )?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new(
         id: u32,
@@ -232,7 +232,7 @@ impl Message {
     /// # Examples
     ///
     /// ```
-    /// use dbc::{Message, Signal, ByteOrder, Receivers};
+    /// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
     ///
     /// let signal = Signal::new(
     ///     "RPM",
@@ -250,7 +250,7 @@ impl Message {
     ///
     /// let message = Message::new(256, "EngineData", 8, "ECM", vec![signal])?;
     /// assert_eq!(message.to_dbc_string(), "BO_ 256 EngineData : 8 ECM");
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn to_dbc_string(&self) -> String {
         use alloc::format;
@@ -271,7 +271,7 @@ impl Message {
     /// # Examples
     ///
     /// ```
-    /// use dbc::{Message, Signal, ByteOrder, Receivers};
+    /// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
     ///
     /// let signal = Signal::new(
     ///     "RPM",
@@ -291,7 +291,7 @@ impl Message {
     /// let dbc_str = message.to_dbc_string_with_signals();
     /// assert!(dbc_str.contains("BO_ 256 EngineData : 8 ECM"));
     /// assert!(dbc_str.contains("SG_ RPM"));
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn to_dbc_string_with_signals(&self) -> String {
         let mut result = String::with_capacity(200 + (self.signals.len() * 100));

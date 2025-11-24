@@ -1,4 +1,4 @@
-use dbc::Dbc;
+use dbc_rs::Dbc;
 
 #[test]
 fn test_parse_simple_dbc() {
@@ -161,12 +161,12 @@ fn test_parse_broadcast_signals_dbc() {
 
     // Verify broadcast signal (receivers = *)
     let status = msg.find_signal("Status").unwrap();
-    assert_eq!(status.receivers(), &dbc::Receivers::Broadcast);
+    assert_eq!(status.receivers(), &dbc_rs::Receivers::Broadcast);
 
     // Verify signals with specific receivers
     let data1 = msg.find_signal("Data1").unwrap();
     match data1.receivers() {
-        dbc::Receivers::Nodes(nodes) => {
+        dbc_rs::Receivers::Nodes(nodes) => {
             assert_eq!(nodes.len(), 2);
             assert!(nodes.iter().any(|n| n.as_ref() == "RECEIVER1"));
             assert!(nodes.iter().any(|n| n.as_ref() == "RECEIVER2"));
@@ -176,7 +176,7 @@ fn test_parse_broadcast_signals_dbc() {
 
     let data2 = msg.find_signal("Data2").unwrap();
     match data2.receivers() {
-        dbc::Receivers::Nodes(nodes) => {
+        dbc_rs::Receivers::Nodes(nodes) => {
             assert_eq!(nodes.len(), 1);
             assert_eq!(nodes[0].as_ref(), "RECEIVER1");
         }

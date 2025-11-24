@@ -1,6 +1,6 @@
-use dbc::{ByteOrder, Dbc, Message, Nodes, Receivers, Signal, Version};
+use dbc_rs::{ByteOrder, Dbc, Message, Nodes, Receivers, Signal, Version};
 
-fn main() -> Result<(), dbc::Error> {
+fn main() -> Result<(), dbc_rs::Error> {
     // Create version "1.0"
     let version = Version::new(1, Some(0), None)?;
 

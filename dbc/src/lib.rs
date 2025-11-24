@@ -15,3 +15,6 @@ pub use message::Message;
 pub use nodes::Nodes;
 pub use signal::{ByteOrder, Receivers, Signal};
 pub use version::Version;
+
+/// Library version
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");

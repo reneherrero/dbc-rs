@@ -1,0 +1,18 @@
+[package]
+name = "dbc-rs"
+version.workspace = true
+edition.workspace = true
+description = "CAN .dbc parser and editor"
+license.workspace = true
+keywords = ["can", "dbc", "automotive", "no_std"]
+categories = ["parsing", "embedded"]
+rust-version = "1.70.0"
+
+[features]
+default = ["std"]
+std = []
+# Language selection features (mutually exclusive, default is English)
+lang-fr = [] # French
+lang-es = [] # Spanish
+lang-de = [] # German
+lang-ja = [] # Japanese

@@ -1,4 +1,4 @@
-use crate::{Error, Message, Nodes, Signal, Version, error::messages};
+use crate::{error::messages, Error, Message, Nodes, Signal, Version};
 use alloc::{string::String, string::ToString, vec::Vec};
 
 #[derive(Debug)]
@@ -48,7 +48,7 @@ impl Dbc {
     /// # Examples
     ///
     /// ```
-    /// use dbc::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
+    /// use dbc_rs::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
     ///
     /// let version = Version::new(1, Some(0), None)?;
     /// let nodes = Nodes::new(&["ECM", "TCM"]);
@@ -70,7 +70,7 @@ impl Dbc {
     /// let message = Message::new(256, "EngineData", 8, "ECM", vec![signal])?;
     ///
     /// let dbc = Dbc::new(version, nodes, vec![message])?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new(version: Version, nodes: Nodes, messages: Vec<Message>) -> Result<Self, Error> {
         Self::validate(&version, &nodes, &messages)?;
@@ -107,11 +107,11 @@ impl Dbc {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Dbc;
+    /// use dbc_rs::Dbc;
     ///
     /// let content = "VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"";
     /// let dbc = Dbc::parse(content)?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse(data: &str) -> Result<Self, Error> {
         let mut lines = data.lines().peekable();
@@ -182,11 +182,11 @@ impl Dbc {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Dbc;
+    /// use dbc_rs::Dbc;
     ///
     /// let bytes = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"";
     /// let dbc = Dbc::parse_bytes(bytes)?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse_bytes(data: &[u8]) -> Result<Self, Error> {
         let content = core::str::from_utf8(data)
@@ -202,11 +202,11 @@ impl Dbc {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Dbc;
+    /// use dbc_rs::Dbc;
     ///
     /// let content = String::from("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"");
     /// let dbc = Dbc::parse_from(content)?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse_from<S: AsRef<str>>(data: S) -> Result<Self, Error> {
         Self::parse(data.as_ref())
@@ -224,19 +224,25 @@ impl Dbc {
     /// # Examples
     ///
     /// ```
-    /// use dbc::Dbc;
+    /// use dbc_rs::Dbc;
     ///
     /// let content = "VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"";
     /// let dbc = Dbc::parse(content)?;
     /// let saved = dbc.save();
     /// // The saved content should be equivalent to the original
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn save(&self) -> String {
         // Pre-allocate with estimated capacity
         // Estimate: ~50 chars per message + ~100 chars per signal
-        let estimated_capacity = 200 + (self.messages.len() * 50) + 
-            (self.messages.iter().map(|m| m.signals().len()).sum::<usize>() * 100);
+        let estimated_capacity = 200
+            + (self.messages.len() * 50)
+            + (self
+                .messages
+                .iter()
+                .map(|m| m.signals().len())
+                .sum::<usize>()
+                * 100);
         let mut result = String::with_capacity(estimated_capacity);
 
         // VERSION line
@@ -274,7 +280,7 @@ impl Dbc {
     /// # Examples
     ///
     /// ```no_run
-    /// use dbc::Dbc;
+    /// use dbc_rs::Dbc;
     /// use std::fs::File;
     ///
     /// let file = File::open("example.dbc").expect("file not found");
@@ -284,13 +290,13 @@ impl Dbc {
     /// Reading from a buffer:
     ///
     /// ```
-    /// use dbc::Dbc;
+    /// use dbc_rs::Dbc;
     /// use std::io::Cursor;
     ///
     /// let data = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"";
     /// let cursor = Cursor::new(data);
     /// let dbc = Dbc::from_reader(cursor)?;
-    /// # Ok::<(), dbc::Error>(())
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Self, Error> {
         use alloc::string::String;

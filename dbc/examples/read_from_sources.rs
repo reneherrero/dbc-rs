@@ -1,7 +1,7 @@
-use dbc::Dbc;
+use dbc_rs::Dbc;
 use std::io::Cursor;
 
-fn main() -> Result<(), dbc::Error> {
+fn main() -> Result<(), dbc_rs::Error> {
     let dbc_content = r#"VERSION "1.0"
 
 BU_: ECM TCM

@@ -1,17 +1,9 @@
-[package]
-name = "dbc"
-version = "1.0.0"
-edition = "2024"
-description = "CAN .dbc parser and editor"
-license = "MIT OR Apache-2.0"
-keywords = ["can", "dbc", "automotive", "no_std"]
-categories = ["parsing", "embedded"]
+[workspace]
+members = ["dbc", "dbc-cli"]
+resolver = "2"
 
-[features]
-default = ["std"]
-std = []
-# Language selection features (mutually exclusive, default is English)
-lang-fr = [] # French
-lang-es = [] # Spanish
-lang-de = [] # German
-lang-ja = [] # Japanese
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["dbc-rs contributors"]
