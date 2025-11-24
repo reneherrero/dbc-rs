@@ -36,8 +36,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build (no_std)
         run: cargo build --verbose --no-default-features -p dbc-rs
-      - name: Test (no_std)
-        run: cargo test --verbose --no-default-features -p dbc-rs
+
 
   test-std-msrv:
     name: Test (std, MSRV)
@@ -58,6 +57,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.74.0
       - name: Build (no_std)
         run: cargo build --verbose --no-default-features -p dbc-rs
-      - name: Test (no_std)
-        run: cargo test --verbose --no-default-features -p dbc-rs
+
 

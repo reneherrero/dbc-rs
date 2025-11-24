@@ -11,7 +11,8 @@ rust-version = "1.74.0"
 [features]
 default = ["std"]
 std = []
-# Language selection features (mutually exclusive, default is English)
+# Language selection (default is English, no feature needed)
+# Set one of these to select a language:
 lang-fr = [] # French
 lang-es = [] # Spanish
 lang-de = [] # German
