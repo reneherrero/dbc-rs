@@ -1,0 +1,105 @@
+VERSION "2.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_:
+
+BU_: ECM TCM BCM ABS SENSOR
+
+VAL_TABLE_ GearPosition 0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive" 4 "Sport" 5 "Manual" ;
+VAL_TABLE_ Status 0 "Inactive" 1 "Active" 2 "Error" 3 "Warning" ;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM BCM
+ SG_ Temperature : 16|8@0- (1,-40) [-40|215] "°C" TCM BCM ABS
+ SG_ ThrottlePosition : 24|8@0+ (0.392157,0) [0|100] "%" *
+ SG_ OilPressure : 32|16@1+ (0.01,0) [0|1000] "kPa" TCM
+
+BO_ 512 TransmissionData : 8 TCM
+ SG_ GearPosition : 0|8@0+ (1,0) [0|5] "" BCM
+ SG_ ClutchEngaged : 8|1@0+ (1,0) [0|1] "" ECM
+ SG_ Torque : 16|16@1- (0.1,0) [-3276.8|3276.7] "Nm" ECM BCM
+ SG_ TransmissionTemp : 32|8@0- (1,-40) [-40|215] "°C" ECM
+
+BO_ 768 BrakeData : 6 ABS
+ SG_ BrakePressure : 0|16@1+ (0.1,0) [0|1000] "bar" ECM BCM
+ SG_ ABSActive : 16|1@0+ (1,0) [0|1] "" ECM
+ SG_ WheelSpeedFL : 17|15@1+ (0.01,0) [0|327.67] "km/h" ECM
+ SG_ WheelSpeedFR : 32|15@1+ (0.01,0) [0|327.67] "km/h" ECM
+
+BO_ 1024 SensorData : 6 SENSOR
+ SG_ Voltage : 0|16@0+ (0.01,0) [0|20] "V" ECM TCM
+ SG_ Current : 16|16@0- (0.001,0) [-32.768|32.767] "A" ECM
+ SG_ Humidity : 32|8@0+ (0.5,0) [0|127.5] "%" BCM
+
+CM_ "This is a comprehensive DBC file for testing all features";
+CM_ BO_ 256 "Primary engine control message with RPM, temperature, and throttle";
+CM_ SG_ 256 RPM "Engine speed in revolutions per minute";
+CM_ SG_ 256 Temperature "Engine coolant temperature in Celsius";
+CM_ SG_ 512 GearPosition "Current transmission gear position";
+CM_ BU_ ECM "Engine Control Module - primary ECU";
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
+BA_DEF_DEF_ "GenMsgCycleTime" 100;
+BA_DEF_ BO_ "GenMsgSendType" ENUM "Cyclic","Event","CyclicIfActive","EventIfActive","NoMsgSendType";
+BA_DEF_DEF_ "GenMsgSendType" "Cyclic";
+BA_DEF_ SG_ "GenSigStartValue" FLOAT 0 1000000;
+BA_DEF_DEF_ "GenSigStartValue" 0.0;
+BA_DEF_ SG_ "DisplayName" STRING;
+BA_DEF_DEF_ "DisplayName" "";
+BA_DEF_ BU_ "NetworkNode" STRING;
+BA_DEF_DEF_ "NetworkNode" "";
+
+BA_ "GenMsgCycleTime" BO_ 256 50;
+BA_ "GenMsgCycleTime" BO_ 512 100;
+BA_ "GenMsgCycleTime" BO_ 768 20;
+BA_ "GenMsgSendType" BO_ 256 "Cyclic";
+BA_ "GenMsgSendType" BO_ 512 "Cyclic";
+BA_ "GenMsgSendType" BO_ 768 "Event";
+BA_ "GenSigStartValue" SG_ 256 RPM 0.0;
+BA_ "GenSigStartValue" SG_ 256 Temperature 85.0;
+BA_ "DisplayName" SG_ 256 RPM "Engine RPM";
+BA_ "DisplayName" SG_ 512 GearPosition "Gear";
+BA_ "NetworkNode" BU_ ECM "Engine Control";
+
+VAL_ 256 ThrottlePosition 0 "Closed" 25 "Quarter" 50 "Half" 75 "ThreeQuarter" 100 "Full" ;
+VAL_ 512 GearPosition 0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive" 4 "Sport" 5 "Manual" ;
+VAL_ 768 ABSActive 0 "Inactive" 1 "Active" ;
+
+SIG_GROUP_ 256 EngineGroup 1 RPM Temperature ThrottlePosition;
+SIG_GROUP_ 512 TransmissionGroup 1 GearPosition ClutchEngaged Torque;
+
+SIG_VALTYPE_ 256 ThrottlePosition : 1;
+SIG_VALTYPE_ 512 GearPosition : 1;
+SIG_VALTYPE_ 768 ABSActive : 1;
+
+EV_ SensorVoltage : 0 [ 0 | 20 ] "V" 12.0 1 DUMMY_NODE_VECTOR1 DUMMY_NODE_VECTOR2;
+EV_ SensorCurrent : 0 [ -32.768 | 32.767 ] "A" 0.0 2 DUMMY_NODE_VECTOR1 DUMMY_NODE_VECTOR2;

@@ -1,0 +1,7 @@
+VERSION "1"
+
+BU_: NODE1
+
+BO_ 256 TestMessage : 1 NODE1
+ SG_ TestSignal : 0|8@1+ (1,0) [0|255] ""
+

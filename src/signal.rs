@@ -1,0 +1,887 @@
+use crate::{Error, error::messages};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Signal {
+    name: Box<str>,
+    start_bit: u8,
+    length: u8,
+    byte_order: ByteOrder,
+    unsigned: bool,
+    factor: f64,
+    offset: f64,
+    min: f64,
+    max: f64,
+    unit: Option<Box<str>>,
+    receivers: Receivers,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ByteOrder {
+    LittleEndian = 0,
+    BigEndian = 1,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Receivers {
+    Broadcast,
+    Nodes(Vec<Box<str>>),
+    None,
+}
+
+impl Signal {
+    /// Validate signal parameters
+    fn validate(name: &str, start_bit: u8, length: u8, min: f64, max: f64) -> Result<(), Error> {
+        if name.trim().is_empty() {
+            return Err(Error::Signal(messages::SIGNAL_NAME_EMPTY.to_string()));
+        }
+
+        // Validate length: must be between 1 and 64 bits
+        if length == 0 {
+            return Err(Error::Signal(messages::SIGNAL_LENGTH_TOO_SMALL.to_string()));
+        }
+        if length > 64 {
+            return Err(Error::Signal(messages::SIGNAL_LENGTH_TOO_LARGE.to_string()));
+        }
+
+        // Validate start_bit + length doesn't exceed 64 (CAN message max size)
+        let end_bit = start_bit as u16 + length as u16;
+        if end_bit > 64 {
+            return Err(Error::Signal(messages::signal_extends_beyond_can(
+                start_bit, length, end_bit,
+            )));
+        }
+
+        // Validate min <= max
+        if min > max {
+            return Err(Error::Signal(messages::invalid_range(min, max)));
+        }
+
+        Ok(())
+    }
+
+    /// Create a new Signal with the given parameters
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - `name` is empty
+    /// - `length` is 0 or greater than 64
+    /// - `start_bit + length` exceeds 64 (signal would overflow CAN message)
+    /// - `min > max` (invalid range)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc::{Signal, ByteOrder, Receivers};
+    ///
+    /// let signal = Signal::new(
+    ///     "RPM",
+    ///     0,
+    ///     16,
+    ///     ByteOrder::BigEndian,
+    ///     true,
+    ///     0.25,
+    ///     0.0,
+    ///     0.0,
+    ///     8000.0,
+    ///     Some("rpm" as &str),
+    ///     Receivers::Broadcast,
+    /// )?;
+    /// # Ok::<(), dbc::Error>(())
+    /// ```
+    pub fn new(
+        name: impl AsRef<str>,
+        start_bit: u8,
+        length: u8,
+        byte_order: ByteOrder,
+        unsigned: bool,
+        factor: f64,
+        offset: f64,
+        min: f64,
+        max: f64,
+        unit: Option<impl AsRef<str>>,
+        receivers: Receivers,
+    ) -> Result<Self, Error> {
+        let name_str = name.as_ref();
+        Self::validate(name_str, start_bit, length, min, max)?;
+
+        Ok(Self {
+            name: name_str.into(),
+            start_bit,
+            length,
+            byte_order,
+            unsigned,
+            factor,
+            offset,
+            min,
+            max,
+            unit: unit.map(|u| u.as_ref().into()),
+            receivers,
+        })
+    }
+
+    pub(super) fn parse(line: &str) -> Result<Self, Error> {
+        // INSERT_YOUR_CODE
+
+        // Trim and check for SG_
+        let line = line.trim_start();
+        let line = line
+            .strip_prefix("SG_")
+            .or_else(|| line.strip_prefix("SG_"))
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_SG.to_string()))?;
+        let line = line.trim();
+
+        // name until ':'
+        let (name, rest) = match line.split_once(':') {
+            Some((n, r)) => (n.trim(), r.trim()),
+            None => {
+                return Err(Error::Signal(
+                    messages::SIGNAL_PARSE_MISSING_COLON.to_string(),
+                ));
+            }
+        };
+
+        // startBit|length@byteOrderSign
+        // e.g. 0|16@0+
+        let mut rest = rest;
+        let mut tokens = rest.splitn(2, ' ');
+        let pos = tokens
+            .next()
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_POSITION.to_string()))?
+            .trim();
+        rest = tokens
+            .next()
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_REST.to_string()))?
+            .trim();
+
+        // e.g. 0|16@0+
+        let (bitlen, bosign) = pos
+            .split_once('@')
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_AT.to_string()))?;
+        let (startbit, length) = bitlen
+            .split_once('|')
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_PIPE.to_string()))?;
+
+        let start_bit: u8 = startbit
+            .trim()
+            .parse()
+            .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_START_BIT.to_string()))?;
+        let length: u8 = length
+            .trim()
+            .parse()
+            .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_LENGTH.to_string()))?;
+
+        // Parse byte order and sign
+        let bosign = bosign.trim();
+        let (byte_order, unsigned) = {
+            let mut chars = bosign.chars();
+            let bo = chars.next().ok_or_else(|| {
+                Error::Signal(messages::SIGNAL_PARSE_MISSING_BYTE_ORDER.to_string())
+            })?;
+            let sign = chars
+                .next()
+                .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_SIGN.to_string()))?;
+            let byte_order = match bo {
+                '0' => ByteOrder::LittleEndian,
+                '1' => ByteOrder::BigEndian,
+                _ => return Err(Error::Signal(messages::unknown_byte_order(bo))),
+            };
+            let unsigned = match sign {
+                '+' => true,
+                '-' => false,
+                _ => return Err(Error::Signal(messages::unknown_sign(sign))),
+            };
+            (byte_order, unsigned)
+        };
+
+        // Now next token: (factor,offset)
+        let rest = rest.trim_start();
+        let (f_and_rest, rest) = match rest.trim_start().split_once(')') {
+            Some((f, r)) => (f, r),
+            None => {
+                return Err(Error::Signal(
+                    messages::SIGNAL_PARSE_MISSING_CLOSING_PAREN.to_string(),
+                ));
+            }
+        };
+        let f_and_rest = f_and_rest.trim_start();
+        let f_and_rest = f_and_rest.strip_prefix('(').ok_or_else(|| {
+            Error::Signal(messages::SIGNAL_PARSE_MISSING_OPENING_PAREN.to_string())
+        })?;
+        let (factor_str, offset_str) = f_and_rest
+            .split_once(',')
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_COMMA.to_string()))?;
+        let (factor_str, offset_str) = (factor_str.trim(), offset_str.trim());
+        let factor: f64 = if factor_str == "" {
+            0.
+        } else {
+            factor_str
+                .parse()
+                .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_FACTOR.to_string()))?
+        };
+        let offset: f64 = if offset_str == "" {
+            0.
+        } else {
+            offset_str
+                .parse()
+                .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_OFFSET.to_string()))?
+        };
+        let rest = rest.trim_start();
+
+        // Next token: [min|max]
+        let (minmax, rest) = match rest.split_once(']') {
+            Some((m, r)) => (m, r),
+            None => {
+                return Err(Error::Signal(
+                    messages::SIGNAL_PARSE_MISSING_CLOSING_BRACKET.to_string(),
+                ));
+            }
+        };
+        let minmax = minmax.trim_start().strip_prefix('[').ok_or_else(|| {
+            Error::Signal(messages::SIGNAL_PARSE_MISSING_OPENING_BRACKET.to_string())
+        })?;
+        let (min_str, max_str) = minmax.split_once('|').ok_or_else(|| {
+            Error::Signal(messages::SIGNAL_PARSE_MISSING_PIPE_IN_RANGE.to_string())
+        })?;
+        let (min_str, max_str) = (min_str.trim(), max_str.trim());
+        let min: f64 = if min_str == "" {
+            0.
+        } else {
+            min_str
+                .parse()
+                .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_MIN.to_string()))?
+        };
+        let max: f64 = if max_str == "" {
+            0.
+        } else {
+            max_str
+                .parse()
+                .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_MAX.to_string()))?
+        };
+        let mut rest = rest.trim_start();
+
+        // Now: unit in double quotes
+        if !rest.starts_with('"') {
+            return Err(Error::Signal(
+                messages::SIGNAL_PARSE_EXPECTED_UNIT_QUOTE.to_string(),
+            ));
+        }
+        rest = &rest[1..];
+        // Pre-allocate unit string (most units are short, 1-10 chars)
+        let mut unit_str = String::with_capacity(10);
+        let mut chars = rest.chars();
+        while let Some(c) = chars.next() {
+            if c == '"' {
+                break;
+            }
+            unit_str.push(c);
+        }
+        // Advance past the closing quote in rest
+        rest = rest[unit_str.len()..].trim_start();
+        if rest.starts_with('"') {
+            rest = &rest[1..];
+        }
+        let unit = if unit_str.is_empty() {
+            None
+        } else {
+            Some(unit_str.into_boxed_str())
+        };
+        let rest = rest.trim_start();
+
+        // Receivers
+        let receivers = if rest.is_empty() {
+            Receivers::None
+        } else if rest == "*" {
+            Receivers::Broadcast
+        } else {
+            // Pre-allocate receivers Vec (most signals have 1-3 receivers)
+            let nodes: Vec<Box<str>> = rest.split_whitespace().map(|s| s.into()).collect();
+            if nodes.is_empty() {
+                Receivers::None
+            } else {
+                Receivers::Nodes(nodes)
+            }
+        };
+
+        // Validate the parsed signal using the same validation as new()
+        Self::validate(name, start_bit, length, min, max)?;
+
+        Ok(Signal {
+            name: name.into(),
+            start_bit,
+            length,
+            byte_order,
+            unsigned,
+            factor,
+            offset,
+            min,
+            max,
+            unit,
+            receivers,
+        })
+    }
+
+    #[inline]
+    pub fn name(&self) -> &str {
+        &*self.name
+    }
+
+    #[inline]
+    pub fn start_bit(&self) -> u8 {
+        self.start_bit
+    }
+
+    #[inline]
+    pub fn length(&self) -> u8 {
+        self.length
+    }
+
+    #[inline]
+    pub fn byte_order(&self) -> ByteOrder {
+        self.byte_order
+    }
+
+    #[inline]
+    pub fn is_unsigned(&self) -> bool {
+        self.unsigned
+    }
+
+    #[inline]
+    pub fn factor(&self) -> f64 {
+        self.factor
+    }
+
+    #[inline]
+    pub fn offset(&self) -> f64 {
+        self.offset
+    }
+
+    #[inline]
+    pub fn min(&self) -> f64 {
+        self.min
+    }
+
+    #[inline]
+    pub fn max(&self) -> f64 {
+        self.max
+    }
+
+    #[inline]
+    pub fn unit(&self) -> Option<&str> {
+        self.unit.as_ref().map(|s| s.as_ref())
+    }
+
+    #[inline]
+    pub fn receivers(&self) -> &Receivers {
+        &self.receivers
+    }
+
+    /// Format signal in DBC file format (e.g., ` SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *`)
+    ///
+    /// Useful for debugging and visualization of the signal in DBC format.
+    /// Note: The leading space is included to match DBC file formatting conventions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc::{Signal, ByteOrder, Receivers};
+    ///
+    /// let signal = Signal::new(
+    ///     "RPM",
+    ///     0,
+    ///     16,
+    ///     ByteOrder::BigEndian,
+    ///     true,
+    ///     0.25,
+    ///     0.0,
+    ///     0.0,
+    ///     8000.0,
+    ///     Some("rpm" as &str),
+    ///     Receivers::Broadcast,
+    /// )?;
+    /// assert_eq!(signal.to_dbc_string(), " SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *");
+    /// # Ok::<(), dbc::Error>(())
+    /// ```
+    pub fn to_dbc_string(&self) -> String {
+        use alloc::format;
+
+        let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
+
+        result.push_str(" SG_ ");
+        result.push_str(self.name());
+        result.push_str(" : ");
+        result.push_str(&self.start_bit().to_string());
+        result.push('|');
+        result.push_str(&self.length().to_string());
+        result.push('@');
+
+        // Byte order: 0 for LittleEndian, 1 for BigEndian
+        match self.byte_order() {
+            ByteOrder::LittleEndian => result.push('0'),
+            ByteOrder::BigEndian => result.push('1'),
+        }
+
+        // Sign: + for unsigned, - for signed
+        if self.is_unsigned() {
+            result.push('+');
+        } else {
+            result.push('-');
+        }
+
+        // Factor and offset: (factor,offset)
+        result.push_str(" (");
+        result.push_str(&format!("{}", self.factor()));
+        result.push(',');
+        result.push_str(&format!("{}", self.offset()));
+        result.push(')');
+
+        // Min and max: [min|max]
+        result.push_str(" [");
+        result.push_str(&format!("{}", self.min()));
+        result.push('|');
+        result.push_str(&format!("{}", self.max()));
+        result.push(']');
+
+        // Unit: "unit" or ""
+        result.push(' ');
+        if let Some(unit) = self.unit() {
+            result.push('"');
+            result.push_str(unit);
+            result.push('"');
+        } else {
+            result.push_str("\"\"");
+        }
+
+        // Receivers: * for Broadcast, space-separated list for Nodes, or empty
+        match self.receivers() {
+            Receivers::Broadcast => {
+                result.push(' ');
+                result.push('*');
+            }
+            Receivers::Nodes(nodes) => {
+                if !nodes.is_empty() {
+                    result.push(' ');
+                    for (i, node) in nodes.iter().enumerate() {
+                        if i > 0 {
+                            result.push(' ');
+                        }
+                        result.push_str(node.as_ref());
+                    }
+                }
+            }
+            Receivers::None => {
+                // No receivers specified - nothing to add
+            }
+        }
+
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Error;
+    extern crate std;
+
+    #[test]
+    fn test_signal_new_valid() {
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            0.25,
+            0.0,
+            0.0,
+            8000.0,
+            Some("rpm" as &str),
+            Receivers::Broadcast,
+        )
+        .unwrap();
+        assert_eq!(signal.name(), "RPM");
+        assert_eq!(signal.start_bit(), 0);
+        assert_eq!(signal.length(), 16);
+        assert_eq!(signal.byte_order(), ByteOrder::BigEndian);
+        assert!(signal.is_unsigned());
+        assert_eq!(signal.factor(), 0.25);
+        assert_eq!(signal.offset(), 0.0);
+        assert_eq!(signal.min(), 0.0);
+        assert_eq!(signal.max(), 8000.0);
+        assert_eq!(signal.unit(), Some("rpm"));
+        assert_eq!(signal.receivers(), &Receivers::Broadcast);
+    }
+
+    #[test]
+    fn test_signal_new_empty_name() {
+        let result = Signal::new(
+            "",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains("name cannot be empty")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_signal_new_zero_length() {
+        let result = Signal::new(
+            "Test",
+            0,
+            0,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains("length must be at least 1 bit")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_signal_new_length_too_large() {
+        let result = Signal::new(
+            "Test",
+            0,
+            65,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains("length cannot exceed 64 bits")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_signal_new_overflow() {
+        let result = Signal::new(
+            "Test",
+            60,
+            10,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains("extends beyond CAN message boundary")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_signal_new_invalid_range() {
+        let result = Signal::new(
+            "Test",
+            0,
+            8,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            100.0,
+            50.0,
+            None::<&str>,
+            Receivers::None,
+        );
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains("Invalid range")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_signal_new_max_boundary() {
+        // Test that 64 bits at position 0 is valid
+        let signal = Signal::new(
+            "FullMessage",
+            0,
+            64,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        assert_eq!(signal.length(), 64);
+    }
+
+    #[test]
+    fn test_signal_new_with_receivers() {
+        let nodes = vec!["ECM".into(), "TCM".into()];
+        let unit: Option<&str> = Some("°C");
+        let signal = Signal::new(
+            "TestSignal",
+            8,
+            16,
+            ByteOrder::LittleEndian,
+            false,
+            0.1,
+            -40.0,
+            -40.0,
+            215.0,
+            unit,
+            Receivers::Nodes(nodes),
+        )
+        .unwrap();
+        assert_eq!(signal.name(), "TestSignal");
+        assert!(!signal.is_unsigned());
+        assert_eq!(signal.unit(), Some("°C"));
+        match signal.receivers() {
+            Receivers::Nodes(n) => assert_eq!(n.len(), 2),
+            _ => panic!("Expected Nodes variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_valid_signal() {
+        let line = r#" SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM"#;
+        let sig = Signal::parse(line).unwrap();
+        assert_eq!(sig.name(), "RPM");
+        assert_eq!(sig.start_bit(), 0);
+        assert_eq!(sig.length(), 16);
+        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert!(sig.is_unsigned());
+        assert_eq!(sig.factor(), 0.25);
+        assert_eq!(sig.offset(), 0.);
+        assert_eq!(sig.min(), 0.);
+        assert_eq!(sig.max(), 8000.);
+        assert_eq!(sig.unit(), Some("rpm"));
+        assert_eq!(sig.receivers(), &Receivers::Nodes(vec!["TCM".into()]));
+    }
+
+    #[test]
+    fn test_parse_signal_with_empty_unit_and_broadcast() {
+        let line = r#" SG_ ABSActive : 16|1@0+ (1,0) [0|1] "" *"#;
+        let sig = Signal::parse(line).unwrap();
+        assert_eq!(sig.name(), "ABSActive");
+        assert_eq!(sig.start_bit(), 16);
+        assert_eq!(sig.length(), 1);
+        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert!(sig.is_unsigned());
+        assert_eq!(sig.factor(), 1.);
+        assert_eq!(sig.offset(), 0.);
+        assert_eq!(sig.min(), 0.);
+        assert_eq!(sig.max(), 1.);
+        assert_eq!(sig.unit(), None);
+        assert_eq!(sig.receivers(), &Receivers::Broadcast);
+    }
+
+    #[test]
+    fn test_parse_signal_with_negative_offset_and_min() {
+        let line = r#" SG_ Temperature : 16|8@0- (1,-40) [-40|215] "°C" TCM BCM"#;
+        let sig = Signal::parse(line).unwrap();
+        assert_eq!(sig.name(), "Temperature");
+        assert_eq!(sig.start_bit(), 16);
+        assert_eq!(sig.length(), 8);
+        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert!(!sig.is_unsigned());
+        assert_eq!(sig.factor(), 1.);
+        assert_eq!(sig.offset(), -40.);
+        assert_eq!(sig.min(), -40.);
+        assert_eq!(sig.max(), 215.);
+        assert_eq!(sig.unit(), Some("°C"));
+        assert_eq!(
+            sig.receivers(),
+            &Receivers::Nodes(vec!["TCM".into(), "BCM".into()])
+        );
+    }
+
+    #[test]
+    fn test_parse_signal_with_percent_unit() {
+        let line = r#" SG_ ThrottlePosition : 24|8@0+ (0.392157,0) [0|100] "%" *"#;
+        let sig = Signal::parse(line).unwrap();
+        assert_eq!(sig.name(), "ThrottlePosition");
+        assert_eq!(sig.start_bit(), 24);
+        assert_eq!(sig.length(), 8);
+        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert!(sig.is_unsigned());
+        assert_eq!(sig.factor(), 0.392157);
+        assert_eq!(sig.offset(), 0.);
+        assert_eq!(sig.min(), 0.);
+        assert_eq!(sig.max(), 100.);
+        assert_eq!(sig.unit(), Some("%"));
+        assert_eq!(sig.receivers(), &Receivers::Broadcast);
+    }
+
+    #[test]
+    fn test_parse_signal_missing_factors_and_limits() {
+        // Should use default values where missing
+        let line = r#" SG_ Simple : 10|4@0+ ( , ) [ | ] "" *"#;
+        let sig = Signal::parse(line).unwrap();
+        assert_eq!(sig.name(), "Simple");
+        assert_eq!(sig.start_bit(), 10);
+        assert_eq!(sig.length(), 4);
+        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert!(sig.is_unsigned());
+        assert_eq!(sig.factor(), 0.);
+        assert_eq!(sig.offset(), 0.);
+        assert_eq!(sig.min(), 0.);
+        assert_eq!(sig.max(), 0.);
+        assert_eq!(sig.unit(), None);
+        assert_eq!(sig.receivers(), &Receivers::Broadcast);
+    }
+
+    #[test]
+    fn test_parse_signal_missing_start_bit() {
+        let line = r#" SG_ RPM : |16@0+ (0.25,0) [0|8000] "rpm" TCM"#;
+        let err = Signal::parse(line).unwrap_err();
+        assert_eq!(err, Error::Signal("Invalid start_bit".to_string()));
+    }
+
+    #[test]
+    fn test_parse_signal_invalid_range() {
+        // min > max should fail validation
+        let line = r#" SG_ Test : 0|8@0+ (1,0) [100|50] "unit" *"#;
+        let err = Signal::parse(line).unwrap_err();
+        match err {
+            Error::Signal(msg) => assert!(msg.contains("Invalid range")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_signal_overflow() {
+        // start_bit + length > 64 should fail validation
+        let line = r#" SG_ Test : 60|10@0+ (1,0) [0|100] "unit" *"#;
+        let err = Signal::parse(line).unwrap_err();
+        match err {
+            Error::Signal(msg) => assert!(msg.contains("extends beyond CAN message boundary")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_signal_length_too_large() {
+        // length > 64 should fail validation
+        let line = r#" SG_ Test : 0|65@0+ (1,0) [0|100] "unit" *"#;
+        let err = Signal::parse(line).unwrap_err();
+        match err {
+            Error::Signal(msg) => assert!(msg.contains("length cannot exceed 64 bits")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_signal_zero_length() {
+        // length = 0 should fail validation
+        let line = r#" SG_ Test : 0|0@0+ (1,0) [0|100] "unit" *"#;
+        let err = Signal::parse(line).unwrap_err();
+        match err {
+            Error::Signal(msg) => assert!(msg.contains("length must be at least 1 bit")),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_signal_missing_length() {
+        let line = r#" SG_ RPM : 0|@0+ (0.25,0) [0|8000] "rpm" TCM"#;
+        let err = Signal::parse(line).unwrap_err();
+        assert_eq!(err, Error::Signal("Invalid length".to_string()));
+    }
+
+    #[test]
+    fn test_signal_to_dbc_string() {
+        // Test with Broadcast receiver
+        let signal1 = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            0.25,
+            0.0,
+            0.0,
+            8000.0,
+            Some("rpm" as &str),
+            Receivers::Broadcast,
+        )
+        .unwrap();
+        assert_eq!(
+            signal1.to_dbc_string(),
+            " SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *"
+        );
+
+        // Test with Nodes receiver
+        let signal2 = Signal::new(
+            "Temperature",
+            16,
+            8,
+            ByteOrder::LittleEndian,
+            false,
+            1.0,
+            -40.0,
+            -40.0,
+            215.0,
+            Some("°C" as &str),
+            Receivers::Nodes(vec!["TCM".into(), "BCM".into()]),
+        )
+        .unwrap();
+        assert_eq!(
+            signal2.to_dbc_string(),
+            " SG_ Temperature : 16|8@0- (1,-40) [-40|215] \"°C\" TCM BCM"
+        );
+
+        // Test with None receiver and empty unit
+        let signal3 = Signal::new(
+            "Flag",
+            24,
+            1,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        assert_eq!(
+            signal3.to_dbc_string(),
+            " SG_ Flag : 24|1@1+ (1,0) [0|1] \"\""
+        );
+    }
+}

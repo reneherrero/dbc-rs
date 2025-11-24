@@ -1,0 +1,15 @@
+VERSION "2.1"
+
+BU_: GATEWAY SENSOR ACTUATOR
+
+BO_ 300 SensorData : 8 GATEWAY
+ SG_ SensorID : 0|8@1+ (1,0) [0|255] ""
+ SG_ Temperature : 8|16@1+ (0.1,-50) [-50|6553.5] "°C"
+ SG_ Pressure : 24|16@1+ (0.01,0) [0|655.35] "kPa"
+ SG_ Humidity : 40|8@1+ (0.5,0) [0|127.5] "%"
+
+BO_ 400 ActuatorControl : 6 ACTUATOR
+ SG_ ActuatorID : 0|8@1+ (1,0) [0|255] ""
+ SG_ Position : 8|16@1+ (0.1,0) [0|6553.5] "mm"
+ SG_ Force : 24|16@1- (0.01,-327.68) [-327.68|327.67] "N"
+

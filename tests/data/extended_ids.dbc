@@ -1,0 +1,12 @@
+VERSION "1.5"
+
+BU_: ECU_A ECU_B
+
+BO_ 416 EngineData : 8 ECU_A
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+ SG_ Throttle : 16|8@1+ (0.392157,0) [0|100] "%"
+
+BO_ 688 TransmissionData : 8 ECU_B
+ SG_ Gear : 0|4@1+ (1,0) [0|15] ""
+ SG_ Clutch : 4|1@1+ (1,0) [0|1] ""
+
