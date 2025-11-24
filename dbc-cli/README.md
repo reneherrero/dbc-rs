@@ -1,8 +1,7 @@
 # dbc-cli
 
-[![Crates.io](https://img.shields.io/crates/v/dbc-cli.svg)](https://crates.io/crates/dbc-cli)
-[![License](https://img.shields.io/crates/l/dbc-cli.svg)](https://github.com/yourusername/dbc-rs/blob/main/LICENSE-MIT)
-[![CI](https://github.com/yourusername/dbc-rs/workflows/CI/badge.svg)](https://github.com/yourusername/dbc-rs/actions)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSING.md)
+[![CI](https://github.com/reneherrero/dbc-rs/workflows/CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions)
 
 Command-line interface for DBC (CAN Database) file manipulation.
 

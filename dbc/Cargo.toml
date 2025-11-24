@@ -6,7 +6,7 @@ description = "CAN .dbc parser and editor"
 license.workspace = true
 keywords = ["can", "dbc", "automotive", "no_std"]
 categories = ["parsing", "embedded"]
-rust-version = "1.70.0"
+rust-version = "1.74.0"
 
 [features]
 default = ["std"]

@@ -8,7 +8,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  MSRV: "1.70.0"
+  MSRV: "1.74.0"
 
 jobs:
   test-std:
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.70.0
+      - uses: dtolnay/rust-toolchain@1.74.0
       - name: Build
         run: cargo build --verbose
       - name: Test
@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.70.0
+      - uses: dtolnay/rust-toolchain@1.74.0
       - name: Build (no_std)
         run: cargo build --verbose --no-default-features --workspace
       - name: Test (no_std)

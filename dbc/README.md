@@ -4,13 +4,13 @@ A clean, zero-dependency DBC (CAN Database) file parser and editor for Rust.
 
 [![Crates.io](https://img.shields.io/crates/v/dbc-rs.svg)](https://crates.io/crates/dbc-rs)
 [![Documentation](https://docs.rs/dbc-rs/badge.svg)](https://docs.rs/dbc-rs)
-[![License](https://img.shields.io/crates/l/dbc-rs.svg)](https://github.com/yourusername/dbc-rs/blob/main/LICENSE-MIT)
-[![MSRV](https://img.shields.io/badge/rustc-1.70.0+-blue.svg)](https://www.rust-lang.org)
-[![CI](https://github.com/yourusername/dbc-rs/workflows/CI/badge.svg)](https://github.com/yourusername/dbc-rs/actions)
+[![License](https://img.shields.io/crates/l/dbc-rs.svg)](https://github.com/reneherrero/dbc-rs/blob/main/LICENSING.md)
+[![MSRV](https://img.shields.io/badge/rustc-1.74.0+-blue.svg)](https://www.rust-lang.org)
+[![CI](https://github.com/reneherrero/dbc-rs/workflows/CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions)
 
 ## Minimum Supported Rust Version (MSRV)
 
-The minimum supported Rust version is **1.70.0**. The crate is tested against this version and may use features available in it or later.
+The minimum supported Rust version is **1.74.0**. The crate is tested against this version and may use features available in it or later.
 
 ## Features
 
