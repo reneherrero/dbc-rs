@@ -6,6 +6,10 @@
 
 pub const INVALID_DATA_CATEGORY: &str = "Datenfehler";
 pub const SIGNAL_ERROR_CATEGORY: &str = "Signalfehler";
+pub const MESSAGE_ERROR_CATEGORY: &str = "Nachrichtenfehler";
+pub const DBC_ERROR_CATEGORY: &str = "DBC-Fehler";
+pub const VERSION_ERROR_CATEGORY: &str = "Versionsfehler";
+pub const NODES_ERROR_CATEGORY: &str = "Knotenfehler";
 
 // ============================================================================
 // Version-related error messages
@@ -13,6 +17,7 @@ pub const SIGNAL_ERROR_CATEGORY: &str = "Signalfehler";
 
 pub const VERSION_EMPTY: &str = "Leere Versionszeichenkette";
 pub const VERSION_INVALID: &str = "Ungültige Versionszeichenkette";
+pub const VERSION_MAJOR_REQUIRED: &str = "Hauptversion ist erforderlich";
 pub const VERSION_PATCH_REQUIRES_MINOR: &str = "Patch-Version erfordert Nebenversion";
 
 // ============================================================================
@@ -20,13 +25,18 @@ pub const VERSION_PATCH_REQUIRES_MINOR: &str = "Patch-Version erfordert Nebenver
 // ============================================================================
 
 pub const DBC_EMPTY_FILE: &str = "Leere DBC-Datei";
+pub const DBC_VERSION_REQUIRED: &str = "Version ist erforderlich";
+pub const DBC_NODES_REQUIRED: &str = "Knoten sind erforderlich";
 pub const DBC_NODES_NOT_DEFINED: &str = "Knoten (BU_) sind nicht definiert";
+pub const NODES_DUPLICATE_NAME: &str = "Doppelter Knotenname";
 
 // ============================================================================
 // Message-related error messages
 // ============================================================================
 
 pub const MESSAGE_NAME_EMPTY: &str = "Nachrichtenname darf nicht leer sein";
+pub const MESSAGE_ID_REQUIRED: &str = "id ist erforderlich";
+pub const MESSAGE_DLC_REQUIRED: &str = "dlc ist erforderlich";
 pub const MESSAGE_SENDER_EMPTY: &str = "Nachrichtensender darf nicht leer sein";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "Nachrichten-DLC muss mindestens 1 Byte betragen";
 pub const MESSAGE_DLC_TOO_LARGE: &str = "Nachrichten-DLC darf 8 Bytes nicht überschreiten";
@@ -40,6 +50,8 @@ pub const MESSAGE_ID_OUT_OF_RANGE: &str = "Nachrichten-ID außerhalb des gültig
 // ============================================================================
 
 pub const SIGNAL_NAME_EMPTY: &str = "Signalname darf nicht leer sein";
+pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bit ist erforderlich";
+pub const SIGNAL_LENGTH_REQUIRED: &str = "length ist erforderlich";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signallänge muss mindestens 1 Bit betragen";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "Signallänge darf 64 Bits nicht überschreiten";
 pub const SIGNAL_OVERLAP: &str = "Signale überlappen sich in der Nachricht";
@@ -76,6 +88,7 @@ pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "Erwartet Beginn der 'unit'-Z
 
 pub const FORMAT_DUPLICATE_MESSAGE_ID: &str =
     "Doppelte Nachrichten-ID: {} (Nachrichten '{}' und '{}')";
+pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Doppelter Knotenname: '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "Nachricht '{}' hat einen Sender '{}', der nicht in der Knotenliste steht";
 pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Signal '{}' erstreckt sich über die Nachrichtengrenze hinaus: start_bit {} + length {} = {} > {} (DLC {} Bytes)";

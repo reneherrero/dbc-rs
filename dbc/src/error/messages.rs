@@ -7,18 +7,20 @@ use alloc::{format, string::String};
 /// from the `lang` module. The language is selected at build time via feature flags.
 // Re-export constants from the selected language module
 pub(crate) use lang::{
-    DBC_EMPTY_FILE, DBC_NODES_NOT_DEFINED, MESSAGE_DLC_TOO_LARGE, MESSAGE_DLC_TOO_SMALL,
+    DBC_EMPTY_FILE, DBC_NODES_NOT_DEFINED, DBC_NODES_REQUIRED, DBC_VERSION_REQUIRED,
+    MESSAGE_DLC_REQUIRED, MESSAGE_DLC_TOO_LARGE, MESSAGE_DLC_TOO_SMALL, MESSAGE_ID_REQUIRED,
     MESSAGE_INVALID_DLC, MESSAGE_INVALID_FORMAT, MESSAGE_INVALID_ID, MESSAGE_NAME_EMPTY,
-    MESSAGE_SENDER_EMPTY, SIGNAL_LENGTH_TOO_LARGE, SIGNAL_LENGTH_TOO_SMALL, SIGNAL_NAME_EMPTY,
-    SIGNAL_PARSE_EXPECTED_AT, SIGNAL_PARSE_EXPECTED_PIPE, SIGNAL_PARSE_EXPECTED_SG,
-    SIGNAL_PARSE_EXPECTED_UNIT_QUOTE, SIGNAL_PARSE_INVALID_FACTOR, SIGNAL_PARSE_INVALID_LENGTH,
-    SIGNAL_PARSE_INVALID_MAX, SIGNAL_PARSE_INVALID_MIN, SIGNAL_PARSE_INVALID_OFFSET,
-    SIGNAL_PARSE_INVALID_START_BIT, SIGNAL_PARSE_MISSING_BYTE_ORDER,
+    MESSAGE_SENDER_EMPTY, SIGNAL_LENGTH_REQUIRED, SIGNAL_LENGTH_TOO_LARGE, SIGNAL_LENGTH_TOO_SMALL,
+    SIGNAL_NAME_EMPTY, SIGNAL_PARSE_EXPECTED_AT, SIGNAL_PARSE_EXPECTED_PIPE,
+    SIGNAL_PARSE_EXPECTED_SG, SIGNAL_PARSE_EXPECTED_UNIT_QUOTE, SIGNAL_PARSE_INVALID_FACTOR,
+    SIGNAL_PARSE_INVALID_LENGTH, SIGNAL_PARSE_INVALID_MAX, SIGNAL_PARSE_INVALID_MIN,
+    SIGNAL_PARSE_INVALID_OFFSET, SIGNAL_PARSE_INVALID_START_BIT, SIGNAL_PARSE_MISSING_BYTE_ORDER,
     SIGNAL_PARSE_MISSING_CLOSING_BRACKET, SIGNAL_PARSE_MISSING_CLOSING_PAREN,
     SIGNAL_PARSE_MISSING_COLON, SIGNAL_PARSE_MISSING_COMMA, SIGNAL_PARSE_MISSING_OPENING_BRACKET,
     SIGNAL_PARSE_MISSING_OPENING_PAREN, SIGNAL_PARSE_MISSING_PIPE_IN_RANGE,
     SIGNAL_PARSE_MISSING_POSITION, SIGNAL_PARSE_MISSING_REST, SIGNAL_PARSE_MISSING_SIGN,
-    VERSION_EMPTY, VERSION_INVALID, VERSION_PATCH_REQUIRES_MINOR,
+    SIGNAL_START_BIT_REQUIRED, VERSION_EMPTY, VERSION_INVALID, VERSION_MAJOR_REQUIRED,
+    VERSION_PATCH_REQUIRES_MINOR,
 };
 
 // ============================================================================
@@ -33,6 +35,26 @@ pub(crate) fn format_invalid_data(details: &str) -> String {
 /// Format a signal error message with category
 pub(crate) fn format_signal_error(details: &str) -> String {
     format!("{}: {}", lang::SIGNAL_ERROR_CATEGORY, details)
+}
+
+/// Format a message error message with category
+pub(crate) fn format_message_error(details: &str) -> String {
+    format!("{}: {}", lang::MESSAGE_ERROR_CATEGORY, details)
+}
+
+/// Format a DBC error message with category
+pub(crate) fn format_dbc_error(details: &str) -> String {
+    format!("{}: {}", lang::DBC_ERROR_CATEGORY, details)
+}
+
+/// Format a version error message with category
+pub(crate) fn format_version_error(details: &str) -> String {
+    format!("{}: {}", lang::VERSION_ERROR_CATEGORY, details)
+}
+
+/// Format a nodes error message with category
+pub(crate) fn format_nodes_error(details: &str) -> String {
+    format!("{}: {}", lang::NODES_ERROR_CATEGORY, details)
 }
 
 // ============================================================================
@@ -70,6 +92,12 @@ pub(crate) fn duplicate_message_id(id: u32, msg1: &str, msg2: &str) -> String {
         &msg2 as &dyn core::fmt::Display,
     ];
     replace_placeholders(lang::FORMAT_DUPLICATE_MESSAGE_ID, &args)
+}
+
+/// Format duplicate node name error
+pub(crate) fn duplicate_node_name(node_name: &str) -> String {
+    let args: [&dyn core::fmt::Display; 1] = [&node_name as &dyn core::fmt::Display];
+    replace_placeholders(lang::FORMAT_DUPLICATE_NODE_NAME, &args)
 }
 
 /// Format sender not in nodes error

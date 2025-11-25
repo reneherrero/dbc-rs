@@ -90,6 +90,22 @@ BU_: ECM TCM BCM ABS
 - Each node name should be unique
 - Nodes are referenced as transmitters and receivers in messages and signals
 
+**Node Naming Requirements:**
+- Uniqueness: Node names should be unique within a DBC file (recommended, not strictly enforced by all parsers)
+- Case Sensitivity: Node names are case-sensitive (e.g., `ECM` and `ecm` are considered different nodes)
+- Character Restrictions: No specific character restrictions are defined in the DBC format specification. Node names typically use:
+  - Alphanumeric characters (A-Z, a-z, 0-9)
+  - Underscores (`_`)
+  - Common practice: Uppercase abbreviations (e.g., `ECM`, `TCM`, `BCM`)
+- Length: No maximum length is specified in the DBC format specification
+- Format: No specific format requirements (PascalCase, UPPERCASE, snake_case, etc. are all acceptable)
+- **Examples of Valid Node Names**:
+  - Short uppercase: `ECM`, `TCM`, `BCM`, `ABS`
+  - With numbers: `ECU1`, `ECU2`, `NODE1`
+  - With underscores: `ECU_A`, `ECU_B`
+  - Mixed case: `Gateway`, `Sensor`, `Actuator`
+  - All uppercase: `GATEWAY`, `SENSOR`, `ACTUATOR`
+
 ---
 
 ### 3. BO_ (Message Definition)

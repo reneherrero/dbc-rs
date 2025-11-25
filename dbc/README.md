@@ -5,12 +5,12 @@ A clean, zero-dependency DBC (CAN Database) file parser and editor for Rust.
 [![Crates.io](https://img.shields.io/crates/v/dbc-rs.svg)](https://crates.io/crates/dbc-rs)
 [![Documentation](https://docs.rs/dbc-rs/badge.svg)](https://docs.rs/dbc-rs)
 [![License](https://img.shields.io/crates/l/dbc-rs.svg)](https://github.com/reneherrero/dbc-rs/blob/main/LICENSING.md)
-[![MSRV](https://img.shields.io/badge/rustc-1.74.0+-blue.svg)](https://www.rust-lang.org)
+[![MSRV](https://img.shields.io/badge/rustc-1.85.0+-blue.svg)](https://www.rust-lang.org)
 [![CI](https://github.com/reneherrero/dbc-rs/workflows/dbc-rs%20Library%20CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions/workflows/dbc-rs.yml)
 
 ## Minimum Supported Rust Version (MSRV)
 
-The minimum supported Rust version is **1.74.0**. The crate is tested against this version and may use features available in it or later.
+The minimum supported Rust version is **1.85.0**. The crate is tested against this version and may use features available in it or later.
 
 ## Features
 
@@ -274,29 +274,29 @@ use dbc_rs::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
 // Parse existing DBC
 let dbc = Dbc::parse(&content)?;
 
-// Create new signal
-let new_signal = Signal::new(
-    "NewSignal",
-    32,
-    8,
-    ByteOrder::BigEndian,
-    true,
-    1.0,
-    0.0,
-    0.0,
-    255.0,
-    Some("unit"),
-    Receivers::Broadcast,
-)?;
+// Create new signal using builder
+let new_signal = Signal::builder()
+    .name("NewSignal")
+    .start_bit(32)
+    .length(8)
+    .byte_order(ByteOrder::BigEndian)
+    .unsigned(true)
+    .factor(1.0)
+    .offset(0.0)
+    .min(0.0)
+    .max(255.0)
+    .unit("unit")
+    .receivers(Receivers::Broadcast)
+    .build()?;
 
-// Create new message with the signal
-let new_message = Message::new(
-    1024,
-    "NewMessage",
-    8,
-    "ECM",
-    vec![new_signal],
-)?;
+// Create new message with the signal using builder
+let new_message = Message::builder()
+    .id(1024)
+    .name("NewMessage")
+    .dlc(8)
+    .sender("ECM")
+    .add_signal(new_signal)
+    .build()?;
 
 // Note: Dbc doesn't have a mutable API yet, so you'd need to:
 // 1. Extract all data via getters
@@ -306,7 +306,11 @@ let nodes = dbc.nodes();
 let mut messages: Vec<Message> = dbc.messages().to_vec();
 messages.push(new_message);
 
-let modified_dbc = Dbc::new(version.clone(), nodes.clone(), messages)?;
+let modified_dbc = Dbc::builder()
+    .version(version.clone())
+    .nodes(nodes.clone())
+    .messages(messages)
+    .build()?;
 
 // Save back to DBC format
 let saved_content = modified_dbc.save();
@@ -346,11 +350,35 @@ for message in dbc.messages() {
 use dbc_rs::{Message, Signal, ByteOrder, Receivers};
 
 // This will fail validation - signal overlaps
-let signal1 = Signal::new("Signal1", 0, 16, ByteOrder::BigEndian, true, 1.0, 0.0, 0.0, 100.0, None, Receivers::None)?;
-let signal2 = Signal::new("Signal2", 8, 16, ByteOrder::BigEndian, true, 1.0, 0.0, 0.0, 100.0, None, Receivers::None)?;
+let signal1 = Signal::builder()
+    .name("Signal1")
+    .start_bit(0)
+    .length(16)
+    .byte_order(ByteOrder::BigEndian)
+    .unsigned(true)
+    .min(0.0)
+    .max(100.0)
+    .build()?;
+let signal2 = Signal::builder()
+    .name("Signal2")
+    .start_bit(8)
+    .length(16)
+    .byte_order(ByteOrder::BigEndian)
+    .unsigned(true)
+    .min(0.0)
+    .max(100.0)
+    .build()?;
 
 // This will return an error due to signal overlap
-match Message::new(256, "Test", 8, "ECM", vec![signal1, signal2]) {
+match Message::builder()
+    .id(256)
+    .name("Test")
+    .dlc(8)
+    .sender("ECM")
+    .add_signal(signal1)
+    .add_signal(signal2)
+    .build()
+{
     Ok(_) => println!("Message created successfully"),
     Err(e) => println!("Validation failed: {}", e),
 }
@@ -468,25 +496,39 @@ if let Some(msg) = engine_msg {
 use dbc_rs::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
 
 // Create from scratch
-let version = Version::new(1, Some(0), None)?;
-let nodes = Nodes::new(&["ECM", "TCM", "BCM"]);
+let version = Version::builder().major(1).minor(0).build()?;
+let nodes = Nodes::builder()
+    .add_node("ECM")
+    .add_node("TCM")
+    .add_node("BCM")
+    .build();
 
-let signal = Signal::new(
-    "EngineSpeed",
-    0,
-    16,
-    ByteOrder::BigEndian,
-    true,
-    0.25,
-    0.0,
-    0.0,
-    8000.0,
-    Some("rpm"),
-    Receivers::Broadcast,
-)?;
+let signal = Signal::builder()
+    .name("EngineSpeed")
+    .start_bit(0)
+    .length(16)
+    .byte_order(ByteOrder::BigEndian)
+    .unsigned(true)
+    .factor(0.25)
+    .offset(0.0)
+    .min(0.0)
+    .max(8000.0)
+    .unit("rpm")
+    .receivers(Receivers::Broadcast)
+    .build()?;
 
-let message = Message::new(256, "EngineData", 8, "ECM", vec![signal])?;
-let dbc = Dbc::new(version, nodes, vec![message])?;
+let message = Message::builder()
+    .id(256)
+    .name("EngineData")
+    .dlc(8)
+    .sender("ECM")
+    .add_signal(signal)
+    .build()?;
+let dbc = Dbc::builder()
+    .version(version)
+    .nodes(nodes)
+    .add_message(message)
+    .build()?;
 
 // Save to string
 let dbc_string = dbc.save();
@@ -504,33 +546,42 @@ let version = dbc.version();
 let nodes = dbc.nodes();
 let mut messages: Vec<Message> = dbc.messages().to_vec();
 
-// Add new message
-let new_signal = Signal::new(
-    "NewSignal",
-    0,
-    8,
-    ByteOrder::BigEndian,
-    true,
-    1.0,
-    0.0,
-    0.0,
-    255.0,
-    None,
-    Receivers::Broadcast,
-)?;
+// Add new message using builder
+let new_signal = Signal::builder()
+    .name("NewSignal")
+    .start_bit(0)
+    .length(8)
+    .byte_order(ByteOrder::BigEndian)
+    .unsigned(true)
+    .factor(1.0)
+    .offset(0.0)
+    .min(0.0)
+    .max(255.0)
+    .receivers(Receivers::Broadcast)
+    .build()?;
 
-let new_message = Message::new(1024, "NewMessage", 8, "ECM", vec![new_signal])?;
+let new_message = Message::builder()
+    .id(1024)
+    .name("NewMessage")
+    .dlc(8)
+    .sender("ECM")
+    .add_signal(new_signal)
+    .build()?;
 messages.push(new_message);
 
 // Create modified DBC
-let modified_dbc = Dbc::new(version.clone(), nodes.clone(), messages)?;
+let modified_dbc = Dbc::builder()
+    .version(version.clone())
+    .nodes(nodes.clone())
+    .messages(messages)
+    .build()?;
 let saved = modified_dbc.save();
 ```
 
 ### Best Practices
 
 1. **Always handle errors**: Use `?` operator or `match` to handle parsing errors gracefully
-2. **Validate before creating**: Use constructors (`new()`) which include validation
+2. **Validate before creating**: Use builders (`.builder()`) which include validation
 3. **Use getters**: Access data through getter methods, not direct field access
 4. **Clone when needed**: Clone `Version` and `Nodes` when creating new `Dbc` instances
 5. **Check signal ranges**: Verify signal min/max values match your application requirements
@@ -551,12 +602,22 @@ let id = message.id(); // Correct
 ❌ **Don't**: Ignore validation errors
 ```rust
 // This might panic or create invalid data
-let signal = Signal::new(/* invalid params */).unwrap();
+let signal = Signal::builder()
+    .name("Test")
+    .start_bit(0)
+    .length(16)
+    .build()
+    .unwrap(); // Don't use unwrap() in production!
 ```
 
 ✅ **Do**: Handle errors properly
 ```rust
-match Signal::new(/* params */) {
+match Signal::builder()
+    .name("Test")
+    .start_bit(0)
+    .length(16)
+    .build()
+{
     Ok(signal) => { /* use signal */ },
     Err(e) => eprintln!("Validation failed: {}", e),
 }
@@ -596,10 +657,20 @@ match Signal::new(/* params */) {
 
 ```rust
 // ❌ Invalid
-let msg = Message::new(0x20000000, "Test", 8, "ECM", vec![])?; // Too large
+let msg = Message::builder()
+    .id(0x20000000) // Too large
+    .name("Test")
+    .dlc(8)
+    .sender("ECM")
+    .build()?;
 
 // ✅ Valid
-let msg = Message::new(0x1FFFFFFF, "Test", 8, "ECM", vec![])?; // Max extended ID
+let msg = Message::builder()
+    .id(0x1FFFFFFF) // Max extended ID
+    .name("Test")
+    .dlc(8)
+    .sender("ECM")
+    .build()?;
 ```
 
 #### "Signal extends beyond CAN message"
@@ -610,12 +681,32 @@ let msg = Message::new(0x1FFFFFFF, "Test", 8, "ECM", vec![])?; // Max extended I
 
 ```rust
 // ❌ Invalid: Signal extends to bit 64, but DLC=8 means max bit is 63
-let sig = Signal::new("Test", 56, 16, ...)?; // 56 + 16 = 72 > 64
-let msg = Message::new(256, "Test", 8, "ECM", vec![sig])?;
+let sig = Signal::builder()
+    .name("Test")
+    .start_bit(56)
+    .length(16) // 56 + 16 = 72 > 64
+    .build()?;
+let msg = Message::builder()
+    .id(256)
+    .name("Test")
+    .dlc(8)
+    .sender("ECM")
+    .add_signal(sig)
+    .build()?;
 
 // ✅ Valid: Signal fits within 8-byte message (0-63)
-let sig = Signal::new("Test", 0, 64, ...)?; // 0 + 64 = 64 (fits in 8 bytes)
-let msg = Message::new(256, "Test", 8, "ECM", vec![sig])?;
+let sig = Signal::builder()
+    .name("Test")
+    .start_bit(0)
+    .length(64) // 0 + 64 = 64 (fits in 8 bytes)
+    .build()?;
+let msg = Message::builder()
+    .id(256)
+    .name("Test")
+    .dlc(8)
+    .sender("ECM")
+    .add_signal(sig)
+    .build()?;
 ```
 
 #### "Signal overlap detected"
@@ -626,12 +717,28 @@ let msg = Message::new(256, "Test", 8, "ECM", vec![sig])?;
 
 ```rust
 // ❌ Invalid: Signals overlap at bits 8-15
-let sig1 = Signal::new("Signal1", 0, 16, ...)?;  // Bits 0-15
-let sig2 = Signal::new("Signal2", 8, 16, ...)?; // Bits 8-23 (overlaps!)
+let sig1 = Signal::builder()
+    .name("Signal1")
+    .start_bit(0)
+    .length(16) // Bits 0-15
+    .build()?;
+let sig2 = Signal::builder()
+    .name("Signal2")
+    .start_bit(8)
+    .length(16) // Bits 8-23 (overlaps!)
+    .build()?;
 
 // ✅ Valid: Signals don't overlap
-let sig1 = Signal::new("Signal1", 0, 16, ...)?;  // Bits 0-15
-let sig2 = Signal::new("Signal2", 16, 16, ...)?; // Bits 16-31 (no overlap)
+let sig1 = Signal::builder()
+    .name("Signal1")
+    .start_bit(0)
+    .length(16) // Bits 0-15
+    .build()?;
+let sig2 = Signal::builder()
+    .name("Signal2")
+    .start_bit(16)
+    .length(16) // Bits 16-31 (no overlap)
+    .build()?;
 ```
 
 #### "Sender not in nodes"
@@ -642,14 +749,32 @@ let sig2 = Signal::new("Signal2", 16, 16, ...)?; // Bits 16-31 (no overlap)
 
 ```rust
 // ❌ Invalid: "ECM" not in nodes
-let nodes = Nodes::new(&["TCM"]);
-let msg = Message::new(256, "Test", 8, "ECM", vec![])?;
-let dbc = Dbc::new(version, nodes, vec![msg])?; // Error!
+let nodes = Nodes::builder().add_node("TCM").build()?;
+let msg = Message::builder()
+    .id(256)
+    .name("Test")
+    .dlc(8)
+    .sender("ECM")
+    .build()?;
+let dbc = Dbc::builder()
+    .version(version.clone())
+    .nodes(nodes)
+    .add_message(msg)
+    .build(); // Error!
 
 // ✅ Valid: "ECM" is in nodes
-let nodes = Nodes::new(&["ECM", "TCM"]);
-let msg = Message::new(256, "Test", 8, "ECM", vec![])?;
-let dbc = Dbc::new(version, nodes, vec![msg])?; // OK
+let nodes = Nodes::builder().add_node("ECM").add_node("TCM").build()?;
+let msg = Message::builder()
+    .id(256)
+    .name("Test")
+    .dlc(8)
+    .sender("ECM")
+    .build()?;
+let dbc = Dbc::builder()
+    .version(version)
+    .nodes(nodes)
+    .add_message(msg)
+    .build()?; // OK
 ```
 
 #### "Duplicate message ID"
@@ -660,18 +785,38 @@ let dbc = Dbc::new(version, nodes, vec![msg])?; // OK
 
 ```rust
 // ❌ Invalid: Duplicate IDs
-let msg1 = Message::new(256, "Message1", 8, "ECM", vec![])?;
-let msg2 = Message::new(256, "Message2", 8, "TCM", vec![])?; // Same ID!
+let msg1 = Message::builder()
+    .id(256)
+    .name("Message1")
+    .dlc(8)
+    .sender("ECM")
+    .build()?;
+let msg2 = Message::builder()
+    .id(256)
+    .name("Message2")
+    .dlc(8)
+    .sender("TCM")
+    .build()?; // Same ID!
 
 // ✅ Valid: Unique IDs
-let msg1 = Message::new(256, "Message1", 8, "ECM", vec![])?;
-let msg2 = Message::new(512, "Message2", 8, "TCM", vec![])?; // Different IDs
+let msg1 = Message::builder()
+    .id(256)
+    .name("Message1")
+    .dlc(8)
+    .sender("ECM")
+    .build()?;
+let msg2 = Message::builder()
+    .id(512)
+    .name("Message2")
+    .dlc(8)
+    .sender("TCM")
+    .build()?; // Different IDs
 ```
 
 ### Debugging Tips
 
 1. **Enable verbose error messages**: Error messages include context about what failed
-2. **Check validation**: Use constructors (`new()`) which validate input
+2. **Check validation**: Use builders (`.builder()`) which validate input
 3. **Verify DBC format**: Ensure your DBC file follows the correct format
 4. **Test with minimal examples**: Start with simple DBC files to isolate issues
 
@@ -723,7 +868,13 @@ dbc-rs/
 ### Error Handling
 
 - **Result-based**: All fallible operations return `Result<T, Error>`
-- **Categorized errors**: `Error::InvalidData` for parsing issues, `Error::Signal` for signal-specific issues
+- **Categorized errors**: Errors are categorized by type:
+  - `Error::Signal` - Signal-specific validation errors
+  - `Error::Message` - Message-specific validation errors
+  - `Error::Dbc` - DBC file-level errors
+  - `Error::Version` - Version parsing errors
+  - `Error::Nodes` - Node-related errors
+  - `Error::InvalidData` - General parsing/data errors
 - **Internationalized**: Error messages can be localized at build time
 - **Descriptive**: Error messages include context about what failed and why
 

@@ -52,6 +52,8 @@
 //! - [Examples](../examples/) - Usage examples
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![deny(missing_docs)]
+#![deny(unsafe_code)]
 
 extern crate alloc;
 

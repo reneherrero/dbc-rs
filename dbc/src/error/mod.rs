@@ -5,10 +5,33 @@ use core::num::ParseIntError;
 mod lang;
 pub(crate) mod messages;
 
+/// Error type for DBC parsing and validation operations.
+///
+/// Errors are categorized by the component that generated them, making it
+/// easier to identify where validation or parsing failed.
+///
+/// # Examples
+///
+/// ```rust
+/// use dbc_rs::Error;
+///
+/// let error = Error::Signal("Signal name cannot be empty".to_string());
+/// println!("{}", error);
+/// ```
 #[derive(Debug, PartialEq)]
 pub enum Error {
+    /// General data validation or parsing error.
     InvalidData(String),
+    /// Signal-specific validation or parsing error.
     Signal(String),
+    /// Message-specific validation or parsing error.
+    Message(String),
+    /// DBC file-level validation or parsing error.
+    Dbc(String),
+    /// Version parsing error.
+    Version(String),
+    /// Node-related validation or parsing error.
+    Nodes(String),
 }
 
 impl fmt::Display for Error {
@@ -21,6 +44,18 @@ impl fmt::Display for Error {
             Error::Signal(msg) => {
                 // Display the message with category prefix for better readability
                 write!(f, "{}", messages::format_signal_error(msg))
+            }
+            Error::Message(msg) => {
+                write!(f, "{}", messages::format_message_error(msg))
+            }
+            Error::Dbc(msg) => {
+                write!(f, "{}", messages::format_dbc_error(msg))
+            }
+            Error::Version(msg) => {
+                write!(f, "{}", messages::format_version_error(msg))
+            }
+            Error::Nodes(msg) => {
+                write!(f, "{}", messages::format_nodes_error(msg))
             }
         }
     }

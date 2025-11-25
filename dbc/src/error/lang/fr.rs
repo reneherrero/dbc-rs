@@ -6,6 +6,10 @@
 
 pub const INVALID_DATA_CATEGORY: &str = "Erreur de données";
 pub const SIGNAL_ERROR_CATEGORY: &str = "Erreur de signal";
+pub const MESSAGE_ERROR_CATEGORY: &str = "Erreur de message";
+pub const DBC_ERROR_CATEGORY: &str = "Erreur DBC";
+pub const VERSION_ERROR_CATEGORY: &str = "Erreur de version";
+pub const NODES_ERROR_CATEGORY: &str = "Erreur de nœuds";
 
 // ============================================================================
 // Version-related error messages
@@ -13,6 +17,7 @@ pub const SIGNAL_ERROR_CATEGORY: &str = "Erreur de signal";
 
 pub const VERSION_EMPTY: &str = "Chaîne de version vide";
 pub const VERSION_INVALID: &str = "Chaîne de version invalide";
+pub const VERSION_MAJOR_REQUIRED: &str = "version majeure est requise";
 pub const VERSION_PATCH_REQUIRES_MINOR: &str =
     "La version de correctif nécessite une version mineure";
 
@@ -21,13 +26,18 @@ pub const VERSION_PATCH_REQUIRES_MINOR: &str =
 // ============================================================================
 
 pub const DBC_EMPTY_FILE: &str = "Fichier DBC vide";
+pub const DBC_VERSION_REQUIRED: &str = "version est requise";
+pub const DBC_NODES_REQUIRED: &str = "nœuds sont requis";
 pub const DBC_NODES_NOT_DEFINED: &str = "Les nœuds (BU_) ne sont pas définis";
+pub const NODES_DUPLICATE_NAME: &str = "Nom de nœud en double";
 
 // ============================================================================
 // Message-related error messages
 // ============================================================================
 
 pub const MESSAGE_NAME_EMPTY: &str = "Le nom du message ne peut pas être vide";
+pub const MESSAGE_ID_REQUIRED: &str = "id est requis";
+pub const MESSAGE_DLC_REQUIRED: &str = "dlc est requis";
 pub const MESSAGE_SENDER_EMPTY: &str = "L'expéditeur du message ne peut pas être vide";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "Le DLC du message doit être d'au moins 1 octet";
 pub const MESSAGE_DLC_TOO_LARGE: &str = "Le DLC du message ne peut pas dépasser 8 octets";
@@ -41,6 +51,8 @@ pub const MESSAGE_ID_OUT_OF_RANGE: &str = "ID de message hors de la plage valide
 // ============================================================================
 
 pub const SIGNAL_NAME_EMPTY: &str = "Le nom du signal ne peut pas être vide";
+pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bit est requis";
+pub const SIGNAL_LENGTH_REQUIRED: &str = "length est requis";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "La longueur du signal doit être d'au moins 1 bit";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "La longueur du signal ne peut pas dépasser 64 bits";
 pub const SIGNAL_OVERLAP: &str = "Les signaux se chevauchent dans le message";
@@ -77,6 +89,7 @@ pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "Attendu le début de la cha�
 
 pub const FORMAT_DUPLICATE_MESSAGE_ID: &str =
     "ID de message en double : {} (messages '{}' et '{}')";
+pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Nom de nœud en double : '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "Le message '{}' a un expéditeur '{}' qui n'est pas dans la liste des nœuds";
 pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Le signal '{}' dépasse la limite du message : start_bit {} + length {} = {} > {} (DLC {} octets)";

@@ -1,76 +1,82 @@
 use dbc_rs::{ByteOrder, Dbc, Message, Nodes, Receivers, Signal, Version};
 
 fn main() -> Result<(), dbc_rs::Error> {
-    // Create version "1.0"
-    let version = Version::new(1, Some(0), None)?;
+    // Create version "1.0" using builder
+    let version = Version::builder().major(1).minor(0).build()?;
 
-    // Create nodes: ECM and TCM
-    let nodes = Nodes::new(&["ECM", "TCM"]);
+    // Create nodes: ECM and TCM using builder
+    let nodes = Nodes::builder().add_node("ECM").add_node("TCM").build()?;
 
-    // Create signals for Engine message
-    let rpm_signal = Signal::new(
-        "RPM",                   // name
-        0,                       // start_bit
-        16,                      // length
-        ByteOrder::LittleEndian, // byte_order (@0)
-        true,                    // unsigned (+)
-        0.25,                    // factor
-        0.0,                     // offset
-        0.0,                     // min
-        8000.0,                  // max
-        Some("rpm"),             // unit
-        Receivers::None,         // receivers
-    )?;
+    // Create signals for Engine message using the builder pattern
+    let rpm_signal = Signal::builder()
+        .name("RPM")
+        .start_bit(0)
+        .length(16)
+        .byte_order(ByteOrder::LittleEndian)
+        .unsigned(true)
+        .factor(0.25)
+        .offset(0.0)
+        .min(0.0)
+        .max(8000.0)
+        .unit("rpm")
+        .receivers(Receivers::None)
+        .build()?;
 
-    let temp_signal = Signal::new(
-        "Temp",                  // name
-        16,                      // start_bit
-        8,                       // length
-        ByteOrder::LittleEndian, // byte_order (@0)
-        false,                   // signed (-)
-        1.0,                     // factor
-        -40.0,                   // offset
-        -40.0,                   // min
-        215.0,                   // max
-        Some("°C"),              // unit
-        Receivers::None,         // receivers
-    )?;
+    let temp_signal = Signal::builder()
+        .name("Temp")
+        .start_bit(16)
+        .length(8)
+        .byte_order(ByteOrder::LittleEndian)
+        .unsigned(false)
+        .factor(1.0)
+        .offset(-40.0)
+        .min(-40.0)
+        .max(215.0)
+        .unit("°C")
+        .receivers(Receivers::None)
+        .build()?;
 
     // Create signals for Brake message
-    let pressure_signal = Signal::new(
-        "Pressure",           // name
-        0,                    // start_bit
-        16,                   // length
-        ByteOrder::BigEndian, // byte_order (@1)
-        true,                 // unsigned (+)
-        0.1,                  // factor
-        0.0,                  // offset
-        0.0,                  // min
-        1000.0,               // max
-        Some("bar"),          // unit
-        Receivers::None,      // receivers
-    )?;
+    let pressure_signal = Signal::builder()
+        .name("Pressure")
+        .start_bit(0)
+        .length(16)
+        .byte_order(ByteOrder::BigEndian)
+        .unsigned(true)
+        .factor(0.1)
+        .offset(0.0)
+        .min(0.0)
+        .max(1000.0)
+        .unit("bar")
+        .receivers(Receivers::None)
+        .build()?;
 
-    // Create Engine message (ID 256, DLC 8, sender ECM)
-    let engine_message = Message::new(
-        256,                           // id
-        "Engine",                      // name
-        8,                             // dlc
-        "ECM",                         // sender
-        vec![rpm_signal, temp_signal], // signals
-    )?;
+    // Create Engine message (ID 256, DLC 8, sender ECM) using the builder pattern
+    let engine_message = Message::builder()
+        .id(256)
+        .name("Engine")
+        .dlc(8)
+        .sender("ECM")
+        .add_signal(rpm_signal)
+        .add_signal(temp_signal)
+        .build()?;
 
-    // Create Brake message (ID 512, DLC 4, sender TCM)
-    let brake_message = Message::new(
-        512,                   // id
-        "Brake",               // name
-        4,                     // dlc
-        "TCM",                 // sender
-        vec![pressure_signal], // signals
-    )?;
+    // Create Brake message (ID 512, DLC 4, sender TCM) using the builder pattern
+    let brake_message = Message::builder()
+        .id(512)
+        .name("Brake")
+        .dlc(4)
+        .sender("TCM")
+        .add_signal(pressure_signal)
+        .build()?;
 
-    // Create DBC with all components
-    let dbc = Dbc::new(version, nodes, vec![engine_message, brake_message])?;
+    // Create DBC with all components using the builder pattern
+    let dbc = Dbc::builder()
+        .version(version)
+        .nodes(nodes)
+        .add_message(engine_message)
+        .add_message(brake_message)
+        .build()?;
 
     // Verify the created DBC
     println!("Created DBC with version: {}", dbc.version().to_string());

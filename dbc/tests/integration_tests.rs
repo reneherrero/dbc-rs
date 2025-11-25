@@ -227,9 +227,7 @@ fn test_parse_complete_dbc_file() {
     assert_eq!(rpm.factor(), 0.25);
     assert_eq!(rpm.unit(), Some("rpm"));
 
-    let temp = engine_msg
-        .find_signal("Temperature")
-        .expect("Temperature signal not found");
+    let temp = engine_msg.find_signal("Temperature").expect("Temperature signal not found");
     assert_eq!(temp.start_bit(), 16);
     assert_eq!(temp.length(), 8);
     assert_eq!(temp.unit(), Some("°C"));
@@ -256,29 +254,24 @@ fn test_parse_complete_dbc_file() {
     assert_eq!(brake_msg.signals().len(), 4);
 
     // Verify signals in BrakeData
-    let brake_pressure = brake_msg
-        .find_signal("BrakePressure")
-        .expect("BrakePressure signal not found");
+    let brake_pressure =
+        brake_msg.find_signal("BrakePressure").expect("BrakePressure signal not found");
     assert_eq!(brake_pressure.start_bit(), 0);
     assert_eq!(brake_pressure.length(), 16);
     assert_eq!(brake_pressure.unit(), Some("bar"));
 
-    let abs_active = brake_msg
-        .find_signal("ABSActive")
-        .expect("ABSActive signal not found");
+    let abs_active = brake_msg.find_signal("ABSActive").expect("ABSActive signal not found");
     assert_eq!(abs_active.start_bit(), 16);
     assert_eq!(abs_active.length(), 1);
 
-    let wheel_speed_fl = brake_msg
-        .find_signal("WheelSpeedFL")
-        .expect("WheelSpeedFL signal not found");
+    let wheel_speed_fl =
+        brake_msg.find_signal("WheelSpeedFL").expect("WheelSpeedFL signal not found");
     assert_eq!(wheel_speed_fl.start_bit(), 17);
     assert_eq!(wheel_speed_fl.length(), 15);
     assert_eq!(wheel_speed_fl.unit(), Some("km/h"));
 
-    let wheel_speed_fr = brake_msg
-        .find_signal("WheelSpeedFR")
-        .expect("WheelSpeedFR signal not found");
+    let wheel_speed_fr =
+        brake_msg.find_signal("WheelSpeedFR").expect("WheelSpeedFR signal not found");
     assert_eq!(wheel_speed_fr.start_bit(), 32);
     assert_eq!(wheel_speed_fr.length(), 15);
     assert_eq!(wheel_speed_fr.unit(), Some("km/h"));

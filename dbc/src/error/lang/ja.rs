@@ -6,6 +6,10 @@
 
 pub const INVALID_DATA_CATEGORY: &str = "データエラー";
 pub const SIGNAL_ERROR_CATEGORY: &str = "信号エラー";
+pub const MESSAGE_ERROR_CATEGORY: &str = "メッセージエラー";
+pub const DBC_ERROR_CATEGORY: &str = "DBCエラー";
+pub const VERSION_ERROR_CATEGORY: &str = "バージョンエラー";
+pub const NODES_ERROR_CATEGORY: &str = "ノードエラー";
 
 // ============================================================================
 // Version-related error messages
@@ -13,6 +17,7 @@ pub const SIGNAL_ERROR_CATEGORY: &str = "信号エラー";
 
 pub const VERSION_EMPTY: &str = "空のバージョン文字列";
 pub const VERSION_INVALID: &str = "無効なバージョン文字列";
+pub const VERSION_MAJOR_REQUIRED: &str = "メジャーバージョンが必要です";
 pub const VERSION_PATCH_REQUIRES_MINOR: &str = "パッチバージョンにはマイナーバージョンが必要です";
 
 // ============================================================================
@@ -20,13 +25,18 @@ pub const VERSION_PATCH_REQUIRES_MINOR: &str = "パッチバージョンには�
 // ============================================================================
 
 pub const DBC_EMPTY_FILE: &str = "空のDBCファイル";
+pub const DBC_VERSION_REQUIRED: &str = "バージョンが必要です";
+pub const DBC_NODES_REQUIRED: &str = "ノードが必要です";
 pub const DBC_NODES_NOT_DEFINED: &str = "ノード（BU_）が定義されていません";
+pub const NODES_DUPLICATE_NAME: &str = "重複するノード名";
 
 // ============================================================================
 // Message-related error messages
 // ============================================================================
 
 pub const MESSAGE_NAME_EMPTY: &str = "メッセージ名を空にすることはできません";
+pub const MESSAGE_ID_REQUIRED: &str = "idが必要です";
+pub const MESSAGE_DLC_REQUIRED: &str = "dlcが必要です";
 pub const MESSAGE_SENDER_EMPTY: &str = "メッセージ送信者を空にすることはできません";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "メッセージDLCは少なくとも1バイトである必要があります";
 pub const MESSAGE_DLC_TOO_LARGE: &str = "メッセージDLCは8バイトを超えることはできません";
@@ -40,6 +50,8 @@ pub const MESSAGE_ID_OUT_OF_RANGE: &str = "メッセージIDが有効範囲外�
 // ============================================================================
 
 pub const SIGNAL_NAME_EMPTY: &str = "信号名を空にすることはできません";
+pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bitが必要です";
+pub const SIGNAL_LENGTH_REQUIRED: &str = "lengthが必要です";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "信号長は少なくとも1ビットである必要があります";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "信号長は64ビットを超えることはできません";
 pub const SIGNAL_OVERLAP: &str = "信号がメッセージ内で重複しています";
@@ -75,6 +87,7 @@ pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "'unit'文字列の開始'\"'
 // ============================================================================
 
 pub const FORMAT_DUPLICATE_MESSAGE_ID: &str = "重複するメッセージID: {}（メッセージ'{}'と'{}'）";
+pub const FORMAT_DUPLICATE_NODE_NAME: &str = "重複するノード名: '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "メッセージ'{}'には送信者'{}'がありますが、ノードリストにありません";
 pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str =

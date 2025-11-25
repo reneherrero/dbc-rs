@@ -1,6 +1,24 @@
-use crate::{error::messages, Error, Signal};
+use crate::{Error, Signal, error::messages};
 use alloc::{boxed::Box, format, string::String, string::ToString, vec::Vec};
 
+/// Represents a CAN message within a DBC file.
+///
+/// A message contains a CAN ID, name, data length code (DLC), sender node,
+/// and a list of signals that make up the message payload.
+///
+/// # Examples
+///
+/// ```rust
+/// use dbc_rs::Message;
+///
+/// let message = Message::builder()
+///     .id(256)
+///     .name("EngineData")
+///     .dlc(8)
+///     .sender("ECM")
+///     .build()?;
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Message {
     id: u32,
@@ -20,19 +38,19 @@ impl Message {
         signals: &[Signal],
     ) -> Result<(), Error> {
         if name.trim().is_empty() {
-            return Err(Error::Signal(messages::MESSAGE_NAME_EMPTY.to_string()));
+            return Err(Error::Message(messages::MESSAGE_NAME_EMPTY.to_string()));
         }
 
         if sender.trim().is_empty() {
-            return Err(Error::Signal(messages::MESSAGE_SENDER_EMPTY.to_string()));
+            return Err(Error::Message(messages::MESSAGE_SENDER_EMPTY.to_string()));
         }
 
         // Validate DLC: must be between 1 and 8 bytes
         if dlc == 0 {
-            return Err(Error::Signal(messages::MESSAGE_DLC_TOO_SMALL.to_string()));
+            return Err(Error::Message(messages::MESSAGE_DLC_TOO_SMALL.to_string()));
         }
         if dlc > 8 {
-            return Err(Error::Signal(messages::MESSAGE_DLC_TOO_LARGE.to_string()));
+            return Err(Error::Message(messages::MESSAGE_DLC_TOO_LARGE.to_string()));
         }
 
         // Validate CAN ID range
@@ -45,7 +63,7 @@ impl Message {
 
         // Validate that ID is within valid CAN ID ranges
         if id > MAX_EXTENDED_ID {
-            return Err(Error::Signal(messages::message_id_out_of_range(id)));
+            return Err(Error::Message(messages::message_id_out_of_range(id)));
         }
 
         // Explicit validation: standard IDs must be 0-0x7FF
@@ -53,7 +71,7 @@ impl Message {
         // This check ensures proper range validation for both types
         if id <= MAX_STANDARD_ID {
             // Valid standard 11-bit ID (0-2047) - explicitly validated
-        } else if id >= MIN_EXTENDED_ID && id <= MAX_EXTENDED_ID {
+        } else if (MIN_EXTENDED_ID..=MAX_EXTENDED_ID).contains(&id) {
             // Valid extended 29-bit ID (2048-536870911) - explicitly validated
         }
 
@@ -62,7 +80,7 @@ impl Message {
         for signal in signals {
             let end_bit = signal.start_bit() as u16 + signal.length() as u16;
             if end_bit > max_bits {
-                return Err(Error::Signal(messages::signal_extends_beyond_message(
+                return Err(Error::Message(messages::signal_extends_beyond_message(
                     signal.name(),
                     signal.start_bit(),
                     signal.length(),
@@ -88,7 +106,7 @@ impl Message {
                 // Check if ranges overlap
                 // Two ranges overlap if: sig1_start < sig2_end && sig2_start < sig1_end
                 if sig1_start < sig2_end && sig2_start < sig1_end {
-                    return Err(Error::Signal(messages::signal_overlap(
+                    return Err(Error::Message(messages::signal_overlap(
                         sig1.name(),
                         sig2.name(),
                         name,
@@ -112,35 +130,8 @@ impl Message {
     /// - Any signal extends beyond the message boundary (DLC * 8 bits)
     /// - Any signals overlap within the message
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
-    ///
-    /// let signal = Signal::new(
-    ///     "RPM",
-    ///     0,
-    ///     16,
-    ///     ByteOrder::BigEndian,
-    ///     true,
-    ///     0.25,
-    ///     0.0,
-    ///     0.0,
-    ///     8000.0,
-    ///     Some("rpm" as &str),
-    ///     Receivers::Broadcast,
-    /// )?;
-    ///
-    /// let message = Message::new(
-    ///     256,
-    ///     "EngineData",
-    ///     8,
-    ///     "ECM",
-    ///     vec![signal],
-    /// )?;
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    pub fn new(
+    /// This is an internal constructor. For public API usage, use [`Message::builder()`] instead.
+    pub(crate) fn new(
         id: u32,
         name: impl AsRef<str>,
         dlc: u8,
@@ -160,19 +151,45 @@ impl Message {
         })
     }
 
+    /// Create a new builder for constructing a `Message`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
+    ///
+    /// let signal = Signal::builder()
+    ///     .name("RPM")
+    ///     .start_bit(0)
+    ///     .length(16)
+    ///     .build()?;
+    ///
+    /// let message = Message::builder()
+    ///     .id(256)
+    ///     .name("EngineData")
+    ///     .dlc(8)
+    ///     .sender("ECM")
+    ///     .add_signal(signal)
+    ///     .build()?;
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn builder() -> MessageBuilder {
+        MessageBuilder::new()
+    }
+
     pub(super) fn parse(message: &str, signals: Vec<Signal>) -> Result<Self, Error> {
         let parts: Vec<&str> = message.split_whitespace().collect();
         if parts.len() != 6 {
-            return Err(Error::Signal(messages::MESSAGE_INVALID_FORMAT.to_string()));
+            return Err(Error::Message(messages::MESSAGE_INVALID_FORMAT.to_string()));
         }
 
         let id = parts[1]
             .parse()
-            .map_err(|_| Error::Signal(messages::MESSAGE_INVALID_ID.to_string()))?;
+            .map_err(|_| Error::Message(messages::MESSAGE_INVALID_ID.to_string()))?;
         let name = parts[2];
         let dlc = parts[4]
             .parse()
-            .map_err(|_| Error::Signal(messages::MESSAGE_INVALID_DLC.to_string()))?;
+            .map_err(|_| Error::Message(messages::MESSAGE_INVALID_DLC.to_string()))?;
         let sender = parts[5];
 
         // Validate the parsed message using the same validation as new()
@@ -196,7 +213,7 @@ impl Message {
     /// Get the message name
     #[inline]
     pub fn name(&self) -> &str {
-        &*self.name
+        &self.name
     }
 
     /// Get the Data Length Code (DLC)
@@ -208,7 +225,7 @@ impl Message {
     /// Get the sender node name
     #[inline]
     pub fn sender(&self) -> &str {
-        &*self.sender
+        &self.sender
     }
 
     /// Get a read-only slice of signals in this message
@@ -234,21 +251,27 @@ impl Message {
     /// ```
     /// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
     ///
-    /// let signal = Signal::new(
-    ///     "RPM",
-    ///     0,
-    ///     16,
-    ///     ByteOrder::BigEndian,
-    ///     true,
-    ///     0.25,
-    ///     0.0,
-    ///     0.0,
-    ///     8000.0,
-    ///     Some("rpm" as &str),
-    ///     Receivers::Broadcast,
-    /// )?;
+    /// let signal = Signal::builder()
+    ///     .name("RPM")
+    ///     .start_bit(0)
+    ///     .length(16)
+    ///     .byte_order(ByteOrder::BigEndian)
+    ///     .unsigned(true)
+    ///     .factor(0.25)
+    ///     .offset(0.0)
+    ///     .min(0.0)
+    ///     .max(8000.0)
+    ///     .unit("rpm")
+    ///     .receivers(Receivers::Broadcast)
+    ///     .build()?;
     ///
-    /// let message = Message::new(256, "EngineData", 8, "ECM", vec![signal])?;
+    /// let message = Message::builder()
+    ///     .id(256)
+    ///     .name("EngineData")
+    ///     .dlc(8)
+    ///     .sender("ECM")
+    ///     .add_signal(signal)
+    ///     .build()?;
     /// assert_eq!(message.to_dbc_string(), "BO_ 256 EngineData : 8 ECM");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -273,21 +296,27 @@ impl Message {
     /// ```
     /// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
     ///
-    /// let signal = Signal::new(
-    ///     "RPM",
-    ///     0,
-    ///     16,
-    ///     ByteOrder::BigEndian,
-    ///     true,
-    ///     0.25,
-    ///     0.0,
-    ///     0.0,
-    ///     8000.0,
-    ///     Some("rpm" as &str),
-    ///     Receivers::Broadcast,
-    /// )?;
+    /// let signal = Signal::builder()
+    ///     .name("RPM")
+    ///     .start_bit(0)
+    ///     .length(16)
+    ///     .byte_order(ByteOrder::BigEndian)
+    ///     .unsigned(true)
+    ///     .factor(0.25)
+    ///     .offset(0.0)
+    ///     .min(0.0)
+    ///     .max(8000.0)
+    ///     .unit("rpm")
+    ///     .receivers(Receivers::Broadcast)
+    ///     .build()?;
     ///
-    /// let message = Message::new(256, "EngineData", 8, "ECM", vec![signal])?;
+    /// let message = Message::builder()
+    ///     .id(256)
+    ///     .name("EngineData")
+    ///     .dlc(8)
+    ///     .sender("ECM")
+    ///     .add_signal(signal)
+    ///     .build()?;
     /// let dbc_str = message.to_dbc_string_with_signals();
     /// assert!(dbc_str.contains("BO_ 256 EngineData : 8 ECM"));
     /// assert!(dbc_str.contains("SG_ RPM"));
@@ -304,6 +333,171 @@ impl Message {
         }
 
         result
+    }
+}
+
+/// Builder for constructing a `Message` with a fluent API
+///
+/// This builder provides a more ergonomic way to construct `Message` instances,
+/// especially when building messages with multiple signals.
+///
+/// # Examples
+///
+/// ```
+/// use dbc_rs::{Message, Signal, ByteOrder, Receivers};
+///
+/// // Message with no signals
+/// let message = Message::builder()
+///     .id(256)
+///     .name("EngineData")
+///     .dlc(8)
+///     .sender("ECM")
+///     .build()?;
+///
+/// // Message with multiple signals
+/// let signal1 = Signal::builder()
+///     .name("RPM")
+///     .start_bit(0)
+///     .length(16)
+///     .build()?;
+///
+/// let signal2 = Signal::builder()
+///     .name("Temperature")
+///     .start_bit(16)
+///     .length(8)
+///     .build()?;
+///
+/// let message = Message::builder()
+///     .id(256)
+///     .name("EngineData")
+///     .dlc(8)
+///     .sender("ECM")
+///     .add_signal(signal1)
+///     .add_signal(signal2)
+///     .build()?;
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+#[derive(Debug, Clone)]
+pub struct MessageBuilder {
+    id: Option<u32>,
+    name: Option<Box<str>>,
+    dlc: Option<u8>,
+    sender: Option<Box<str>>,
+    signals: Vec<Signal>,
+}
+
+impl MessageBuilder {
+    fn new() -> Self {
+        Self {
+            id: None,
+            name: None,
+            dlc: None,
+            sender: None,
+            signals: Vec::new(),
+        }
+    }
+
+    /// Set the CAN message ID (required)
+    pub fn id(mut self, id: u32) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    /// Set the message name (required)
+    pub fn name(mut self, name: impl AsRef<str>) -> Self {
+        self.name = Some(name.as_ref().into());
+        self
+    }
+
+    /// Set the Data Length Code (DLC) (required)
+    pub fn dlc(mut self, dlc: u8) -> Self {
+        self.dlc = Some(dlc);
+        self
+    }
+
+    /// Set the sender node name (required)
+    pub fn sender(mut self, sender: impl AsRef<str>) -> Self {
+        self.sender = Some(sender.as_ref().into());
+        self
+    }
+
+    /// Add a signal to the message
+    pub fn add_signal(mut self, signal: Signal) -> Self {
+        self.signals.push(signal);
+        self
+    }
+
+    /// Add multiple signals to the message
+    pub fn add_signals(mut self, signals: impl IntoIterator<Item = Signal>) -> Self {
+        self.signals.extend(signals);
+        self
+    }
+
+    /// Set all signals at once (replaces any existing signals)
+    pub fn signals(mut self, signals: Vec<Signal>) -> Self {
+        self.signals = signals;
+        self
+    }
+
+    /// Clear all signals
+    pub fn clear_signals(mut self) -> Self {
+        self.signals.clear();
+        self
+    }
+
+    /// Validate the current builder state
+    ///
+    /// This method performs the same validation as `Message::validate()` but on the
+    /// builder's current state. Useful for checking validity before calling `build()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Required fields (`id`, `name`, `dlc`, `sender`) are missing
+    /// - Validation fails (same as `Message::validate()`)
+    #[must_use]
+    pub fn validate(&self) -> Result<(), Error> {
+        let id = self
+            .id
+            .ok_or_else(|| Error::Message(messages::MESSAGE_ID_REQUIRED.to_string()))?;
+        let name = self
+            .name
+            .as_ref()
+            .ok_or_else(|| Error::Message(messages::MESSAGE_NAME_EMPTY.to_string()))?;
+        let dlc = self
+            .dlc
+            .ok_or_else(|| Error::Message(messages::MESSAGE_DLC_REQUIRED.to_string()))?;
+        let sender = self
+            .sender
+            .as_ref()
+            .ok_or_else(|| Error::Message(messages::MESSAGE_SENDER_EMPTY.to_string()))?;
+
+        Message::validate(id, name.as_ref(), dlc, sender.as_ref(), &self.signals)
+    }
+
+    /// Build the `Message` from the builder
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Required fields (`id`, `name`, `dlc`, `sender`) are missing
+    /// - Validation fails (same validation logic as the internal constructor)
+    #[must_use]
+    pub fn build(self) -> Result<Message, Error> {
+        let id = self
+            .id
+            .ok_or_else(|| Error::Message(messages::MESSAGE_ID_REQUIRED.to_string()))?;
+        let name = self
+            .name
+            .ok_or_else(|| Error::Message(messages::MESSAGE_NAME_EMPTY.to_string()))?;
+        let dlc = self
+            .dlc
+            .ok_or_else(|| Error::Message(messages::MESSAGE_DLC_REQUIRED.to_string()))?;
+        let sender = self
+            .sender
+            .ok_or_else(|| Error::Message(messages::MESSAGE_SENDER_EMPTY.to_string()))?;
+
+        Message::new(id, name.as_ref(), dlc, sender.as_ref(), self.signals)
     }
 }
 
@@ -357,7 +551,7 @@ mod tests {
         let result = Message::new(256, "", 8, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("name cannot be empty")),
+            Error::Message(msg) => assert!(msg.contains("name cannot be empty")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -382,7 +576,7 @@ mod tests {
         let result = Message::new(256, "EngineData", 8, "", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("sender cannot be empty")),
+            Error::Message(msg) => assert!(msg.contains("sender cannot be empty")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -407,7 +601,7 @@ mod tests {
         let result = Message::new(256, "EngineData", 0, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("DLC must be at least 1 byte")),
+            Error::Message(msg) => assert!(msg.contains("DLC must be at least 1 byte")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -432,7 +626,7 @@ mod tests {
         let result = Message::new(256, "EngineData", 9, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("DLC cannot exceed 8 bytes")),
+            Error::Message(msg) => assert!(msg.contains("DLC cannot exceed 8 bytes")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -475,7 +669,7 @@ mod tests {
         let result = Message::new(256, "EngineData", 2, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("extends beyond message boundary")),
+            Error::Message(msg) => assert!(msg.contains("extends beyond message boundary")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -524,7 +718,7 @@ mod tests {
         let result = Message::parse(line, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("DLC cannot exceed 8 bytes")),
+            Error::Message(msg) => assert!(msg.contains("DLC cannot exceed 8 bytes")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -537,7 +731,7 @@ mod tests {
         let result = Message::parse(line, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("DLC must be at least 1 byte")),
+            Error::Message(msg) => assert!(msg.contains("DLC must be at least 1 byte")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -565,7 +759,7 @@ mod tests {
         let result = Message::parse(line, vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("extends beyond message boundary")),
+            Error::Message(msg) => assert!(msg.contains("extends beyond message boundary")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -577,7 +771,7 @@ mod tests {
         let result = Message::parse(line, vec![]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("Invalid message format")),
+            Error::Message(msg) => assert!(msg.contains("Invalid message format")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -589,7 +783,7 @@ mod tests {
         let result = Message::parse(line, vec![]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("Invalid message ID")),
+            Error::Message(msg) => assert!(msg.contains("Invalid message ID")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -601,7 +795,7 @@ mod tests {
         let result = Message::parse(line, vec![]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("Invalid DLC")),
+            Error::Message(msg) => assert!(msg.contains("Invalid DLC")),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -688,7 +882,7 @@ mod tests {
         let result = Message::new(0x20000000, "Test", 8, "ECM", vec![signal.clone()]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("out of valid range")),
+            Error::Message(msg) => assert!(msg.contains("out of valid range")),
             _ => panic!("Expected Signal error"),
         }
 
@@ -745,7 +939,7 @@ mod tests {
         let result = Message::new(256, "TestMessage", 8, "ECM", vec![signal1, signal2]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => {
+            Error::Message(msg) => {
                 assert!(msg.contains("overlap"));
                 assert!(msg.contains("Signal1"));
                 assert!(msg.contains("Signal2"));
@@ -865,7 +1059,7 @@ mod tests {
         let result = Message::new(256, "TestMessage", 8, "ECM", vec![signal1, signal2]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("overlap")),
+            Error::Message(msg) => assert!(msg.contains("overlap")),
             _ => panic!("Expected Signal error"),
         }
     }

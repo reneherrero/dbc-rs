@@ -1,6 +1,20 @@
-use crate::{error::messages, Error, Message, Nodes, Signal, Version};
+use crate::{Error, Message, Nodes, Signal, Version, error::messages};
 use alloc::{string::String, string::ToString, vec::Vec};
 
+/// Represents a complete DBC (CAN Database) file.
+///
+/// A `Dbc` contains all the information from a DBC file: version information,
+/// node definitions, and CAN messages with their signals.
+///
+/// # Examples
+///
+/// ```rust
+/// use dbc_rs::Dbc;
+///
+/// let content = "VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM";
+/// let dbc = Dbc::parse(content)?;
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct Dbc {
     version: Version,
@@ -15,7 +29,7 @@ impl Dbc {
         for (i, msg1) in messages.iter().enumerate() {
             for msg2 in messages.iter().skip(i + 1) {
                 if msg1.id() == msg2.id() {
-                    return Err(Error::InvalidData(messages::duplicate_message_id(
+                    return Err(Error::Dbc(messages::duplicate_message_id(
                         msg1.id(),
                         msg1.name(),
                         msg2.name(),
@@ -27,7 +41,7 @@ impl Dbc {
         // Validate that all message senders are in the nodes list
         for msg in messages {
             if !nodes.contains(msg.sender()) {
-                return Err(Error::InvalidData(messages::sender_not_in_nodes(
+                return Err(Error::Dbc(messages::sender_not_in_nodes(
                     msg.name(),
                     msg.sender(),
                 )));
@@ -37,52 +51,62 @@ impl Dbc {
         Ok(())
     }
 
-    /// Create a new DBC instance with the given parameters
-    ///
-    /// This method validates all input data before creating the DBC instance.
-    /// Use this when programmatically creating DBC files rather than parsing from text.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - There are duplicate message IDs
-    /// - Any message sender is not in the nodes list
+    /// Create a new builder for constructing a `Dbc`
     ///
     /// # Examples
     ///
     /// ```
     /// use dbc_rs::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
     ///
-    /// let version = Version::new(1, Some(0), None)?;
-    /// let nodes = Nodes::new(&["ECM", "TCM"]);
+    /// let version = Version::builder().major(1).minor(0).build()?;
+    /// let nodes = Nodes::builder().add_node("ECM").add_node("TCM").build()?;
     ///
-    /// let signal = Signal::new(
-    ///     "RPM",
-    ///     0,
-    ///     16,
-    ///     ByteOrder::BigEndian,
-    ///     true,
-    ///     0.25,
-    ///     0.0,
-    ///     0.0,
-    ///     8000.0,
-    ///     Some("rpm" as &str),
-    ///     Receivers::Broadcast,
-    /// )?;
+    /// let signal = Signal::builder()
+    ///     .name("RPM")
+    ///     .start_bit(0)
+    ///     .length(16)
+    ///     .byte_order(ByteOrder::BigEndian)
+    ///     .unsigned(true)
+    ///     .factor(0.25)
+    ///     .offset(0.0)
+    ///     .min(0.0)
+    ///     .max(8000.0)
+    ///     .unit("rpm")
+    ///     .receivers(Receivers::Broadcast)
+    ///     .build()?;
     ///
-    /// let message = Message::new(256, "EngineData", 8, "ECM", vec![signal])?;
+    /// let message = Message::builder()
+    ///     .id(256)
+    ///     .name("EngineData")
+    ///     .dlc(8)
+    ///     .sender("ECM")
+    ///     .add_signal(signal)
+    ///     .build()?;
     ///
-    /// let dbc = Dbc::new(version, nodes, vec![message])?;
+    /// let dbc = Dbc::builder()
+    ///     .version(version)
+    ///     .nodes(nodes)
+    ///     .add_message(message)
+    ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     ///
     /// # See Also
     ///
     /// - [`parse`](Self::parse) - Parse from string slice
-    /// - [`Version::new`](crate::Version::new) - Create version
-    /// - [`Nodes::new`](crate::Nodes::new) - Create nodes
-    /// - [`Message::new`](crate::Message::new) - Create message
-    pub fn new(version: Version, nodes: Nodes, messages: Vec<Message>) -> Result<Self, Error> {
+    /// - [`Version::builder`](crate::Version::builder) - Create version using builder
+    /// - [`Nodes::builder`](crate::Nodes::builder) - Create nodes using builder
+    /// - [`Message::builder`](crate::Message::builder) - Create message using builder pattern
+    pub fn builder() -> DbcBuilder {
+        DbcBuilder::new()
+    }
+
+    /// This is an internal constructor. For public API usage, use [`Dbc::builder()`] instead.
+    pub(crate) fn new(
+        version: Version,
+        nodes: Nodes,
+        messages: Vec<Message>,
+    ) -> Result<Self, Error> {
         Self::validate(&version, &nodes, &messages)?;
 
         Ok(Self {
@@ -145,7 +169,7 @@ impl Dbc {
         let version = if let Some(v) = lines.next() {
             v
         } else {
-            return Err(Error::InvalidData(messages::DBC_EMPTY_FILE.to_string()));
+            return Err(Error::Dbc(messages::DBC_EMPTY_FILE.to_string()));
         };
         let version = Version::parse(version)?;
 
@@ -179,9 +203,7 @@ impl Dbc {
         let nodes = match nodes {
             Some(val) => val,
             None => {
-                return Err(Error::InvalidData(
-                    messages::DBC_NODES_NOT_DEFINED.to_string(),
-                ));
+                return Err(Error::Dbc(messages::DBC_NODES_NOT_DEFINED.to_string()));
             }
         };
 
@@ -214,8 +236,8 @@ impl Dbc {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse_bytes(data: &[u8]) -> Result<Self, Error> {
-        let content = core::str::from_utf8(data)
-            .map_err(|e| Error::InvalidData(messages::invalid_utf8(e)))?;
+        let content =
+            core::str::from_utf8(data).map_err(|e| Error::Dbc(messages::invalid_utf8(e)))?;
         Self::parse(content)
     }
 
@@ -274,12 +296,7 @@ impl Dbc {
         // Estimate: ~50 chars per message + ~100 chars per signal
         let estimated_capacity = 200
             + (self.messages.len() * 50)
-            + (self
-                .messages
-                .iter()
-                .map(|m| m.signals().len())
-                .sum::<usize>()
-                * 100);
+            + (self.messages.iter().map(|m| m.signals().len()).sum::<usize>() * 100);
         let mut result = String::with_capacity(estimated_capacity);
 
         // VERSION line
@@ -346,8 +363,137 @@ impl Dbc {
 
         let mut buffer = String::new();
         std::io::Read::read_to_string(&mut reader, &mut buffer)
-            .map_err(|e| Error::InvalidData(messages::read_failed(e)))?;
+            .map_err(|e| Error::Dbc(messages::read_failed(e)))?;
         Self::parse(&buffer)
+    }
+}
+
+/// Builder for constructing a `Dbc` with a fluent API
+///
+/// This builder provides a more ergonomic way to construct `Dbc` instances,
+/// especially when building DBC files with multiple messages.
+///
+/// # Examples
+///
+/// ```
+/// use dbc_rs::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
+///
+/// let version = Version::builder().major(1).minor(0).build()?;
+/// let nodes = Nodes::builder().add_node("ECM").add_node("TCM").build()?;
+///
+/// let signal = Signal::builder()
+///     .name("RPM")
+///     .start_bit(0)
+///     .length(16)
+///     .build()?;
+///
+/// let message = Message::builder()
+///     .id(256)
+///     .name("EngineData")
+///     .dlc(8)
+///     .sender("ECM")
+///     .add_signal(signal)
+///     .build()?;
+///
+/// let dbc = Dbc::builder()
+///     .version(version)
+///     .nodes(nodes)
+///     .add_message(message)
+///     .build()?;
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+#[derive(Debug)]
+pub struct DbcBuilder {
+    version: Option<Version>,
+    nodes: Option<Nodes>,
+    messages: Vec<Message>,
+}
+
+impl DbcBuilder {
+    fn new() -> Self {
+        Self {
+            version: None,
+            nodes: None,
+            messages: Vec::new(),
+        }
+    }
+
+    /// Set the version (required)
+    pub fn version(mut self, version: Version) -> Self {
+        self.version = Some(version);
+        self
+    }
+
+    /// Set the nodes (required)
+    pub fn nodes(mut self, nodes: Nodes) -> Self {
+        self.nodes = Some(nodes);
+        self
+    }
+
+    /// Add a message to the DBC
+    pub fn add_message(mut self, message: Message) -> Self {
+        self.messages.push(message);
+        self
+    }
+
+    /// Add multiple messages to the DBC
+    pub fn add_messages(mut self, messages: impl IntoIterator<Item = Message>) -> Self {
+        self.messages.extend(messages);
+        self
+    }
+
+    /// Set all messages at once (replaces any existing messages)
+    pub fn messages(mut self, messages: Vec<Message>) -> Self {
+        self.messages = messages;
+        self
+    }
+
+    /// Clear all messages
+    pub fn clear_messages(mut self) -> Self {
+        self.messages.clear();
+        self
+    }
+
+    /// Validate the current builder state
+    ///
+    /// This method performs the same validation as `Dbc::validate()` but on the
+    /// builder's current state. Useful for checking validity before calling `build()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Required fields (`version`, `nodes`) are missing
+    /// - Validation fails (same as `Dbc::validate()`)
+    #[must_use]
+    pub fn validate(&self) -> Result<(), Error> {
+        let version = self
+            .version
+            .as_ref()
+            .ok_or_else(|| Error::Dbc(messages::DBC_VERSION_REQUIRED.to_string()))?;
+        let nodes = self
+            .nodes
+            .as_ref()
+            .ok_or_else(|| Error::Dbc(messages::DBC_NODES_REQUIRED.to_string()))?;
+
+        Dbc::validate(version, nodes, &self.messages)
+    }
+
+    /// Build the `Dbc` from the builder
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Required fields (`version`, `nodes`) are missing
+    /// - Validation fails (same validation logic as the internal constructor)
+    #[must_use]
+    pub fn build(self) -> Result<Dbc, Error> {
+        let version = self
+            .version
+            .ok_or_else(|| Error::Dbc(messages::DBC_VERSION_REQUIRED.to_string()))?;
+        let nodes =
+            self.nodes.ok_or_else(|| Error::Dbc(messages::DBC_NODES_REQUIRED.to_string()))?;
+
+        Dbc::new(version, nodes, self.messages)
     }
 }
 
@@ -359,7 +505,7 @@ mod tests {
     #[test]
     fn test_dbc_new_valid() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM", "TCM"]);
+        let nodes = Nodes::new(&["ECM", "TCM"]).unwrap();
 
         let signal1 = Signal::new(
             "RPM",
@@ -403,7 +549,7 @@ mod tests {
     #[test]
     fn test_dbc_new_duplicate_message_id() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM"]);
+        let nodes = Nodes::new(&["ECM"]).unwrap();
 
         let signal = Signal::new(
             "RPM",
@@ -426,7 +572,7 @@ mod tests {
         let result = Dbc::new(version, nodes, vec![message1, message2]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidData(msg) => assert!(msg.contains("Duplicate message ID")),
+            Error::Dbc(msg) => assert!(msg.contains("Duplicate message ID")),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -434,7 +580,7 @@ mod tests {
     #[test]
     fn test_dbc_new_sender_not_in_nodes() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM"]); // Only ECM, but message uses TCM
+        let nodes = Nodes::new(&["ECM"]).unwrap(); // Only ECM, but message uses TCM
 
         let signal = Signal::new(
             "RPM",
@@ -456,7 +602,7 @@ mod tests {
         let result = Dbc::new(version, nodes, vec![message]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidData(msg) => assert!(msg.contains("not in the nodes list")),
+            Error::Dbc(msg) => assert!(msg.contains("not in the nodes list")),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -500,7 +646,7 @@ BO_ 256 EngineData2 : 8 ECM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidData(msg) => assert!(msg.contains("Duplicate message ID")),
+            Error::Dbc(msg) => assert!(msg.contains("Duplicate message ID")),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -519,7 +665,7 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidData(msg) => assert!(msg.contains("not in the nodes list")),
+            Error::Dbc(msg) => assert!(msg.contains("not in the nodes list")),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -530,7 +676,7 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse("");
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidData(msg) => assert!(msg.contains("Empty DBC file")),
+            Error::Dbc(msg) => assert!(msg.contains("Empty DBC file")),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -547,7 +693,7 @@ BO_ 256 EngineData : 8 ECM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidData(msg) => assert!(msg.contains("Nodes (BU_) are not defined")),
+            Error::Dbc(msg) => assert!(msg.contains("Nodes (BU_) are not defined")),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -592,7 +738,7 @@ BO_ 256 Engine : 8 ECM
         let result = Dbc::parse_bytes(invalid_bytes);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidData(msg) => assert!(msg.contains("Invalid UTF-8")),
+            Error::Dbc(msg) => assert!(msg.contains("Invalid UTF-8")),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -600,7 +746,7 @@ BO_ 256 Engine : 8 ECM
     #[test]
     fn test_save_basic() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM"]);
+        let nodes = Nodes::new(&["ECM"]).unwrap();
 
         let signal = Signal::new(
             "RPM",
@@ -676,7 +822,7 @@ BO_ 512 BrakeData : 4 TCM
     #[test]
     fn test_save_multiple_messages() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM", "TCM"]);
+        let nodes = Nodes::new(&["ECM", "TCM"]).unwrap();
 
         let signal1 = Signal::new(
             "RPM",
@@ -719,20 +865,6 @@ BO_ 512 BrakeData : 4 TCM
         assert!(saved.contains("BO_ 512 BrakeData : 4 TCM"));
         assert!(saved.contains("SG_ RPM"));
         assert!(saved.contains("SG_ Pressure"));
-    }
-
-    #[test]
-    fn test_save_empty_nodes() {
-        let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::empty();
-        let dbc = Dbc::new(version, nodes, vec![]).unwrap();
-
-        let saved = dbc.save();
-        assert!(saved.contains("VERSION \"1.0\""));
-        assert!(saved.contains("BU_:"));
-        // Should not have a space after BU_: when empty
-        let bu_line = saved.lines().find(|l| l.starts_with("BU_")).unwrap();
-        assert_eq!(bu_line, "BU_:");
     }
 }
 

@@ -6,6 +6,10 @@
 
 pub const INVALID_DATA_CATEGORY: &str = "Error de datos";
 pub const SIGNAL_ERROR_CATEGORY: &str = "Error de señal";
+pub const MESSAGE_ERROR_CATEGORY: &str = "Error de mensaje";
+pub const DBC_ERROR_CATEGORY: &str = "Error DBC";
+pub const VERSION_ERROR_CATEGORY: &str = "Error de versión";
+pub const NODES_ERROR_CATEGORY: &str = "Error de nodos";
 
 // ============================================================================
 // Version-related error messages
@@ -13,6 +17,7 @@ pub const SIGNAL_ERROR_CATEGORY: &str = "Error de señal";
 
 pub const VERSION_EMPTY: &str = "Cadena de versión vacía";
 pub const VERSION_INVALID: &str = "Cadena de versión inválida";
+pub const VERSION_MAJOR_REQUIRED: &str = "versión mayor es requerida";
 pub const VERSION_PATCH_REQUIRES_MINOR: &str = "La versión de parche requiere una versión menor";
 
 // ============================================================================
@@ -20,13 +25,18 @@ pub const VERSION_PATCH_REQUIRES_MINOR: &str = "La versión de parche requiere u
 // ============================================================================
 
 pub const DBC_EMPTY_FILE: &str = "Archivo DBC vacío";
+pub const DBC_VERSION_REQUIRED: &str = "versión es requerida";
+pub const DBC_NODES_REQUIRED: &str = "nodos son requeridos";
 pub const DBC_NODES_NOT_DEFINED: &str = "Los nodos (BU_) no están definidos";
+pub const NODES_DUPLICATE_NAME: &str = "Nombre de nodo duplicado";
 
 // ============================================================================
 // Message-related error messages
 // ============================================================================
 
 pub const MESSAGE_NAME_EMPTY: &str = "El nombre del mensaje no puede estar vacío";
+pub const MESSAGE_ID_REQUIRED: &str = "id es requerido";
+pub const MESSAGE_DLC_REQUIRED: &str = "dlc es requerido";
 pub const MESSAGE_SENDER_EMPTY: &str = "El remitente del mensaje no puede estar vacío";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "El DLC del mensaje debe ser de al menos 1 byte";
 pub const MESSAGE_DLC_TOO_LARGE: &str = "El DLC del mensaje no puede exceder 8 bytes";
@@ -40,6 +50,8 @@ pub const MESSAGE_ID_OUT_OF_RANGE: &str = "ID de mensaje fuera del rango válido
 // ============================================================================
 
 pub const SIGNAL_NAME_EMPTY: &str = "El nombre de la señal no puede estar vacío";
+pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bit es requerido";
+pub const SIGNAL_LENGTH_REQUIRED: &str = "length es requerido";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "La longitud de la señal debe ser de al menos 1 bit";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "La longitud de la señal no puede exceder 64 bits";
 pub const SIGNAL_OVERLAP: &str = "Las señales se superponen en el mensaje";
@@ -76,6 +88,7 @@ pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "Se esperaba el inicio de la 
 // ============================================================================
 
 pub const FORMAT_DUPLICATE_MESSAGE_ID: &str = "ID de mensaje duplicado: {} (mensajes '{}' y '{}')";
+pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Nombre de nodo duplicado: '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "El mensaje '{}' tiene un remitente '{}' que no está en la lista de nodos";
 pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "La señal '{}' se extiende más allá del límite del mensaje: start_bit {} + length {} = {} > {} (DLC {} bytes)";
