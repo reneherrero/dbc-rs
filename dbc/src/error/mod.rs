@@ -2,7 +2,7 @@ use alloc::string::String;
 use core::fmt;
 use core::num::ParseIntError;
 
-mod lang;
+pub mod lang;
 pub(crate) mod messages;
 
 /// Error type for DBC parsing and validation operations.
@@ -77,6 +77,7 @@ impl std::error::Error for Error {
 #[cfg(test)]
 mod tests {
     use super::Error;
+    use crate::error::lang;
     use alloc::string::ToString;
 
     #[test]
@@ -86,7 +87,9 @@ mod tests {
         let error: Error = parse_error.into();
 
         match error {
-            Error::InvalidData(msg) => assert!(msg.contains("Failed to parse number")),
+            Error::InvalidData(msg) => {
+                assert!(msg.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()))
+            }
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -95,16 +98,16 @@ mod tests {
     fn test_display_invalid_data() {
         let error = Error::InvalidData("Test error message".to_string());
         let display = error.to_string();
-        assert!(display.starts_with("Data Error:"));
+        assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
         assert!(display.contains("Test error message"));
     }
 
     #[test]
     fn test_display_signal_error() {
-        let error = Error::Signal("Signal name cannot be empty".to_string());
+        let error = Error::Signal(lang::SIGNAL_NAME_EMPTY.to_string());
         let display = error.to_string();
-        assert!(display.starts_with("Signal Error:"));
-        assert!(display.contains("Signal name cannot be empty"));
+        assert!(display.starts_with(lang::SIGNAL_ERROR_CATEGORY));
+        assert!(display.contains(lang::SIGNAL_NAME_EMPTY));
     }
 
     #[test]
@@ -114,8 +117,7 @@ mod tests {
             "Duplicate message ID: 256 (messages 'EngineData' and 'BrakeData')".to_string(),
         );
         let display = error.to_string();
-        assert!(display.starts_with("Data Error:"));
-        assert!(display.contains("Duplicate message ID"));
+        assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
         assert!(display.contains("256"));
         assert!(display.contains("EngineData"));
         assert!(display.contains("BrakeData"));
@@ -127,8 +129,8 @@ mod tests {
         let error: Error = parse_error.into();
         let display = error.to_string();
 
-        assert!(display.starts_with("Data Error:"));
-        assert!(display.contains("Failed to parse number"));
+        assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
+        assert!(display.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()));
     }
 
     #[cfg(feature = "std")]

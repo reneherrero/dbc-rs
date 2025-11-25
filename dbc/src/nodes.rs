@@ -230,6 +230,7 @@ impl NodesBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::lang;
 
     #[test]
     fn test_nodes_from_valid_line() {
@@ -296,7 +297,7 @@ mod tests {
         let result = Nodes::new(["ECM", "TCM", "ECM"]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg.contains("Duplicate node name")),
+            Error::Nodes(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
             _ => panic!("Expected Nodes error"),
         }
     }
@@ -327,7 +328,7 @@ mod tests {
         let result = Nodes::builder().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg.contains("Duplicate node name")),
+            Error::Nodes(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
             _ => panic!("Expected Nodes error"),
         }
     }
@@ -338,7 +339,7 @@ mod tests {
         let result = Nodes::parse(line);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg.contains("Duplicate node name")),
+            Error::Nodes(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
             _ => panic!("Expected Nodes error"),
         }
     }

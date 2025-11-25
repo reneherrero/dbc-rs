@@ -738,6 +738,7 @@ impl SignalBuilder {
 mod tests {
     use super::*;
     use crate::Error;
+    use crate::error::lang;
     extern crate std;
 
     #[test]
@@ -786,7 +787,7 @@ mod tests {
         );
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("name cannot be empty")),
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_NAME_EMPTY)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -808,7 +809,7 @@ mod tests {
         );
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("length must be at least 1 bit")),
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -830,7 +831,7 @@ mod tests {
         );
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("length cannot exceed 64 bits")),
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -852,7 +853,12 @@ mod tests {
         );
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("extends beyond CAN message boundary")),
+            Error::Signal(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text =
+                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_CAN.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
     }
@@ -874,7 +880,11 @@ mod tests {
         );
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains("Invalid range")),
+            Error::Signal(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_INVALID_RANGE.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
     }
@@ -1019,7 +1029,10 @@ mod tests {
     fn test_parse_signal_missing_start_bit() {
         let line = r#" SG_ RPM : |16@0+ (0.25,0) [0|8000] "rpm" TCM"#;
         let err = Signal::parse(line).unwrap_err();
-        assert_eq!(err, Error::Signal("Invalid start_bit".to_string()));
+        match err {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_START_BIT)),
+            _ => panic!("Expected Signal error"),
+        }
     }
 
     #[test]
@@ -1028,7 +1041,11 @@ mod tests {
         let line = r#" SG_ Test : 0|8@0+ (1,0) [100|50] "unit" *"#;
         let err = Signal::parse(line).unwrap_err();
         match err {
-            Error::Signal(msg) => assert!(msg.contains("Invalid range")),
+            Error::Signal(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_INVALID_RANGE.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
     }
@@ -1039,7 +1056,12 @@ mod tests {
         let line = r#" SG_ Test : 60|10@0+ (1,0) [0|100] "unit" *"#;
         let err = Signal::parse(line).unwrap_err();
         match err {
-            Error::Signal(msg) => assert!(msg.contains("extends beyond CAN message boundary")),
+            Error::Signal(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text =
+                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_CAN.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
     }
@@ -1050,7 +1072,7 @@ mod tests {
         let line = r#" SG_ Test : 0|65@0+ (1,0) [0|100] "unit" *"#;
         let err = Signal::parse(line).unwrap_err();
         match err {
-            Error::Signal(msg) => assert!(msg.contains("length cannot exceed 64 bits")),
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -1061,7 +1083,7 @@ mod tests {
         let line = r#" SG_ Test : 0|0@0+ (1,0) [0|100] "unit" *"#;
         let err = Signal::parse(line).unwrap_err();
         match err {
-            Error::Signal(msg) => assert!(msg.contains("length must be at least 1 bit")),
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -1070,7 +1092,10 @@ mod tests {
     fn test_parse_signal_missing_length() {
         let line = r#" SG_ RPM : 0|@0+ (0.25,0) [0|8000] "rpm" TCM"#;
         let err = Signal::parse(line).unwrap_err();
-        assert_eq!(err, Error::Signal("Invalid length".to_string()));
+        match err {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_LENGTH)),
+            _ => panic!("Expected Signal error"),
+        }
     }
 
     #[test]

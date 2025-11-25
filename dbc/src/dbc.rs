@@ -498,6 +498,7 @@ impl DbcBuilder {
 #[cfg(test)]
 mod tests {
     use super::Dbc;
+    use crate::error::lang;
     use crate::{ByteOrder, Error, Message, Nodes, Receivers, Signal, Version};
 
     #[test]
@@ -570,8 +571,12 @@ mod tests {
         let result = Dbc::new(version, nodes, vec![message1, message2]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains("Duplicate message ID")),
-            _ => panic!("Expected InvalidData error"),
+            Error::Dbc(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_DUPLICATE_MESSAGE_ID.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
+            _ => panic!("Expected Dbc error"),
         }
     }
 
@@ -600,8 +605,12 @@ mod tests {
         let result = Dbc::new(version, nodes, vec![message]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains("not in the nodes list")),
-            _ => panic!("Expected InvalidData error"),
+            Error::Dbc(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_SENDER_NOT_IN_NODES.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
+            _ => panic!("Expected Dbc error"),
         }
     }
 
@@ -644,8 +653,12 @@ BO_ 256 EngineData2 : 8 ECM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains("Duplicate message ID")),
-            _ => panic!("Expected InvalidData error"),
+            Error::Dbc(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_DUPLICATE_MESSAGE_ID.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
+            _ => panic!("Expected Dbc error"),
         }
     }
 
@@ -663,8 +676,12 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains("not in the nodes list")),
-            _ => panic!("Expected InvalidData error"),
+            Error::Dbc(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_SENDER_NOT_IN_NODES.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
+            _ => panic!("Expected Dbc error"),
         }
     }
 
@@ -674,8 +691,8 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse("");
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains("Empty DBC file")),
-            _ => panic!("Expected InvalidData error"),
+            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_EMPTY_FILE)),
+            _ => panic!("Expected Dbc error"),
         }
     }
 
@@ -691,8 +708,8 @@ BO_ 256 EngineData : 8 ECM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains("Nodes (BU_) are not defined")),
-            _ => panic!("Expected InvalidData error"),
+            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_NODES_NOT_DEFINED)),
+            _ => panic!("Expected Dbc error"),
         }
     }
 
@@ -736,8 +753,12 @@ BO_ 256 Engine : 8 ECM
         let result = Dbc::parse_bytes(invalid_bytes);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains("Invalid UTF-8")),
-            _ => panic!("Expected InvalidData error"),
+            Error::Dbc(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_INVALID_UTF8.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
+            _ => panic!("Expected Dbc error"),
         }
     }
 

@@ -249,6 +249,7 @@ impl VersionBuilder {
 #[cfg(test)]
 mod tests {
     use super::Version;
+    use crate::error::lang;
     use crate::{Error, error::messages};
 
     #[test]
@@ -306,7 +307,7 @@ mod tests {
         let result = Version::parse("");
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Version(msg) => assert!(msg.contains("Empty version string")),
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_EMPTY)),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -316,7 +317,7 @@ mod tests {
         let result = Version::parse("\"1.0\"");
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Version(msg) => assert!(msg.contains("Empty version string")),
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_EMPTY)),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -326,7 +327,7 @@ mod tests {
         let result = Version::parse("VERSION 1.0");
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Version(msg) => assert!(msg.contains("Invalid version string")),
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_INVALID)),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -336,7 +337,7 @@ mod tests {
         let result = Version::parse("VERSION \"1.2.3.4\"");
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Version(msg) => assert!(msg.contains("Invalid version string")),
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_INVALID)),
             _ => panic!("Expected InvalidData error"),
         }
     }
@@ -347,7 +348,12 @@ mod tests {
         assert!(result.is_err());
         // This should trigger ParseIntError conversion
         match result.unwrap_err() {
-            Error::Version(msg) => assert!(msg.contains("Failed to parse number")),
+            Error::Version(msg) => {
+                // Check for format template text (language-agnostic)
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_PARSE_NUMBER_FAILED.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
             _ => panic!("Expected Version error from ParseIntError"),
         }
     }

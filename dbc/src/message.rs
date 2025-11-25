@@ -502,6 +502,7 @@ impl MessageBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::lang;
     use crate::{ByteOrder, Receivers};
 
     #[test]
@@ -549,7 +550,7 @@ mod tests {
         let result = Message::new(256, "", 8, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("name cannot be empty")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_NAME_EMPTY)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -574,7 +575,7 @@ mod tests {
         let result = Message::new(256, "EngineData", 8, "", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("sender cannot be empty")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_SENDER_EMPTY)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -599,7 +600,7 @@ mod tests {
         let result = Message::new(256, "EngineData", 0, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("DLC must be at least 1 byte")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_DLC_TOO_SMALL)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -624,7 +625,7 @@ mod tests {
         let result = Message::new(256, "EngineData", 9, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("DLC cannot exceed 8 bytes")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_DLC_TOO_LARGE)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -667,7 +668,13 @@ mod tests {
         let result = Message::new(256, "EngineData", 2, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("extends beyond message boundary")),
+            Error::Message(msg) => {
+                // Check for format template text (language-agnostic)
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text =
+                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
     }
@@ -716,7 +723,7 @@ mod tests {
         let result = Message::parse(line, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("DLC cannot exceed 8 bytes")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_DLC_TOO_LARGE)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -729,7 +736,7 @@ mod tests {
         let result = Message::parse(line, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("DLC must be at least 1 byte")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_DLC_TOO_SMALL)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -757,7 +764,13 @@ mod tests {
         let result = Message::parse(line, vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("extends beyond message boundary")),
+            Error::Message(msg) => {
+                // Check for format template text (language-agnostic)
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text =
+                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
     }
@@ -769,7 +782,7 @@ mod tests {
         let result = Message::parse(line, vec![]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("Invalid message format")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_INVALID_FORMAT)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -781,7 +794,7 @@ mod tests {
         let result = Message::parse(line, vec![]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("Invalid message ID")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_INVALID_ID)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -793,7 +806,7 @@ mod tests {
         let result = Message::parse(line, vec![]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("Invalid DLC")),
+            Error::Message(msg) => assert!(msg.contains(lang::MESSAGE_INVALID_DLC)),
             _ => panic!("Expected Signal error"),
         }
     }
@@ -880,7 +893,12 @@ mod tests {
         let result = Message::new(0x20000000, "Test", 8, "ECM", vec![signal.clone()]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("out of valid range")),
+            Error::Message(msg) => {
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text =
+                    lang::FORMAT_MESSAGE_ID_OUT_OF_RANGE.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
 
@@ -938,7 +956,10 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Message(msg) => {
-                assert!(msg.contains("overlap"));
+                // Check for format template text and signal names (language-agnostic)
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_SIGNAL_OVERLAP.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
                 assert!(msg.contains("Signal1"));
                 assert!(msg.contains("Signal2"));
                 assert!(msg.contains("TestMessage"));
@@ -1057,7 +1078,12 @@ mod tests {
         let result = Message::new(256, "TestMessage", 8, "ECM", vec![signal1, signal2]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => assert!(msg.contains("overlap")),
+            Error::Message(msg) => {
+                // Check for format template text (language-agnostic)
+                // Check for format template text (language-agnostic) - extract text before first placeholder
+                let template_text = lang::FORMAT_SIGNAL_OVERLAP.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end()));
+            }
             _ => panic!("Expected Signal error"),
         }
     }
