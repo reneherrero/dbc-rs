@@ -464,7 +464,6 @@ impl DbcBuilder {
     /// Returns an error if:
     /// - Required fields (`version`, `nodes`) are missing
     /// - Validation fails (same as `Dbc::validate()`)
-    #[must_use]
     pub fn validate(&self) -> Result<(), Error> {
         let version = self
             .version
@@ -485,7 +484,6 @@ impl DbcBuilder {
     /// Returns an error if:
     /// - Required fields (`version`, `nodes`) are missing
     /// - Validation fails (same validation logic as the internal constructor)
-    #[must_use]
     pub fn build(self) -> Result<Dbc, Error> {
         let version = self
             .version
@@ -505,7 +503,7 @@ mod tests {
     #[test]
     fn test_dbc_new_valid() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM", "TCM"]).unwrap();
+        let nodes = Nodes::new(["ECM", "TCM"]).unwrap();
 
         let signal1 = Signal::new(
             "RPM",
@@ -549,7 +547,7 @@ mod tests {
     #[test]
     fn test_dbc_new_duplicate_message_id() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM"]).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
 
         let signal = Signal::new(
             "RPM",
@@ -580,7 +578,7 @@ mod tests {
     #[test]
     fn test_dbc_new_sender_not_in_nodes() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM"]).unwrap(); // Only ECM, but message uses TCM
+        let nodes = Nodes::new(["ECM"]).unwrap(); // Only ECM, but message uses TCM
 
         let signal = Signal::new(
             "RPM",
@@ -746,7 +744,7 @@ BO_ 256 Engine : 8 ECM
     #[test]
     fn test_save_basic() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM"]).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
 
         let signal = Signal::new(
             "RPM",
@@ -822,7 +820,7 @@ BO_ 512 BrakeData : 4 TCM
     #[test]
     fn test_save_multiple_messages() {
         let version = Version::new(1, Some(0), None).unwrap();
-        let nodes = Nodes::new(&["ECM", "TCM"]).unwrap();
+        let nodes = Nodes::new(["ECM", "TCM"]).unwrap();
 
         let signal1 = Signal::new(
             "RPM",

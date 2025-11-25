@@ -685,7 +685,6 @@ impl SignalBuilder {
     /// Returns an error if:
     /// - Required fields (`name`, `start_bit`, `length`) are missing
     /// - Validation fails (same as `Signal::validate()`)
-    #[must_use]
     pub fn validate(&self) -> Result<(), Error> {
         let name = self
             .name
@@ -708,7 +707,6 @@ impl SignalBuilder {
     /// Returns an error if:
     /// - Required fields (`name`, `start_bit`, `length`) are missing
     /// - Validation fails (same validation logic as the internal constructor)
-    #[must_use]
     pub fn build(self) -> Result<Signal, Error> {
         let name = self
             .name

@@ -216,7 +216,6 @@ impl VersionBuilder {
     /// Returns an error if:
     /// - Required field (`major`) is missing
     /// - `patch` is set but `minor` is not (patch requires minor)
-    #[must_use]
     pub fn validate(&self) -> Result<(), Error> {
         let _major = self
             .major
@@ -238,7 +237,6 @@ impl VersionBuilder {
     /// Returns an error if:
     /// - Required field (`major`) is missing
     /// - `patch` is set but `minor` is not (patch requires minor)
-    #[must_use]
     pub fn build(self) -> Result<Version, Error> {
         let major = self
             .major

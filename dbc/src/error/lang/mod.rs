@@ -23,7 +23,6 @@ mod ja;
 /// - `lang-es`: Spanish
 /// - `lang-de`: German
 /// - `lang-ja`: Japanese
-
 // Language selection: English is default, others require feature flags
 // Features are mutually exclusive - prioritize in order: de, es, fr, ja, then default to en
 #[cfg(feature = "lang-de")]

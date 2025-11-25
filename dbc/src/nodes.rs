@@ -211,7 +211,6 @@ impl NodesBuilder {
     ///
     /// Returns an error if:
     /// - Duplicate node names are found (case-sensitive)
-    #[must_use]
     pub fn validate(&self) -> Result<(), Error> {
         Nodes::validate(&self.nodes)
     }
@@ -222,7 +221,6 @@ impl NodesBuilder {
     ///
     /// Returns an error if:
     /// - Duplicate node names are found (case-sensitive)
-    #[must_use]
     pub fn build(self) -> Result<Nodes, Error> {
         Nodes::validate(&self.nodes)?;
         Ok(Nodes { nodes: self.nodes })
@@ -269,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_nodes_new() {
-        let nodes = Nodes::new(&["ECM", "TCM", "BCM"]).unwrap();
+        let nodes = Nodes::new(["ECM", "TCM", "BCM"]).unwrap();
         assert!(nodes.contains("ECM"));
         assert!(nodes.contains("TCM"));
         assert!(nodes.contains("BCM"));
@@ -295,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_nodes_new_duplicate() {
-        let result = Nodes::new(&["ECM", "TCM", "ECM"]);
+        let result = Nodes::new(["ECM", "TCM", "ECM"]);
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Nodes(msg) => assert!(msg.contains("Duplicate node name")),
@@ -305,22 +303,22 @@ mod tests {
 
     #[test]
     fn test_nodes_to_string_single() {
-        let nodes = Nodes::new(&["ECM"]).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
         assert_eq!(nodes.to_string(), "ECM");
     }
 
     #[test]
     fn test_nodes_to_string_multiple() {
-        let nodes = Nodes::new(&["ECM", "TCM", "BCM"]).unwrap();
+        let nodes = Nodes::new(["ECM", "TCM", "BCM"]).unwrap();
         assert_eq!(nodes.to_string(), "ECM TCM BCM");
     }
 
     #[test]
     fn test_nodes_to_dbc_string() {
-        let nodes_single = Nodes::new(&["ECM"]).unwrap();
+        let nodes_single = Nodes::new(["ECM"]).unwrap();
         assert_eq!(nodes_single.to_dbc_string(), "BU_: ECM");
 
-        let nodes_multiple = Nodes::new(&["ECM", "TCM", "BCM"]).unwrap();
+        let nodes_multiple = Nodes::new(["ECM", "TCM", "BCM"]).unwrap();
         assert_eq!(nodes_multiple.to_dbc_string(), "BU_: ECM TCM BCM");
     }
 

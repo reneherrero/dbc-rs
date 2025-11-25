@@ -455,7 +455,6 @@ impl MessageBuilder {
     /// Returns an error if:
     /// - Required fields (`id`, `name`, `dlc`, `sender`) are missing
     /// - Validation fails (same as `Message::validate()`)
-    #[must_use]
     pub fn validate(&self) -> Result<(), Error> {
         let id = self
             .id
@@ -482,7 +481,6 @@ impl MessageBuilder {
     /// Returns an error if:
     /// - Required fields (`id`, `name`, `dlc`, `sender`) are missing
     /// - Validation fails (same validation logic as the internal constructor)
-    #[must_use]
     pub fn build(self) -> Result<Message, Error> {
         let id = self
             .id
