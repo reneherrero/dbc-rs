@@ -40,6 +40,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           target: thumbv7m-none-eabi
+      - name: Install target standard library
+        run: rustup target add thumbv7m-none-eabi
       - name: Build library without std (no_std mode)
         run: cargo build --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
 
@@ -67,6 +69,8 @@ jobs:
         uses: dtolnay/rust-toolchain@1.85.0
         with:
           target: thumbv7m-none-eabi
+      - name: Install target standard library
+        run: rustup target add thumbv7m-none-eabi
       - name: Build library without std (no_std mode, MSRV)
         run: cargo build --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
 
