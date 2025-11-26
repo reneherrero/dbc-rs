@@ -76,12 +76,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup Rust toolchain with clippy
+      - name: Setup Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Run clippy linter
-        run: cargo clippy --verbose --all-targets -p dbc-rs -- -D warnings
+      - name: Run clippy linter (using stable, overriding rust-toolchain.toml)
+        run: rustup run stable cargo clippy --verbose --all-targets -p dbc-rs -- -D warnings
 
   fmt:
     name: Format check
