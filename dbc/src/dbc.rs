@@ -1,4 +1,4 @@
-use crate::{Error, Message, Nodes, Signal, Version, error::messages};
+use crate::{Error, Message, Nodes, Result, Signal, Version, error::messages};
 use alloc::{string::String, string::ToString, vec::Vec};
 
 /// Represents a complete DBC (CAN Database) file.
@@ -24,7 +24,7 @@ pub struct Dbc {
 
 impl Dbc {
     /// Validate DBC parameters
-    fn validate(_version: &Version, nodes: &Nodes, messages: &[Message]) -> Result<(), Error> {
+    fn validate(_version: &Version, nodes: &Nodes, messages: &[Message]) -> Result<()> {
         // Check for duplicate message IDs
         for (i, msg1) in messages.iter().enumerate() {
             for msg2 in messages.iter().skip(i + 1) {
@@ -102,11 +102,7 @@ impl Dbc {
     }
 
     /// This is an internal constructor. For public API usage, use [`Dbc::builder()`] instead.
-    pub(crate) fn new(
-        version: Version,
-        nodes: Nodes,
-        messages: Vec<Message>,
-    ) -> Result<Self, Error> {
+    pub(crate) fn new(version: Version, nodes: Nodes, messages: Vec<Message>) -> Result<Self> {
         Self::validate(&version, &nodes, &messages)?;
 
         Ok(Self {
@@ -162,7 +158,7 @@ impl Dbc {
     /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes
     /// - [`parse_from`](Self::parse_from) - Parse from owned String
     /// - [`from_reader`](Self::from_reader) - Parse from `std::io::Read` (requires `std` feature)
-    pub fn parse(data: &str) -> Result<Self, Error> {
+    pub fn parse(data: &str) -> Result<Self> {
         let mut lines = data.lines().peekable();
 
         // Must start with VERSION statement
@@ -235,7 +231,7 @@ impl Dbc {
     /// let dbc = Dbc::parse_bytes(bytes)?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn parse_bytes(data: &[u8]) -> Result<Self, Error> {
+    pub fn parse_bytes(data: &[u8]) -> Result<Self> {
         let content =
             core::str::from_utf8(data).map_err(|e| Error::Dbc(messages::invalid_utf8(e)))?;
         Self::parse(content)
@@ -261,7 +257,7 @@ impl Dbc {
     /// - [`parse`](Self::parse) - Parse from string slice
     /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes
     /// - [`from_reader`](Self::from_reader) - Parse from `std::io::Read` (requires `std` feature)
-    pub fn parse_from<S: AsRef<str>>(data: S) -> Result<Self, Error> {
+    pub fn parse_from<S: AsRef<str>>(data: S) -> Result<Self> {
         Self::parse(data.as_ref())
     }
 
@@ -358,7 +354,7 @@ impl Dbc {
     /// - [`parse`](Self::parse) - Parse from string slice (works in `no_std`)
     /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes (works in `no_std`)
     /// - [`parse_from`](Self::parse_from) - Parse from owned string types (works in `no_std`)
-    pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Self, Error> {
+    pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Self> {
         use alloc::string::String;
 
         let mut buffer = String::new();
@@ -464,7 +460,7 @@ impl DbcBuilder {
     /// Returns an error if:
     /// - Required fields (`version`, `nodes`) are missing
     /// - Validation fails (same as `Dbc::validate()`)
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         let version = self
             .version
             .as_ref()
@@ -484,7 +480,7 @@ impl DbcBuilder {
     /// Returns an error if:
     /// - Required fields (`version`, `nodes`) are missing
     /// - Validation fails (same validation logic as the internal constructor)
-    pub fn build(self) -> Result<Dbc, Error> {
+    pub fn build(self) -> Result<Dbc> {
         let version = self
             .version
             .ok_or_else(|| Error::Dbc(messages::DBC_VERSION_REQUIRED.to_string()))?;

@@ -1,3 +1,8 @@
+//! Example: Creating a DBC file programmatically.
+//!
+//! This example demonstrates how to create a DBC file from scratch using
+//! the builder pattern for all components.
+
 use dbc_rs::{ByteOrder, Dbc, Message, Nodes, Receivers, Signal, Version};
 
 fn main() -> Result<(), dbc_rs::Error> {

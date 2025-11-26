@@ -5,13 +5,28 @@ edition.workspace = true
 description = "CAN .dbc parser and editor"
 license.workspace = true
 authors.workspace = true
-repository = "https://github.com/reneherrero/dbc-rs"
-homepage = "https://github.com/reneherrero/dbc-rs"
-documentation = "https://docs.rs/dbc-rs"
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 readme = "README.md"
-keywords = ["can", "dbc", "automotive", "no_std"]
-categories = ["parsing", "embedded"]
+keywords.workspace = true
+categories.workspace = true
 rust-version = "1.85.0"
+exclude = [
+    "tests/",
+    "examples/",
+    "DBC_FORMAT_SPEC.md",
+    ".github/",
+    "*.md",
+    "!README.md",
+    "!LICENSING.md",
+]
+
+[package.metadata.docs.rs]
+features = ["std"]
+
+[lints]
+workspace = true
 
 [features]
 default = ["std"]

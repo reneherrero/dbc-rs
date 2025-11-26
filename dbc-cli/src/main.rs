@@ -1,3 +1,8 @@
+//! Command-line interface for DBC file manipulation.
+//!
+//! This binary provides a CLI tool for parsing, validating, and manipulating
+//! DBC (CAN Database) files.
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]

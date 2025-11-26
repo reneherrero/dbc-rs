@@ -2,13 +2,13 @@ name: dbc-cli CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
     paths:
       - 'dbc-cli/**'
       - 'dbc/**'
       - '.github/workflows/dbc-cli.yml'
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
     paths:
       - 'dbc-cli/**'
       - 'dbc/**'

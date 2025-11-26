@@ -52,23 +52,25 @@
 //! - [Examples](../examples/) - Usage examples
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![deny(missing_docs)]
-#![deny(unsafe_code)]
 
 extern crate alloc;
 
+mod byte_order;
 mod dbc;
 mod error;
 mod message;
 mod nodes;
+mod receivers;
 mod signal;
 mod version;
 
+pub use byte_order::ByteOrder;
 pub use dbc::Dbc;
-pub use error::Error;
+pub use error::{Error, Result};
 pub use message::Message;
 pub use nodes::Nodes;
-pub use signal::{ByteOrder, Receivers, Signal};
+pub use receivers::Receivers;
+pub use signal::Signal;
 pub use version::Version;
 
 /// Library version

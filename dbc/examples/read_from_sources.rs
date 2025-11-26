@@ -1,3 +1,11 @@
+//! Example: Reading DBC files from various sources.
+//!
+//! This example demonstrates different ways to parse DBC files:
+//! - From string slices (no_std compatible)
+//! - From bytes (no_std compatible)
+//! - From owned strings (no_std compatible)
+//! - From std::io::Read (requires std feature)
+
 use dbc_rs::Dbc;
 use std::io::Cursor;
 

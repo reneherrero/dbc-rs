@@ -1,4 +1,4 @@
-use crate::{Error, error::messages};
+use crate::{Error, Result, error::messages};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 /// Represents the list of nodes (ECUs) defined in a DBC file.
@@ -46,7 +46,7 @@ impl Nodes {
 
     /// This is an internal constructor. For public API usage, use [`Nodes::builder()`] instead.
     #[allow(dead_code)] // Used in tests
-    pub(crate) fn new<I, S>(nodes: I) -> Result<Self, Error>
+    pub(crate) fn new<I, S>(nodes: I) -> Result<Self>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -62,7 +62,7 @@ impl Nodes {
     ///
     /// Returns an error if:
     /// - Duplicate node names are found (case-sensitive)
-    fn validate(nodes: &[Box<str>]) -> Result<(), Error> {
+    fn validate(nodes: &[Box<str>]) -> Result<()> {
         // Check for duplicate node names (case-sensitive)
         for (i, node1) in nodes.iter().enumerate() {
             for node2 in nodes.iter().skip(i + 1) {
@@ -74,7 +74,7 @@ impl Nodes {
         Ok(())
     }
 
-    pub(super) fn parse(nodes: &str) -> Result<Self, Error> {
+    pub(super) fn parse(nodes: &str) -> Result<Self> {
         let nodes: Vec<Box<str>> = nodes[4..].split_whitespace().map(|s| s.into()).collect();
         Self::validate(&nodes)?;
         Ok(Self { nodes })
@@ -211,7 +211,7 @@ impl NodesBuilder {
     ///
     /// Returns an error if:
     /// - Duplicate node names are found (case-sensitive)
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         Nodes::validate(&self.nodes)
     }
 
@@ -221,7 +221,7 @@ impl NodesBuilder {
     ///
     /// Returns an error if:
     /// - Duplicate node names are found (case-sensitive)
-    pub fn build(self) -> Result<Nodes, Error> {
+    pub fn build(self) -> Result<Nodes> {
         Nodes::validate(&self.nodes)?;
         Ok(Nodes { nodes: self.nodes })
     }

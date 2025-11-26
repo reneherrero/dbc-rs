@@ -34,6 +34,23 @@ pub enum Error {
     Nodes(String),
 }
 
+/// Result type alias for operations that can fail with an [`Error`].
+///
+/// This is a convenience type alias that makes it easier to write fallible
+/// operations without repeating `Error` in every return type.
+///
+/// # Examples
+///
+/// ```rust
+/// use dbc_rs::Result;
+///
+/// fn parse_signal(data: &str) -> Result<()> {
+///     // ... parsing logic ...
+///     Ok(())
+/// }
+/// ```
+pub type Result<T> = core::result::Result<T, Error>;
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

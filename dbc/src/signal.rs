@@ -1,4 +1,6 @@
-use crate::{Error, error::messages};
+use crate::byte_order::ByteOrder;
+use crate::receivers::Receivers;
+use crate::{Error, Result, error::messages};
 use alloc::{
     boxed::Box,
     string::{String, ToString},
@@ -46,33 +48,9 @@ pub struct Signal {
     receivers: Receivers,
 }
 
-/// Byte order (endianness) for signal encoding.
-///
-/// Determines how multi-byte signals are encoded within the CAN message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ByteOrder {
-    /// Little-endian byte order (Intel format).
-    LittleEndian = 0,
-    /// Big-endian byte order (Motorola format).
-    BigEndian = 1,
-}
-
-/// Receiver specification for a signal.
-///
-/// Defines which nodes on the CAN bus should receive and process this signal.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Receivers {
-    /// Signal is broadcast to all nodes.
-    Broadcast,
-    /// Signal is sent to specific nodes.
-    Nodes(Vec<Box<str>>),
-    /// Signal has no receivers specified.
-    None,
-}
-
 impl Signal {
     /// Validate signal parameters
-    fn validate(name: &str, start_bit: u8, length: u8, min: f64, max: f64) -> Result<(), Error> {
+    fn validate(name: &str, start_bit: u8, length: u8, min: f64, max: f64) -> Result<()> {
         if name.trim().is_empty() {
             return Err(Error::Signal(messages::SIGNAL_NAME_EMPTY.to_string()));
         }
@@ -125,7 +103,7 @@ impl Signal {
         max: f64,
         unit: Option<impl AsRef<str>>,
         receivers: Receivers,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let name_str = name.as_ref();
         Self::validate(name_str, start_bit, length, min, max)?;
 
@@ -170,7 +148,7 @@ impl Signal {
         SignalBuilder::new()
     }
 
-    pub(super) fn parse(line: &str) -> Result<Self, Error> {
+    pub(super) fn parse(line: &str) -> Result<Self> {
         // INSERT_YOUR_CODE
 
         // Trim and check for SG_
@@ -685,7 +663,7 @@ impl SignalBuilder {
     /// Returns an error if:
     /// - Required fields (`name`, `start_bit`, `length`) are missing
     /// - Validation fails (same as `Signal::validate()`)
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         let name = self
             .name
             .as_ref()
@@ -707,7 +685,7 @@ impl SignalBuilder {
     /// Returns an error if:
     /// - Required fields (`name`, `start_bit`, `length`) are missing
     /// - Validation fails (same validation logic as the internal constructor)
-    pub fn build(self) -> Result<Signal, Error> {
+    pub fn build(self) -> Result<Signal> {
         let name = self
             .name
             .ok_or_else(|| Error::Signal(messages::SIGNAL_NAME_EMPTY.to_string()))?;

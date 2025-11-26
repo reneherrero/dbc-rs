@@ -1,3 +1,5 @@
+//! Integration tests for DBC file parsing and manipulation.
+
 use dbc_rs::Dbc;
 
 #[test]

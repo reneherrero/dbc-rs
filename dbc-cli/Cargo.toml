@@ -11,6 +11,9 @@ authors.workspace = true
 name = "dbc-cli"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 dbc-rs = { path = "../dbc", package = "dbc-rs" }
 clap = { version = "4.5", features = ["derive"] }

@@ -1,4 +1,4 @@
-use crate::{Error, Signal, error::messages};
+use crate::{Error, Result, Signal, error::messages};
 use alloc::{boxed::Box, format, string::String, string::ToString, vec::Vec};
 
 /// Represents a CAN message within a DBC file.
@@ -30,13 +30,7 @@ pub struct Message {
 
 impl Message {
     /// Validate message parameters
-    fn validate(
-        id: u32,
-        name: &str,
-        dlc: u8,
-        sender: &str,
-        signals: &[Signal],
-    ) -> Result<(), Error> {
+    fn validate(id: u32, name: &str, dlc: u8, sender: &str, signals: &[Signal]) -> Result<()> {
         if name.trim().is_empty() {
             return Err(Error::Message(messages::MESSAGE_NAME_EMPTY.to_string()));
         }
@@ -137,7 +131,7 @@ impl Message {
         dlc: u8,
         sender: impl AsRef<str>,
         signals: Vec<Signal>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self> {
         let name_str = name.as_ref();
         let sender_str = sender.as_ref();
         Self::validate(id, name_str, dlc, sender_str, &signals)?;
@@ -177,7 +171,7 @@ impl Message {
         MessageBuilder::new()
     }
 
-    pub(super) fn parse(message: &str, signals: Vec<Signal>) -> Result<Self, Error> {
+    pub(super) fn parse(message: &str, signals: Vec<Signal>) -> Result<Self> {
         let parts: Vec<&str> = message.split_whitespace().collect();
         if parts.len() != 6 {
             return Err(Error::Message(messages::MESSAGE_INVALID_FORMAT.to_string()));
@@ -455,7 +449,7 @@ impl MessageBuilder {
     /// Returns an error if:
     /// - Required fields (`id`, `name`, `dlc`, `sender`) are missing
     /// - Validation fails (same as `Message::validate()`)
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         let id = self
             .id
             .ok_or_else(|| Error::Message(messages::MESSAGE_ID_REQUIRED.to_string()))?;
@@ -481,7 +475,7 @@ impl MessageBuilder {
     /// Returns an error if:
     /// - Required fields (`id`, `name`, `dlc`, `sender`) are missing
     /// - Validation fails (same validation logic as the internal constructor)
-    pub fn build(self) -> Result<Message, Error> {
+    pub fn build(self) -> Result<Message> {
         let id = self
             .id
             .ok_or_else(|| Error::Message(messages::MESSAGE_ID_REQUIRED.to_string()))?;

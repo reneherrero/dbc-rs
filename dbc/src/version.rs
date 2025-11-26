@@ -4,7 +4,7 @@ use alloc::{
     vec::Vec,
 };
 
-use crate::{Error, error::messages};
+use crate::{Error, Result, error::messages};
 
 /// Represents the version string from a DBC file.
 ///
@@ -48,7 +48,7 @@ impl Version {
     }
 
     /// This is an internal constructor. For public API usage, use [`Version::builder()`] instead.
-    pub(crate) fn new(major: u8, minor: Option<u8>, patch: Option<u8>) -> Result<Self, Error> {
+    pub(crate) fn new(major: u8, minor: Option<u8>, patch: Option<u8>) -> Result<Self> {
         if minor.is_none() && patch.is_some() {
             return Err(Error::Version(
                 messages::VERSION_PATCH_REQUIRES_MINOR.to_string(),
@@ -61,7 +61,7 @@ impl Version {
         })
     }
 
-    pub(super) fn parse(version: &str) -> Result<Self, Error> {
+    pub(super) fn parse(version: &str) -> Result<Self> {
         // Remove "VERSION " prefix
         let version = if let Some(v) = version.strip_prefix("VERSION") {
             v
@@ -216,7 +216,7 @@ impl VersionBuilder {
     /// Returns an error if:
     /// - Required field (`major`) is missing
     /// - `patch` is set but `minor` is not (patch requires minor)
-    pub fn validate(&self) -> Result<(), Error> {
+    pub fn validate(&self) -> Result<()> {
         let _major = self
             .major
             .ok_or_else(|| Error::Version(messages::VERSION_MAJOR_REQUIRED.to_string()))?;
@@ -237,7 +237,7 @@ impl VersionBuilder {
     /// Returns an error if:
     /// - Required field (`major`) is missing
     /// - `patch` is set but `minor` is not (patch requires minor)
-    pub fn build(self) -> Result<Version, Error> {
+    pub fn build(self) -> Result<Version> {
         let major = self
             .major
             .ok_or_else(|| Error::Version(messages::VERSION_MAJOR_REQUIRED.to_string()))?;
