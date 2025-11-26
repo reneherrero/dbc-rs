@@ -433,6 +433,18 @@ let dbc3 = Dbc::parse_from(string)?;
 
 3. **Signal Multiplexing**: Multiplexed signals are not yet supported.
 
+## Security & Resource Limits
+
+For security reasons (DoS protection), the library enforces the following limits:
+
+- **Maximum 256 nodes** per DBC file
+- **Maximum 64 receiver nodes** per signal
+- **Maximum 10,000 messages** per DBC file
+- **Maximum 64 signals** per message
+- **Maximum 256 characters** for unit strings
+
+Attempting to exceed these limits will result in a validation error. These limits are designed to prevent resource exhaustion attacks while accommodating typical DBC file sizes (which typically have < 1000 messages and < 10 nodes).
+
 ## Usage Patterns
 
 ### Common Workflows

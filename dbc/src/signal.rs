@@ -3,6 +3,7 @@ use crate::receivers::Receivers;
 use crate::{Error, Result, error::messages};
 use alloc::{
     boxed::Box,
+    fmt::Write,
     string::{String, ToString},
     vec::Vec,
 };
@@ -284,6 +285,8 @@ impl Signal {
     /// Parse unit: `"unit"` or `""`
     /// Returns `(unit, remaining_string)`
     fn parse_unit(rest: &str) -> Result<(Option<Box<str>>, &str)> {
+        const MAX_UNIT_LENGTH: usize = 256;
+
         if !rest.starts_with('"') {
             return Err(Error::Signal(
                 messages::SIGNAL_PARSE_EXPECTED_UNIT_QUOTE.to_string(),
@@ -294,6 +297,11 @@ impl Signal {
         for c in rest.chars() {
             if c == '"' {
                 break;
+            }
+            if unit_str.len() >= MAX_UNIT_LENGTH {
+                return Err(Error::Signal(
+                    messages::SIGNAL_PARSE_UNIT_TOO_LONG.to_string(),
+                ));
             }
             unit_str.push(c);
         }
@@ -310,17 +318,30 @@ impl Signal {
     }
 
     /// Parse receivers: * or space-separated list or empty
-    fn parse_receivers(rest: &str) -> Receivers {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Too many receiver nodes (exceeds maximum of 64)
+    fn parse_receivers(rest: &str) -> Result<Receivers> {
+        const MAX_RECEIVER_NODES: usize = 64;
+
         if rest.is_empty() {
-            Receivers::None
+            Ok(Receivers::None)
         } else if rest == "*" {
-            Receivers::Broadcast
+            Ok(Receivers::Broadcast)
         } else {
             let nodes: Vec<Box<str>> = rest.split_whitespace().map(Into::into).collect();
             if nodes.is_empty() {
-                Receivers::None
+                Ok(Receivers::None)
             } else {
-                Receivers::Nodes(nodes)
+                // Check for too many receiver nodes (DoS protection)
+                if nodes.len() > MAX_RECEIVER_NODES {
+                    return Err(Error::Signal(
+                        messages::SIGNAL_RECEIVERS_TOO_MANY.to_string(),
+                    ));
+                }
+                Ok(Receivers::Nodes(nodes))
             }
         }
     }
@@ -331,7 +352,7 @@ impl Signal {
         let (factor, offset, rest) = Self::parse_factor_offset(rest)?;
         let (min, max, rest) = Self::parse_range(rest)?;
         let (unit, rest) = Self::parse_unit(rest)?;
-        let receivers = Self::parse_receivers(rest);
+        let receivers = Self::parse_receivers(rest)?;
 
         // Validate the parsed signal using the same validation as new()
         Self::validate(name, start_bit, length, min, max)?;
@@ -456,8 +477,6 @@ impl Signal {
     /// ```
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
-        use alloc::fmt::Write;
-
         let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
 
         result.push_str(" SG_ ");
@@ -1532,20 +1551,40 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_unit_too_long() {
+        // Create a unit string that exceeds MAX_UNIT_LENGTH (256)
+        let long_unit = "\"".to_string() + &"a".repeat(257) + "\"";
+        let result = Signal::parse_unit(&long_unit);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                // Check for the error message (language-agnostic)
+                // The message should contain either the English text or the constant text
+                assert!(
+                    msg.contains(lang::SIGNAL_PARSE_UNIT_TOO_LONG)
+                        || msg.contains("exceeds maximum length")
+                        || msg.contains("256")
+                );
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
     fn test_parse_receivers_broadcast() {
-        let result = Signal::parse_receivers("*");
+        let result = Signal::parse_receivers("*").unwrap();
         assert_eq!(result, Receivers::Broadcast);
     }
 
     #[test]
     fn test_parse_receivers_none_empty() {
-        let result = Signal::parse_receivers("");
+        let result = Signal::parse_receivers("").unwrap();
         assert_eq!(result, Receivers::None);
     }
 
     #[test]
     fn test_parse_receivers_single_node() {
-        let result = Signal::parse_receivers("TCM");
+        let result = Signal::parse_receivers("TCM").unwrap();
         match result {
             Receivers::Nodes(nodes) => {
                 assert_eq!(nodes.len(), 1);
@@ -1557,7 +1596,7 @@ mod tests {
 
     #[test]
     fn test_parse_receivers_multiple_nodes() {
-        let result = Signal::parse_receivers("TCM BCM ECM");
+        let result = Signal::parse_receivers("TCM BCM ECM").unwrap();
         match result {
             Receivers::Nodes(nodes) => {
                 assert_eq!(nodes.len(), 3);
@@ -1571,18 +1610,57 @@ mod tests {
 
     #[test]
     fn test_parse_receivers_whitespace_only() {
-        let result = Signal::parse_receivers("   ");
+        let result = Signal::parse_receivers("   ").unwrap();
         assert_eq!(result, Receivers::None);
     }
 
     #[test]
     fn test_parse_receivers_with_extra_whitespace() {
-        let result = Signal::parse_receivers("  TCM   BCM  ");
+        let result = Signal::parse_receivers("  TCM   BCM  ").unwrap();
         match result {
             Receivers::Nodes(nodes) => {
                 assert_eq!(nodes.len(), 2);
                 assert_eq!(nodes[0].as_ref(), "TCM");
                 assert_eq!(nodes[1].as_ref(), "BCM");
+            }
+            _ => panic!("Expected Nodes variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_receivers_too_many() {
+        // Create a string with 65 receiver nodes (exceeds limit of 64)
+        let mut receivers = String::new();
+        for i in 0..65 {
+            if i > 0 {
+                receivers.push(' ');
+            }
+            write!(receivers, "Node{i}").unwrap();
+        }
+        let result = Signal::parse_receivers(&receivers);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                assert!(msg.contains(lang::SIGNAL_RECEIVERS_TOO_MANY));
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_receivers_at_limit() {
+        // Create a string with exactly 64 receiver nodes (at the limit)
+        let mut receivers = String::new();
+        for i in 0..64 {
+            if i > 0 {
+                receivers.push(' ');
+            }
+            write!(receivers, "Node{i}").unwrap();
+        }
+        let result = Signal::parse_receivers(&receivers).unwrap();
+        match result {
+            Receivers::Nodes(nodes) => {
+                assert_eq!(nodes.len(), 64);
             }
             _ => panic!("Expected Nodes variant"),
         }

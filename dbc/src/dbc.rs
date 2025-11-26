@@ -6,6 +6,12 @@ use alloc::{string::String, string::ToString, vec::Vec};
 /// A `Dbc` contains all the information from a DBC file: version information,
 /// node definitions, and CAN messages with their signals.
 ///
+/// # Limits
+///
+/// For security reasons (`DoS` protection), the maximum number of messages
+/// per DBC file is **10,000**. Attempting to create a [`Dbc`] instance with
+/// more than 10,000 messages will result in a validation error.
+///
 /// # Examples
 ///
 /// ```rust
@@ -25,6 +31,12 @@ pub struct Dbc {
 impl Dbc {
     /// Validate DBC parameters
     fn validate(_version: &Version, nodes: &Nodes, messages: &[Message]) -> Result<()> {
+        // Check message count limit (DoS protection)
+        const MAX_MESSAGES: usize = 10_000;
+        if messages.len() > MAX_MESSAGES {
+            return Err(Error::Dbc(messages::DBC_TOO_MANY_MESSAGES.to_string()));
+        }
+
         // Check for duplicate message IDs
         for (i, msg1) in messages.iter().enumerate() {
             for msg2 in messages.iter().skip(i + 1) {
@@ -1115,6 +1127,87 @@ BO_ 512 BrakeData : 4 TCM
 
         let result = Dbc::builder().version(version).nodes(nodes).add_message(message).validate();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_dbc_too_many_messages() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+
+        // Create 10,001 messages (exceeds limit of 10,000)
+        let mut messages = Vec::new();
+        for i in 0..10_001 {
+            let message = Message::new(
+                i,
+                format!("Message{i}").as_str(),
+                8,
+                "ECM",
+                vec![signal.clone()],
+            )
+            .unwrap();
+            messages.push(message);
+        }
+
+        let result = Dbc::new(version, nodes, messages);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Dbc(msg) => {
+                assert!(msg.contains(lang::DBC_TOO_MANY_MESSAGES));
+            }
+            _ => panic!("Expected Dbc error"),
+        }
+    }
+
+    #[test]
+    fn test_dbc_at_message_limit() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+
+        // Create exactly 10,000 messages (at the limit)
+        let mut messages = Vec::new();
+        for i in 0..10_000 {
+            let message = Message::new(
+                i,
+                format!("Message{i}").as_str(),
+                8,
+                "ECM",
+                vec![signal.clone()],
+            )
+            .unwrap();
+            messages.push(message);
+        }
+
+        let result = Dbc::new(version, nodes, messages);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().messages().len(), 10_000);
     }
 }
 

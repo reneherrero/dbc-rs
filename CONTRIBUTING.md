@@ -61,9 +61,15 @@ This project adheres to a code of conduct that all contributors are expected to 
 
 4. Run clippy to catch common issues:
    ```bash
+   # For default target (with std)
    cargo clippy --all-targets --all-features -- -D warnings
+   
+   # For no_std builds (must use --no-default-features)
+   cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
    ```
-   **Note**: If you've installed the git hooks (step 5 in setup), clippy will run automatically on commit.
+   **Note**: 
+   - If you've installed the git hooks (step 5 in setup), clippy will run automatically on commit.
+   - When running clippy for `no_std` targets, you **must** use `--no-default-features`, otherwise it will try to use `std` features which aren't available on embedded targets.
 
 5. Format your code:
    ```bash

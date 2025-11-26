@@ -28,7 +28,13 @@ pub const DBC_EMPTY_FILE: &str = "空のDBCファイル";
 pub const DBC_VERSION_REQUIRED: &str = "バージョンが必要です";
 pub const DBC_NODES_REQUIRED: &str = "ノードが必要です";
 pub const DBC_NODES_NOT_DEFINED: &str = "ノード（BU_）が定義されていません";
+pub const DBC_TOO_MANY_MESSAGES: &str = "メッセージが多すぎます：最大10000個まで許可されています";
 pub const NODES_DUPLICATE_NAME: &str = "重複するノード名";
+pub const NODES_TOO_MANY: &str = "ノードが多すぎます：最大256個まで許可されています";
+pub const MESSAGE_TOO_MANY_SIGNALS: &str =
+    "信号が多すぎます：メッセージあたり最大64個まで許可されています";
+pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
+    "受信ノードが多すぎます：信号あたり最大64個まで許可されています";
 
 // ============================================================================
 // Message-related error messages
@@ -81,6 +87,7 @@ pub const SIGNAL_PARSE_MISSING_PIPE_IN_RANGE: &str = "min|maxに'|'がありま�
 pub const SIGNAL_PARSE_INVALID_MIN: &str = "無効な最小値";
 pub const SIGNAL_PARSE_INVALID_MAX: &str = "無効な最大値";
 pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "'unit'文字列の開始'\"'が必要です";
+pub const SIGNAL_PARSE_UNIT_TOO_LONG: &str = "単位文字列が最大長256文字を超えています";
 
 // ============================================================================
 // Formatted error message templates

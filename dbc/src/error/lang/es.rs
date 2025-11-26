@@ -28,7 +28,13 @@ pub const DBC_EMPTY_FILE: &str = "Archivo DBC vacío";
 pub const DBC_VERSION_REQUIRED: &str = "versión es requerida";
 pub const DBC_NODES_REQUIRED: &str = "nodos son requeridos";
 pub const DBC_NODES_NOT_DEFINED: &str = "Los nodos (BU_) no están definidos";
+pub const DBC_TOO_MANY_MESSAGES: &str = "Demasiados mensajes: el máximo permitido es 10000";
 pub const NODES_DUPLICATE_NAME: &str = "Nombre de nodo duplicado";
+pub const NODES_TOO_MANY: &str = "Demasiados nodos: el máximo permitido es 256";
+pub const MESSAGE_TOO_MANY_SIGNALS: &str =
+    "Demasiadas señales: el máximo permitido es 64 por mensaje";
+pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
+    "Demasiados nodos receptores: el máximo permitido es 64 por señal";
 
 // ============================================================================
 // Message-related error messages
@@ -82,6 +88,8 @@ pub const SIGNAL_PARSE_MISSING_PIPE_IN_RANGE: &str = "Falta '|' en min|max";
 pub const SIGNAL_PARSE_INVALID_MIN: &str = "Min inválido";
 pub const SIGNAL_PARSE_INVALID_MAX: &str = "Max inválido";
 pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "Se esperaba el inicio de la cadena 'unit' '\"'";
+pub const SIGNAL_PARSE_UNIT_TOO_LONG: &str =
+    "La cadena de unidad excede la longitud máxima de 256 caracteres";
 
 // ============================================================================
 // Formatted error message templates

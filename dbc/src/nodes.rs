@@ -1,11 +1,21 @@
 use crate::{Error, Result, error::messages};
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// Represents the list of nodes (ECUs) defined in a DBC file.
 ///
 /// Nodes represent the electronic control units (ECUs) that participate
 /// in the CAN bus communication. Each message must have a sender that
 /// is present in the nodes list.
+///
+/// # Limits
+///
+/// For security reasons (`DoS` protection), the maximum number of nodes is **256**.
+/// Attempting to create a [`Nodes`] instance with more than 256 nodes will result
+/// in a validation error.
 ///
 /// # Examples
 ///
@@ -63,7 +73,15 @@ impl Nodes {
     ///
     /// Returns an error if:
     /// - Duplicate node names are found (case-sensitive)
+    /// - Too many nodes (exceeds maximum of 256)
     fn validate(nodes: &[Box<str>]) -> Result<()> {
+        const MAX_NODES: usize = 256;
+
+        // Check for too many nodes (DoS protection)
+        if nodes.len() > MAX_NODES {
+            return Err(Error::Nodes(messages::NODES_TOO_MANY.to_string()));
+        }
+
         // Check for duplicate node names (case-sensitive)
         for (i, node1) in nodes.iter().enumerate() {
             for node2 in nodes.iter().skip(i + 1) {
@@ -350,6 +368,51 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Nodes(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
+            _ => panic!("Expected Nodes error"),
+        }
+    }
+
+    #[test]
+    fn test_nodes_too_many() {
+        // Create a vector with 257 nodes (exceeds limit of 256)
+        let mut nodes = Vec::new();
+        for i in 0..257 {
+            nodes.push(format!("Node{i}"));
+        }
+        let result = Nodes::new(nodes);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Nodes(msg) => {
+                assert!(msg.contains(lang::NODES_TOO_MANY));
+            }
+            _ => panic!("Expected Nodes error"),
+        }
+    }
+
+    #[test]
+    fn test_nodes_at_limit() {
+        // Create a vector with exactly 256 nodes (at the limit)
+        let mut nodes = Vec::new();
+        for i in 0..256 {
+            nodes.push(format!("Node{i}"));
+        }
+        let result = Nodes::new(nodes);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().nodes().unwrap().len(), 256);
+    }
+
+    #[test]
+    fn test_nodes_builder_too_many() {
+        let mut builder = Nodes::builder();
+        for i in 0..257 {
+            builder = builder.add_node(format!("Node{i}"));
+        }
+        let result = builder.build();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Nodes(msg) => {
+                assert!(msg.contains(lang::NODES_TOO_MANY));
+            }
             _ => panic!("Expected Nodes error"),
         }
     }

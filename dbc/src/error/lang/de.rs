@@ -28,7 +28,12 @@ pub const DBC_EMPTY_FILE: &str = "Leere DBC-Datei";
 pub const DBC_VERSION_REQUIRED: &str = "Version ist erforderlich";
 pub const DBC_NODES_REQUIRED: &str = "Knoten sind erforderlich";
 pub const DBC_NODES_NOT_DEFINED: &str = "Knoten (BU_) sind nicht definiert";
+pub const DBC_TOO_MANY_MESSAGES: &str = "Zu viele Nachrichten: das Maximum beträgt 10000";
 pub const NODES_DUPLICATE_NAME: &str = "Doppelter Knotenname";
+pub const NODES_TOO_MANY: &str = "Zu viele Knoten: das Maximum beträgt 256";
+pub const MESSAGE_TOO_MANY_SIGNALS: &str = "Zu viele Signale: das Maximum beträgt 64 pro Nachricht";
+pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
+    "Zu viele Empfängerknoten: das Maximum beträgt 64 pro Signal";
 
 // ============================================================================
 // Message-related error messages
@@ -81,6 +86,8 @@ pub const SIGNAL_PARSE_MISSING_PIPE_IN_RANGE: &str = "Fehlendes '|' in min|max";
 pub const SIGNAL_PARSE_INVALID_MIN: &str = "Ungültiges Min";
 pub const SIGNAL_PARSE_INVALID_MAX: &str = "Ungültiges Max";
 pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "Erwartet Beginn der 'unit'-Zeichenkette '\"'";
+pub const SIGNAL_PARSE_UNIT_TOO_LONG: &str =
+    "Einheitszeichenkette überschreitet die maximale Länge von 256 Zeichen";
 
 // ============================================================================
 // Formatted error message templates

@@ -6,6 +6,12 @@ use alloc::{boxed::Box, format, string::String, string::ToString, vec::Vec};
 /// A message contains a CAN ID, name, data length code (DLC), sender node,
 /// and a list of signals that make up the message payload.
 ///
+/// # Limits
+///
+/// For security reasons (`DoS` protection), the maximum number of signals
+/// per message is **64**. Attempting to create a [`Message`] instance with
+/// more than 64 signals will result in a validation error.
+///
 /// # Examples
 ///
 /// ```rust
@@ -38,6 +44,14 @@ impl Message {
         const MAX_STANDARD_ID: u32 = 0x7FF; // 2047
         const MIN_EXTENDED_ID: u32 = 0x800; // 2048
         const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF; // 536870911
+
+        // Check signal count limit per message (DoS protection)
+        const MAX_SIGNALS_PER_MESSAGE: usize = 64;
+        if signals.len() > MAX_SIGNALS_PER_MESSAGE {
+            return Err(Error::Message(
+                messages::MESSAGE_TOO_MANY_SIGNALS.to_string(),
+            ));
+        }
 
         if name.trim().is_empty() {
             return Err(Error::Message(messages::MESSAGE_NAME_EMPTY.to_string()));
@@ -1098,5 +1112,68 @@ mod tests {
             }
             _ => panic!("Expected Signal error"),
         }
+    }
+
+    #[test]
+    fn test_message_too_many_signals() {
+        // Create a message with 65 signals (exceeds limit of 64)
+        // Use 1-bit signals, but we need to check count BEFORE boundary validation
+        // So we'll create signals that would fit if not for the count limit
+        // Note: Signal count check happens before boundary check in validate()
+        let mut signals = Vec::new();
+        for i in 0..65 {
+            // Use modulo to wrap signals within 64 bits (8 bytes)
+            let start_bit = i % 64;
+            let signal = Signal::new(
+                format!("Signal{i}").as_str(),
+                start_bit,
+                1,
+                ByteOrder::BigEndian,
+                true,
+                1.0,
+                0.0,
+                0.0,
+                1.0,
+                None::<&str>,
+                Receivers::None,
+            )
+            .unwrap();
+            signals.push(signal);
+        }
+        let result = Message::new(256, "TestMessage", 8, "ECM", signals);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Message(msg) => {
+                assert!(msg.contains(lang::MESSAGE_TOO_MANY_SIGNALS));
+            }
+            _ => panic!("Expected Message error"),
+        }
+    }
+
+    #[test]
+    fn test_message_at_signal_limit() {
+        // Create a message with exactly 64 signals (at the limit)
+        // Use 1-bit signals to fit many in a single byte
+        let mut signals = Vec::new();
+        for i in 0..64 {
+            let signal = Signal::new(
+                format!("Signal{i}").as_str(),
+                i,
+                1,
+                ByteOrder::BigEndian,
+                true,
+                1.0,
+                0.0,
+                0.0,
+                1.0,
+                None::<&str>,
+                Receivers::None,
+            )
+            .unwrap();
+            signals.push(signal);
+        }
+        let result = Message::new(256, "TestMessage", 8, "ECM", signals);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().signals().len(), 64);
     }
 }
