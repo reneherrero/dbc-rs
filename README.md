@@ -88,6 +88,10 @@ cargo llvm-cov --all-features --workspace --html
 
 The project aims for at least 80% code coverage. Coverage reports are automatically generated in CI and posted as PR comments.
 
+## Security
+
+For a comprehensive security audit, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md) (also available in the `dbc` crate).
+
 ## License
 
 Licensed under either of:

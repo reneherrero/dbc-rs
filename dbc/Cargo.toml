@@ -20,6 +20,7 @@ exclude = [
     "*.md",
     "!README.md",
     "!LICENSING.md",
+    "!SECURITY_AUDIT.md",
 ]
 
 [package.metadata.docs.rs]

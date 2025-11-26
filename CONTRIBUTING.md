@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to dbc-rs! This document provides guidelines and instructions for contributing to the project.
 
+**For release procedures**, see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
+
 ## Code of Conduct
 
 This project adheres to a code of conduct that all contributors are expected to follow. Please be respectful and constructive in all interactions.

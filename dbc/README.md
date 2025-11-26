@@ -433,7 +433,11 @@ let dbc3 = Dbc::parse_from(string)?;
 
 3. **Signal Multiplexing**: Multiplexed signals are not yet supported.
 
-## Security & Resource Limits
+## Security
+
+For a comprehensive security audit, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
+
+### Security & Resource Limits
 
 For security reasons (DoS protection), the library enforces the following limits:
 
@@ -914,6 +918,7 @@ For most users, the open-source license (MIT OR Apache-2.0) is sufficient. Comme
 ## References
 
 - [DBC Format Specification](DBC_FORMAT_SPEC.md) - Detailed format documentation
+- [Security Audit](SECURITY_AUDIT.md) - Comprehensive security review and DoS protection details
 - Vector Informatik: "DBC File Format Documentation Version 01/2007"
 - CAN Specification (ISO 11898)
 
