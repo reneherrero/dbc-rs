@@ -9,7 +9,7 @@
 //! ## Features
 //!
 //! - **Zero dependencies** - Pure Rust implementation
-//! - **no_std + alloc support** - Works on embedded targets without the standard library
+//! - **`no_std` + alloc support** - Works on embedded targets without the standard library
 //! - **Full parsing and writing** - Parse DBC files and save them back
 //! - **Comprehensive validation** - CAN ID range validation, signal overlap detection, and more
 //! - **Internationalization** - Error messages in multiple languages (build-time selection)

@@ -43,6 +43,7 @@ impl Version {
     /// let v3 = Version::builder().major(1).minor(2).patch(3).build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use]
     pub fn builder() -> VersionBuilder {
         VersionBuilder::new()
     }
@@ -109,24 +110,28 @@ impl Version {
 
     /// Get the major version number
     #[inline]
+    #[must_use]
     pub fn major(&self) -> u8 {
         self.major
     }
 
     /// Get the minor version number, if present
     #[inline]
+    #[must_use]
     pub fn minor(&self) -> Option<u8> {
         self.minor
     }
 
     /// Get the patch version number, if present
     #[inline]
+    #[must_use]
     pub fn patch(&self) -> Option<u8> {
         self.patch
     }
 
     /// Format version as a string (e.g., "1.2.3" or "1.0")
     #[allow(clippy::inherent_to_string)]
+    #[must_use]
     pub fn to_string(&self) -> String {
         match (self.minor, self.patch) {
             (Some(minor), Some(patch)) => format!("{}.{}.{}", self.major, minor, patch),
@@ -148,6 +153,7 @@ impl Version {
     /// assert_eq!(version.to_dbc_string(), "VERSION \"1.0\"");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use]
     pub fn to_dbc_string(&self) -> String {
         format!("VERSION \"{}\"", self.to_string())
     }
@@ -189,18 +195,21 @@ impl VersionBuilder {
     }
 
     /// Set the major version number (required)
+    #[must_use]
     pub fn major(mut self, major: u8) -> Self {
         self.major = Some(major);
         self
     }
 
     /// Set the minor version number (optional)
+    #[must_use]
     pub fn minor(mut self, minor: u8) -> Self {
         self.minor = Some(minor);
         self
     }
 
     /// Set the patch version number (optional, requires minor to be set)
+    #[must_use]
     pub fn patch(mut self, patch: u8) -> Self {
         self.patch = Some(patch);
         self
@@ -248,6 +257,7 @@ impl VersionBuilder {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use super::Version;
     use crate::error::lang;
     use crate::{Error, error::messages};

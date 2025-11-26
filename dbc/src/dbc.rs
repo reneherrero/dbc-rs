@@ -97,6 +97,7 @@ impl Dbc {
     /// - [`Version::builder`](crate::Version::builder) - Create version using builder
     /// - [`Nodes::builder`](crate::Nodes::builder) - Create nodes using builder
     /// - [`Message::builder`](crate::Message::builder) - Create message using builder pattern
+    #[must_use]
     pub fn builder() -> DbcBuilder {
         DbcBuilder::new()
     }
@@ -114,18 +115,21 @@ impl Dbc {
 
     /// Get the version information
     #[inline]
+    #[must_use]
     pub fn version(&self) -> &Version {
         &self.version
     }
 
     /// Get the nodes information
     #[inline]
+    #[must_use]
     pub fn nodes(&self) -> &Nodes {
         &self.nodes
     }
 
     /// Get a read-only slice of messages
     #[inline]
+    #[must_use]
     pub fn messages(&self) -> &[Message] {
         &self.messages
     }
@@ -162,9 +166,7 @@ impl Dbc {
         let mut lines = data.lines().peekable();
 
         // Must start with VERSION statement
-        let version = if let Some(v) = lines.next() {
-            v
-        } else {
+        let Some(version) = lines.next() else {
             return Err(Error::Dbc(messages::DBC_EMPTY_FILE.to_string()));
         };
         let version = Version::parse(version)?;
@@ -196,11 +198,8 @@ impl Dbc {
             }
         }
 
-        let nodes = match nodes {
-            Some(val) => val,
-            None => {
-                return Err(Error::Dbc(messages::DBC_NODES_NOT_DEFINED.to_string()));
-            }
+        let Some(nodes) = nodes else {
+            return Err(Error::Dbc(messages::DBC_NODES_NOT_DEFINED.to_string()));
         };
 
         // Validate the parsed DBC using the same validation as new()
@@ -257,6 +256,10 @@ impl Dbc {
     /// - [`parse`](Self::parse) - Parse from string slice
     /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes
     /// - [`from_reader`](Self::from_reader) - Parse from `std::io::Read` (requires `std` feature)
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`parse`](Self::parse).
     pub fn parse_from<S: AsRef<str>>(data: S) -> Result<Self> {
         Self::parse(data.as_ref())
     }
@@ -287,6 +290,7 @@ impl Dbc {
     /// - [`parse`](Self::parse) - Parse a DBC file from string
     /// - [`Version::to_dbc_string`](crate::Version::to_dbc_string) - Serialize version
     /// - [`Message::to_dbc_string_with_signals`](crate::Message::to_dbc_string_with_signals) - Serialize message
+    #[must_use]
     pub fn save(&self) -> String {
         // Pre-allocate with estimated capacity
         // Estimate: ~50 chars per message + ~100 chars per signal
@@ -415,36 +419,42 @@ impl DbcBuilder {
     }
 
     /// Set the version (required)
+    #[must_use]
     pub fn version(mut self, version: Version) -> Self {
         self.version = Some(version);
         self
     }
 
     /// Set the nodes (required)
+    #[must_use]
     pub fn nodes(mut self, nodes: Nodes) -> Self {
         self.nodes = Some(nodes);
         self
     }
 
     /// Add a message to the DBC
+    #[must_use]
     pub fn add_message(mut self, message: Message) -> Self {
         self.messages.push(message);
         self
     }
 
     /// Add multiple messages to the DBC
+    #[must_use]
     pub fn add_messages(mut self, messages: impl IntoIterator<Item = Message>) -> Self {
         self.messages.extend(messages);
         self
     }
 
     /// Set all messages at once (replaces any existing messages)
+    #[must_use]
     pub fn messages(mut self, messages: Vec<Message>) -> Self {
         self.messages = messages;
         self
     }
 
     /// Clear all messages
+    #[must_use]
     pub fn clear_messages(mut self) -> Self {
         self.messages.clear();
         self
@@ -493,6 +503,7 @@ impl DbcBuilder {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use super::Dbc;
     use crate::error::lang;
     use crate::{ByteOrder, Error, Message, Nodes, Receivers, Signal, Version};

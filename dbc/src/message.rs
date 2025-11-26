@@ -31,6 +31,14 @@ pub struct Message {
 impl Message {
     /// Validate message parameters
     fn validate(id: u32, name: &str, dlc: u8, sender: &str, signals: &[Signal]) -> Result<()> {
+        // Validate CAN ID range
+        // Standard 11-bit: 0-0x7FF (0-2047)
+        // Extended 29-bit: 0x800-0x1FFFFFFF (2048-536870911)
+        // IDs > 0x1FFFFFFF are invalid
+        const MAX_STANDARD_ID: u32 = 0x7FF; // 2047
+        const MIN_EXTENDED_ID: u32 = 0x800; // 2048
+        const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF; // 536870911
+
         if name.trim().is_empty() {
             return Err(Error::Message(messages::MESSAGE_NAME_EMPTY.to_string()));
         }
@@ -47,14 +55,6 @@ impl Message {
             return Err(Error::Message(messages::MESSAGE_DLC_TOO_LARGE.to_string()));
         }
 
-        // Validate CAN ID range
-        // Standard 11-bit: 0-0x7FF (0-2047)
-        // Extended 29-bit: 0x800-0x1FFFFFFF (2048-536870911)
-        // IDs > 0x1FFFFFFF are invalid
-        const MAX_STANDARD_ID: u32 = 0x7FF; // 2047
-        const MIN_EXTENDED_ID: u32 = 0x800; // 2048
-        const MAX_EXTENDED_ID: u32 = 0x1FFFFFFF; // 536870911
-
         // Validate that ID is within valid CAN ID ranges
         if id > MAX_EXTENDED_ID {
             return Err(Error::Message(messages::message_id_out_of_range(id)));
@@ -70,9 +70,9 @@ impl Message {
         }
 
         // Validate that all signals fit within the message size (DLC * 8 bits)
-        let max_bits = dlc as u16 * 8;
+        let max_bits = u16::from(dlc) * 8;
         for signal in signals {
-            let end_bit = signal.start_bit() as u16 + signal.length() as u16;
+            let end_bit = u16::from(signal.start_bit()) + u16::from(signal.length());
             if end_bit > max_bits {
                 return Err(Error::Message(messages::signal_extends_beyond_message(
                     signal.name(),
@@ -90,12 +90,12 @@ impl Message {
         // For simplicity, we check if their bit ranges overlap
         // This works for both little-endian and big-endian signals
         for (i, sig1) in signals.iter().enumerate() {
-            let sig1_start = sig1.start_bit() as u16;
-            let sig1_end = sig1_start + sig1.length() as u16;
+            let sig1_start = u16::from(sig1.start_bit());
+            let sig1_end = sig1_start + u16::from(sig1.length());
 
             for sig2 in signals.iter().skip(i + 1) {
-                let sig2_start = sig2.start_bit() as u16;
-                let sig2_end = sig2_start + sig2.length() as u16;
+                let sig2_start = u16::from(sig2.start_bit());
+                let sig2_end = sig2_start + u16::from(sig2.length());
 
                 // Check if ranges overlap
                 // Two ranges overlap if: sig1_start < sig2_end && sig2_start < sig1_end
@@ -167,6 +167,7 @@ impl Message {
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use]
     pub fn builder() -> MessageBuilder {
         MessageBuilder::new()
     }
@@ -200,35 +201,41 @@ impl Message {
 
     /// Get the CAN message ID
     #[inline]
+    #[must_use]
     pub fn id(&self) -> u32 {
         self.id
     }
 
     /// Get the message name
     #[inline]
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Get the Data Length Code (DLC)
     #[inline]
+    #[must_use]
     pub fn dlc(&self) -> u8 {
         self.dlc
     }
 
     /// Get the sender node name
     #[inline]
+    #[must_use]
     pub fn sender(&self) -> &str {
         &self.sender
     }
 
     /// Get a read-only slice of signals in this message
     #[inline]
+    #[must_use]
     pub fn signals(&self) -> &[Signal] {
         &self.signals
     }
 
     /// Find a signal by name in this message
+    #[must_use]
     pub fn find_signal(&self, name: &str) -> Option<&Signal> {
         self.signals.iter().find(|s| s.name() == name)
     }
@@ -269,6 +276,7 @@ impl Message {
     /// assert_eq!(message.to_dbc_string(), "BO_ 256 EngineData : 8 ECM");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use]
     pub fn to_dbc_string(&self) -> String {
         use alloc::format;
         format!(
@@ -316,6 +324,7 @@ impl Message {
     /// assert!(dbc_str.contains("SG_ RPM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use]
     pub fn to_dbc_string_with_signals(&self) -> String {
         let mut result = String::with_capacity(200 + (self.signals.len() * 100));
         result.push_str(&self.to_dbc_string());
@@ -392,48 +401,56 @@ impl MessageBuilder {
     }
 
     /// Set the CAN message ID (required)
+    #[must_use]
     pub fn id(mut self, id: u32) -> Self {
         self.id = Some(id);
         self
     }
 
     /// Set the message name (required)
+    #[must_use]
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
         self.name = Some(name.as_ref().into());
         self
     }
 
     /// Set the Data Length Code (DLC) (required)
+    #[must_use]
     pub fn dlc(mut self, dlc: u8) -> Self {
         self.dlc = Some(dlc);
         self
     }
 
     /// Set the sender node name (required)
+    #[must_use]
     pub fn sender(mut self, sender: impl AsRef<str>) -> Self {
         self.sender = Some(sender.as_ref().into());
         self
     }
 
     /// Add a signal to the message
+    #[must_use]
     pub fn add_signal(mut self, signal: Signal) -> Self {
         self.signals.push(signal);
         self
     }
 
     /// Add multiple signals to the message
+    #[must_use]
     pub fn add_signals(mut self, signals: impl IntoIterator<Item = Signal>) -> Self {
         self.signals.extend(signals);
         self
     }
 
     /// Set all signals at once (replaces any existing signals)
+    #[must_use]
     pub fn signals(mut self, signals: Vec<Signal>) -> Self {
         self.signals = signals;
         self
     }
 
     /// Clear all signals
+    #[must_use]
     pub fn clear_signals(mut self) -> Self {
         self.signals.clear();
         self
@@ -495,6 +512,7 @@ impl MessageBuilder {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use super::*;
     use crate::error::lang;
     use crate::{ByteOrder, Receivers};
@@ -884,7 +902,7 @@ mod tests {
         .unwrap();
 
         // Test ID that exceeds extended 29-bit range
-        let result = Message::new(0x20000000, "Test", 8, "ECM", vec![signal.clone()]);
+        let result = Message::new(0x2000_0000, "Test", 8, "ECM", vec![signal.clone()]);
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Message(msg) => {
@@ -909,7 +927,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Test valid extended ID (29-bit) - maximum
-        let result = Message::new(0x1FFFFFFF, "Test", 8, "ECM", vec![signal]);
+        let result = Message::new(0x1FFF_FFFF, "Test", 8, "ECM", vec![signal]);
         assert!(result.is_ok());
     }
 

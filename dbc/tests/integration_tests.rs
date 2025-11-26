@@ -1,4 +1,5 @@
 //! Integration tests for DBC file parsing and manipulation.
+#![allow(clippy::float_cmp)]
 
 use dbc_rs::Dbc;
 
@@ -266,21 +267,22 @@ fn test_parse_complete_dbc_file() {
     assert_eq!(abs_active.start_bit(), 16);
     assert_eq!(abs_active.length(), 1);
 
-    let wheel_speed_fl =
+    let wheel_speed_front_left =
         brake_msg.find_signal("WheelSpeedFL").expect("WheelSpeedFL signal not found");
-    assert_eq!(wheel_speed_fl.start_bit(), 17);
-    assert_eq!(wheel_speed_fl.length(), 15);
-    assert_eq!(wheel_speed_fl.unit(), Some("km/h"));
+    assert_eq!(wheel_speed_front_left.start_bit(), 17);
+    assert_eq!(wheel_speed_front_left.length(), 15);
+    assert_eq!(wheel_speed_front_left.unit(), Some("km/h"));
 
-    let wheel_speed_fr =
+    let wheel_speed_front_right =
         brake_msg.find_signal("WheelSpeedFR").expect("WheelSpeedFR signal not found");
-    assert_eq!(wheel_speed_fr.start_bit(), 32);
-    assert_eq!(wheel_speed_fr.length(), 15);
-    assert_eq!(wheel_speed_fr.unit(), Some("km/h"));
+    assert_eq!(wheel_speed_front_right.start_bit(), 32);
+    assert_eq!(wheel_speed_front_right.length(), 15);
+    assert_eq!(wheel_speed_front_right.unit(), Some("km/h"));
     // Verify this signal now fits within the 6-byte message (48 bits)
     assert!(
-        wheel_speed_fr.start_bit() as u16 + wheel_speed_fr.length() as u16
-            <= brake_msg.dlc() as u16 * 8
+        u16::from(wheel_speed_front_right.start_bit())
+            + u16::from(wheel_speed_front_right.length())
+            <= u16::from(brake_msg.dlc()) * 8
     );
 
     // Verify fourth message (SensorData)

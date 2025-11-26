@@ -40,6 +40,7 @@ impl Nodes {
     /// assert!(nodes.contains("ECM"));
     /// assert!(nodes.contains("TCM"));
     /// ```
+    #[must_use]
     pub fn builder() -> NodesBuilder {
         NodesBuilder::new()
     }
@@ -75,7 +76,7 @@ impl Nodes {
     }
 
     pub(super) fn parse(nodes: &str) -> Result<Self> {
-        let nodes: Vec<Box<str>> = nodes[4..].split_whitespace().map(|s| s.into()).collect();
+        let nodes: Vec<Box<str>> = nodes[4..].split_whitespace().map(Into::into).collect();
         Self::validate(&nodes)?;
         Ok(Self { nodes })
     }
@@ -84,6 +85,7 @@ impl Nodes {
     ///
     /// Returns `None` if there are no nodes, otherwise returns `Some(&[Box<str>])`.
     #[inline]
+    #[must_use]
     pub fn nodes(&self) -> Option<&[Box<str>]> {
         if self.nodes.is_empty() {
             None
@@ -94,12 +96,14 @@ impl Nodes {
 
     /// Check if a node name exists in the list
     #[inline]
+    #[must_use]
     pub fn contains(&self, node: &str) -> bool {
         self.nodes.iter().any(|n| n.as_ref() == node)
     }
 
     /// Format nodes as a space-separated string for saving
     #[allow(clippy::inherent_to_string)]
+    #[must_use]
     pub fn to_string(&self) -> String {
         if self.nodes.is_empty() {
             return String::new();
@@ -118,6 +122,7 @@ impl Nodes {
 
     /// Check if the nodes list is empty
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
@@ -138,6 +143,7 @@ impl Nodes {
     ///     .unwrap();
     /// assert_eq!(nodes.to_dbc_string(), "BU_: ECM TCM");
     /// ```
+    #[must_use]
     pub fn to_dbc_string(&self) -> String {
         let mut result = String::from("BU_:");
         let nodes_str = self.to_string();
@@ -181,12 +187,14 @@ impl NodesBuilder {
     }
 
     /// Add a single node
+    #[must_use]
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
         self.nodes.push(node.as_ref().into());
         self
     }
 
     /// Add multiple nodes from an iterator
+    #[must_use]
     pub fn add_nodes<I, S>(mut self, nodes: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -197,6 +205,7 @@ impl NodesBuilder {
     }
 
     /// Clear all nodes
+    #[must_use]
     pub fn clear(mut self) -> Self {
         self.nodes.clear();
         self
@@ -229,6 +238,7 @@ impl NodesBuilder {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use super::*;
     use crate::error::lang;
 

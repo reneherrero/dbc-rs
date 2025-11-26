@@ -166,7 +166,7 @@ pub(crate) fn invalid_utf8(err: impl core::fmt::Display) -> String {
 }
 
 /// Format read failed error
-/// Only available when std feature is enabled (used by Dbc::from_reader)
+/// Only available when std feature is enabled (used by `Dbc::from_reader`)
 #[cfg(feature = "std")]
 pub(crate) fn read_failed(err: impl core::fmt::Display) -> String {
     let args: [&dyn core::fmt::Display; 1] = [&err];

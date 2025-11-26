@@ -64,7 +64,7 @@ impl Signal {
         }
 
         // Validate start_bit + length doesn't exceed 64 (CAN message max size)
-        let end_bit = start_bit as u16 + length as u16;
+        let end_bit = u16::from(start_bit) + u16::from(length);
         if end_bit > 64 {
             return Err(Error::Signal(messages::signal_extends_beyond_can(
                 start_bit, length, end_bit,
@@ -144,13 +144,13 @@ impl Signal {
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use]
     pub fn builder() -> SignalBuilder {
         SignalBuilder::new()
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(super) fn parse(line: &str) -> Result<Self> {
-        // INSERT_YOUR_CODE
-
         // Trim and check for SG_
         let line = line.trim_start();
         let line = line
@@ -186,15 +186,15 @@ impl Signal {
         let (bitlen, bosign) = pos
             .split_once('@')
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_AT.to_string()))?;
-        let (startbit, length) = bitlen
+        let (start_bit_str, length_str) = bitlen
             .split_once('|')
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_PIPE.to_string()))?;
 
-        let start_bit: u8 = startbit
+        let start_bit: u8 = start_bit_str
             .trim()
             .parse()
             .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_START_BIT.to_string()))?;
-        let length: u8 = length
+        let length: u8 = length_str
             .trim()
             .parse()
             .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_LENGTH.to_string()))?;
@@ -224,13 +224,10 @@ impl Signal {
 
         // Now next token: (factor,offset)
         let rest = rest.trim_start();
-        let (f_and_rest, rest) = match rest.trim_start().split_once(')') {
-            Some((f, r)) => (f, r),
-            None => {
-                return Err(Error::Signal(
-                    messages::SIGNAL_PARSE_MISSING_CLOSING_PAREN.to_string(),
-                ));
-            }
+        let Some((f_and_rest, rest)) = rest.trim_start().split_once(')') else {
+            return Err(Error::Signal(
+                messages::SIGNAL_PARSE_MISSING_CLOSING_PAREN.to_string(),
+            ));
         };
         let f_and_rest = f_and_rest.trim_start();
         let f_and_rest = f_and_rest.strip_prefix('(').ok_or_else(|| {
@@ -257,13 +254,10 @@ impl Signal {
         let rest = rest.trim_start();
 
         // Next token: [min|max]
-        let (minmax, rest) = match rest.split_once(']') {
-            Some((m, r)) => (m, r),
-            None => {
-                return Err(Error::Signal(
-                    messages::SIGNAL_PARSE_MISSING_CLOSING_BRACKET.to_string(),
-                ));
-            }
+        let Some((minmax, rest)) = rest.split_once(']') else {
+            return Err(Error::Signal(
+                messages::SIGNAL_PARSE_MISSING_CLOSING_BRACKET.to_string(),
+            ));
         };
         let minmax = minmax.trim_start().strip_prefix('[').ok_or_else(|| {
             Error::Signal(messages::SIGNAL_PARSE_MISSING_OPENING_BRACKET.to_string())
@@ -322,7 +316,7 @@ impl Signal {
             Receivers::Broadcast
         } else {
             // Pre-allocate receivers Vec (most signals have 1-3 receivers)
-            let nodes: Vec<Box<str>> = rest.split_whitespace().map(|s| s.into()).collect();
+            let nodes: Vec<Box<str>> = rest.split_whitespace().map(Into::into).collect();
             if nodes.is_empty() {
                 Receivers::None
             } else {
@@ -350,66 +344,77 @@ impl Signal {
 
     /// Get the signal name.
     #[inline]
+    #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Get the starting bit position within the message.
     #[inline]
+    #[must_use]
     pub fn start_bit(&self) -> u8 {
         self.start_bit
     }
 
     /// Get the signal length in bits.
     #[inline]
+    #[must_use]
     pub fn length(&self) -> u8 {
         self.length
     }
 
     /// Get the byte order (endianness) of the signal.
     #[inline]
+    #[must_use]
     pub fn byte_order(&self) -> ByteOrder {
         self.byte_order
     }
 
     /// Check if the signal is unsigned.
     #[inline]
+    #[must_use]
     pub fn is_unsigned(&self) -> bool {
         self.unsigned
     }
 
     /// Get the scaling factor for converting raw value to physical value.
     #[inline]
+    #[must_use]
     pub fn factor(&self) -> f64 {
         self.factor
     }
 
     /// Get the offset for converting raw value to physical value.
     #[inline]
+    #[must_use]
     pub fn offset(&self) -> f64 {
         self.offset
     }
 
     /// Get the minimum physical value.
     #[inline]
+    #[must_use]
     pub fn min(&self) -> f64 {
         self.min
     }
 
     /// Get the maximum physical value.
     #[inline]
+    #[must_use]
     pub fn max(&self) -> f64 {
         self.max
     }
 
     /// Get the unit string, if present.
     #[inline]
+    #[must_use]
     pub fn unit(&self) -> Option<&str> {
-        self.unit.as_ref().map(|s| s.as_ref())
+        self.unit.as_ref().map(AsRef::as_ref)
     }
 
     /// Get the receiver specification for this signal.
     #[inline]
+    #[must_use]
     pub fn receivers(&self) -> &Receivers {
         &self.receivers
     }
@@ -440,8 +445,9 @@ impl Signal {
     /// assert_eq!(signal.to_dbc_string(), " SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use]
     pub fn to_dbc_string(&self) -> String {
-        use alloc::format;
+        use alloc::fmt::Write;
 
         let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
 
@@ -468,16 +474,16 @@ impl Signal {
 
         // Factor and offset: (factor,offset)
         result.push_str(" (");
-        result.push_str(&format!("{}", self.factor()));
+        write!(result, "{}", self.factor()).unwrap();
         result.push(',');
-        result.push_str(&format!("{}", self.offset()));
+        write!(result, "{}", self.offset()).unwrap();
         result.push(')');
 
         // Min and max: [min|max]
         result.push_str(" [");
-        result.push_str(&format!("{}", self.min()));
+        write!(result, "{}", self.min()).unwrap();
         result.push('|');
-        result.push_str(&format!("{}", self.max()));
+        write!(result, "{}", self.max()).unwrap();
         result.push(']');
 
         // Unit: "unit" or ""
@@ -582,72 +588,84 @@ impl SignalBuilder {
     }
 
     /// Set the signal name (required)
+    #[must_use]
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
         self.name = Some(name.as_ref().into());
         self
     }
 
     /// Set the start bit position (required)
+    #[must_use]
     pub fn start_bit(mut self, start_bit: u8) -> Self {
         self.start_bit = Some(start_bit);
         self
     }
 
     /// Set the signal length in bits (required)
+    #[must_use]
     pub fn length(mut self, length: u8) -> Self {
         self.length = Some(length);
         self
     }
 
     /// Set the byte order (default: `BigEndian`)
+    #[must_use]
     pub fn byte_order(mut self, byte_order: ByteOrder) -> Self {
         self.byte_order = byte_order;
         self
     }
 
     /// Set whether the signal is unsigned (default: `true`)
+    #[must_use]
     pub fn unsigned(mut self, unsigned: bool) -> Self {
         self.unsigned = unsigned;
         self
     }
 
     /// Set the scaling factor (default: `1.0`)
+    #[must_use]
     pub fn factor(mut self, factor: f64) -> Self {
         self.factor = factor;
         self
     }
 
     /// Set the offset value (default: `0.0`)
+    #[must_use]
     pub fn offset(mut self, offset: f64) -> Self {
         self.offset = offset;
         self
     }
 
     /// Set the minimum value (default: `0.0`)
+    #[must_use]
     pub fn min(mut self, min: f64) -> Self {
         self.min = min;
         self
     }
 
     /// Set the maximum value (default: `0.0`)
+    #[must_use]
     pub fn max(mut self, max: f64) -> Self {
         self.max = max;
         self
     }
 
     /// Set the unit string (optional)
+    #[must_use]
     pub fn unit(mut self, unit: impl AsRef<str>) -> Self {
         self.unit = Some(unit.as_ref().into());
         self
     }
 
     /// Clear the unit (set to `None`)
+    #[must_use]
     pub fn no_unit(mut self) -> Self {
         self.unit = None;
         self
     }
 
     /// Set the receivers (default: `Receivers::None`)
+    #[must_use]
     pub fn receivers(mut self, receivers: Receivers) -> Self {
         self.receivers = receivers;
         self
@@ -706,7 +724,7 @@ impl SignalBuilder {
             self.offset,
             self.min,
             self.max,
-            self.unit.as_ref().map(|s| s.as_ref()),
+            self.unit.as_ref().map(AsRef::as_ref),
             self.receivers,
         )
     }
@@ -714,6 +732,7 @@ impl SignalBuilder {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use super::*;
     use crate::Error;
     use crate::error::lang;
@@ -977,7 +996,7 @@ mod tests {
         assert_eq!(sig.length(), 8);
         assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
         assert!(sig.is_unsigned());
-        assert_eq!(sig.factor(), 0.392157);
+        assert_eq!(sig.factor(), 0.392_157);
         assert_eq!(sig.offset(), 0.);
         assert_eq!(sig.min(), 0.);
         assert_eq!(sig.max(), 100.);

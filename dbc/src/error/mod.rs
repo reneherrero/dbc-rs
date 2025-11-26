@@ -93,6 +93,7 @@ impl std::error::Error for Error {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::float_cmp)]
     use super::Error;
     use crate::error::lang;
     use alloc::string::ToString;
@@ -105,7 +106,7 @@ mod tests {
 
         match error {
             Error::InvalidData(msg) => {
-                assert!(msg.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()))
+                assert!(msg.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()));
             }
             _ => panic!("Expected InvalidData error"),
         }
