@@ -81,7 +81,7 @@ jobs:
         with:
           components: clippy
       - name: Run clippy linter
-        run: cargo clippy --verbose -p dbc-rs -- -D warnings
+        run: cargo clippy --verbose --all-targets -p dbc-rs -- -D warnings
 
   fmt:
     name: Format check
@@ -89,10 +89,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup Rust toolchain with rustfmt
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust toolchain (from rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.85.0
           components: rustfmt
+        # Uses MSRV (1.85.0) for consistent formatting across all developers
       - name: Check code formatting
         run: cargo fmt --verbose -- --check
 
@@ -128,4 +130,33 @@ jobs:
         run: cargo build --verbose --features ${{ matrix.lang }} -p dbc-rs
       - name: Run tests with ${{ matrix.lang }} feature
         run: cargo test --verbose --features ${{ matrix.lang }} -p dbc-rs
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Generate code coverage
+        run: |
+          cargo llvm-cov \
+            --all-features \
+            --package dbc-rs \
+            --ignore-filename-regex "^(tests|examples|benches)/" \
+            --fail-under-lines 80 \
+            --lcov \
+            --output-path coverage.lcov
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.lcov
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
 

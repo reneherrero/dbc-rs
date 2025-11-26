@@ -2,3 +2,9 @@
 **/*.rs.bk
 Cargo.lock
 *.pdb
+
+# Coverage artifacts
+llvm-cov-target/
+coverage/
+*.profraw
+*.profdata

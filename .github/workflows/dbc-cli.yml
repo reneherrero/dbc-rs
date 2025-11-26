@@ -52,7 +52,7 @@ jobs:
         with:
           components: clippy
       - name: Run clippy linter
-        run: cargo clippy --verbose -p dbc-cli -- -D warnings
+        run: cargo clippy --verbose --all-targets -p dbc-cli -- -D warnings
 
   fmt:
     name: Format check
@@ -60,10 +60,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup Rust toolchain with rustfmt
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust toolchain (from rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: 1.85.0
           components: rustfmt
+        # Uses MSRV (1.85.0) for consistent formatting across all developers
       - name: Check code formatting
         run: cargo fmt --verbose -- --check
 

@@ -391,4 +391,176 @@ mod tests {
         let v3 = Version::new(2, Some(3), Some(4)).unwrap();
         assert_eq!(v3.to_dbc_string(), "VERSION \"2.3.4\"");
     }
+
+    #[test]
+    fn test_version_parse_major_only() {
+        let result = Version::parse("VERSION \"1\"");
+        assert!(result.is_ok());
+        let version = result.unwrap();
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.minor(), None);
+        assert_eq!(version.patch(), None);
+    }
+
+    #[test]
+    fn test_version_parse_full_version() {
+        let result = Version::parse("VERSION \"1.2.3\"");
+        assert!(result.is_ok());
+        let version = result.unwrap();
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.minor(), Some(2));
+        assert_eq!(version.patch(), Some(3));
+    }
+
+    #[test]
+    fn test_version_parse_with_whitespace() {
+        let result = Version::parse("VERSION  \"1.0\"");
+        assert!(result.is_ok());
+        let version = result.unwrap();
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.minor(), Some(0));
+    }
+
+    #[test]
+    fn test_version_parse_empty_quotes() {
+        let result = Version::parse("VERSION \"\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => {
+                // Empty version string should trigger parse error for major
+                let template_text = lang::FORMAT_PARSE_NUMBER_FAILED.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_parse_missing_closing_quote() {
+        let result = Version::parse("VERSION \"1.0");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_INVALID)),
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_parse_missing_opening_quote() {
+        let result = Version::parse("VERSION 1.0\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_INVALID)),
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_parse_invalid_minor() {
+        let result = Version::parse("VERSION \"1.abc\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => {
+                let template_text = lang::FORMAT_PARSE_NUMBER_FAILED.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_parse_invalid_patch() {
+        let result = Version::parse("VERSION \"1.2.xyz\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => {
+                let template_text = lang::FORMAT_PARSE_NUMBER_FAILED.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+            }
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_parse_zero_parts() {
+        // This should fail because after stripping quotes, we get empty string
+        let result = Version::parse("VERSION \"\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_version_builder_major_only() {
+        let version = Version::builder().major(1).build().unwrap();
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.minor(), None);
+        assert_eq!(version.patch(), None);
+    }
+
+    #[test]
+    fn test_version_builder_major_minor() {
+        let version = Version::builder().major(1).minor(2).build().unwrap();
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.minor(), Some(2));
+        assert_eq!(version.patch(), None);
+    }
+
+    #[test]
+    fn test_version_builder_full() {
+        let version = Version::builder().major(1).minor(2).patch(3).build().unwrap();
+        assert_eq!(version.major(), 1);
+        assert_eq!(version.minor(), Some(2));
+        assert_eq!(version.patch(), Some(3));
+    }
+
+    #[test]
+    fn test_version_builder_missing_major() {
+        let result = Version::builder().build();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_MAJOR_REQUIRED)),
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_builder_patch_without_minor() {
+        let result = Version::builder().major(1).patch(3).build();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => {
+                assert!(msg.contains(lang::VERSION_PATCH_REQUIRES_MINOR));
+            }
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_builder_validate_missing_major() {
+        let builder = Version::builder();
+        let result = builder.validate();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => assert!(msg.contains(lang::VERSION_MAJOR_REQUIRED)),
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_builder_validate_patch_without_minor() {
+        let builder = Version::builder().major(1).patch(3);
+        let result = builder.validate();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Version(msg) => {
+                assert!(msg.contains(lang::VERSION_PATCH_REQUIRES_MINOR));
+            }
+            _ => panic!("Expected Version error"),
+        }
+    }
+
+    #[test]
+    fn test_version_builder_validate_valid() {
+        let builder = Version::builder().major(1).minor(2).patch(3);
+        assert!(builder.validate().is_ok());
+    }
 }

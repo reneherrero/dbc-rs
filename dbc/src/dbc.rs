@@ -892,6 +892,230 @@ BO_ 512 BrakeData : 4 TCM
         assert!(saved.contains("SG_ RPM"));
         assert!(saved.contains("SG_ Pressure"));
     }
+
+    #[test]
+    fn test_dbc_builder_valid() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+
+        let dbc = Dbc::builder()
+            .version(version)
+            .nodes(nodes)
+            .add_message(message)
+            .build()
+            .unwrap();
+
+        assert_eq!(dbc.messages().len(), 1);
+        assert_eq!(dbc.messages()[0].id(), 256);
+    }
+
+    #[test]
+    fn test_dbc_builder_missing_version() {
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+
+        let result = Dbc::builder().nodes(nodes).add_message(message).build();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_VERSION_REQUIRED)),
+            _ => panic!("Expected Dbc error"),
+        }
+    }
+
+    #[test]
+    fn test_dbc_builder_missing_nodes() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+
+        let result = Dbc::builder().version(version).add_message(message).build();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_NODES_REQUIRED)),
+            _ => panic!("Expected Dbc error"),
+        }
+    }
+
+    #[test]
+    fn test_dbc_builder_add_messages() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        let message1 = Message::new(256, "EngineData", 8, "ECM", vec![signal.clone()]).unwrap();
+        let message2 = Message::new(512, "BrakeData", 4, "ECM", vec![signal]).unwrap();
+
+        let dbc = Dbc::builder()
+            .version(version)
+            .nodes(nodes)
+            .add_messages(vec![message1, message2])
+            .build()
+            .unwrap();
+
+        assert_eq!(dbc.messages().len(), 2);
+    }
+
+    #[test]
+    fn test_dbc_builder_messages() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        let message1 = Message::new(256, "EngineData", 8, "ECM", vec![signal.clone()]).unwrap();
+        let message2 = Message::new(512, "BrakeData", 4, "ECM", vec![signal]).unwrap();
+
+        let dbc = Dbc::builder()
+            .version(version)
+            .nodes(nodes)
+            .messages(vec![message1, message2])
+            .build()
+            .unwrap();
+
+        assert_eq!(dbc.messages().len(), 2);
+    }
+
+    #[test]
+    fn test_dbc_builder_clear_messages() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+
+        let dbc = Dbc::builder()
+            .version(version)
+            .nodes(nodes)
+            .add_message(message)
+            .clear_messages()
+            .build()
+            .unwrap();
+
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_dbc_builder_validate_missing_version() {
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let result = Dbc::builder().nodes(nodes).validate();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_VERSION_REQUIRED)),
+            _ => panic!("Expected Dbc error"),
+        }
+    }
+
+    #[test]
+    fn test_dbc_builder_validate_missing_nodes() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let result = Dbc::builder().version(version).validate();
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_NODES_REQUIRED)),
+            _ => panic!("Expected Dbc error"),
+        }
+    }
+
+    #[test]
+    fn test_dbc_builder_validate_valid() {
+        let version = Version::new(1, Some(0), None).unwrap();
+        let nodes = Nodes::new(["ECM"]).unwrap();
+        let signal = Signal::new(
+            "RPM",
+            0,
+            16,
+            ByteOrder::BigEndian,
+            true,
+            1.0,
+            0.0,
+            0.0,
+            100.0,
+            None::<&str>,
+            Receivers::None,
+        )
+        .unwrap();
+        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+
+        let result = Dbc::builder().version(version).nodes(nodes).add_message(message).validate();
+        assert!(result.is_ok());
+    }
 }
 
 #[cfg(feature = "std")]

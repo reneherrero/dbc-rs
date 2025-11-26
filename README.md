@@ -66,6 +66,28 @@ Run all tests:
 cargo test
 ```
 
+### Code Coverage
+
+Code coverage is tracked automatically in CI. To check coverage locally:
+
+```bash
+# Install cargo-llvm-cov using prebuilt binary (recommended)
+host=$(rustc -vV | grep '^host:' | cut -d' ' -f2)
+curl --proto '=https' --tlsv1.2 -fsSL \
+  "https://github.com/taiki-e/cargo-llvm-cov/releases/latest/download/cargo-llvm-cov-$host.tar.gz" \
+  | tar xzf - -C "$HOME/.cargo/bin"
+
+# Generate coverage report
+cargo llvm-cov --all-features --workspace
+
+# Generate HTML report (opens in browser)
+cargo llvm-cov --all-features --workspace --html
+```
+
+**Note**: Prebuilt binaries are recommended because `cargo install` may fail with MSRV (1.85.0). CI uses latest stable Rust and works automatically.
+
+The project aims for at least 80% code coverage. Coverage reports are automatically generated in CI and posted as PR comments.
+
 ## License
 
 Licensed under either of:

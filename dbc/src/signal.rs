@@ -149,40 +149,33 @@ impl Signal {
         SignalBuilder::new()
     }
 
-    #[allow(clippy::too_many_lines)]
-    pub(super) fn parse(line: &str) -> Result<Self> {
-        // Trim and check for SG_
+    /// Parse the signal name and strip the "SG_" prefix
+    fn parse_name_and_prefix(line: &str) -> Result<(&str, &str)> {
         let line = line.trim_start();
         let line = line
             .strip_prefix("SG_")
-            .or_else(|| line.strip_prefix("SG_"))
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_SG.to_string()))?;
         let line = line.trim();
 
-        // name until ':'
-        let (name, rest) = match line.split_once(':') {
-            Some((n, r)) => (n.trim(), r.trim()),
-            None => {
-                return Err(Error::Signal(
-                    messages::SIGNAL_PARSE_MISSING_COLON.to_string(),
-                ));
-            }
-        };
+        let (name, rest) = line
+            .split_once(':')
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_COLON.to_string()))?;
+        Ok((name.trim(), rest.trim()))
+    }
 
-        // startBit|length@byteOrderSign
-        // e.g. 0|16@0+
-        let mut rest = rest;
+    /// Parse position: `start_bit|length@byteOrderSign`
+    /// Returns `(start_bit, length, byte_order, unsigned, remaining_string)`
+    fn parse_position(rest: &str) -> Result<(u8, u8, ByteOrder, bool, &str)> {
         let mut tokens = rest.splitn(2, ' ');
         let pos = tokens
             .next()
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_POSITION.to_string()))?
             .trim();
-        rest = tokens
+        let rest = tokens
             .next()
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_REST.to_string()))?
             .trim();
 
-        // e.g. 0|16@0+
         let (bitlen, bosign) = pos
             .split_once('@')
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_AT.to_string()))?;
@@ -199,36 +192,36 @@ impl Signal {
             .parse()
             .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_LENGTH.to_string()))?;
 
-        // Parse byte order and sign
         let bosign = bosign.trim();
-        let (byte_order, unsigned) = {
-            let mut chars = bosign.chars();
-            let bo = chars.next().ok_or_else(|| {
-                Error::Signal(messages::SIGNAL_PARSE_MISSING_BYTE_ORDER.to_string())
-            })?;
-            let sign = chars
-                .next()
-                .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_SIGN.to_string()))?;
-            let byte_order = match bo {
-                '0' => ByteOrder::LittleEndian,
-                '1' => ByteOrder::BigEndian,
-                _ => return Err(Error::Signal(messages::unknown_byte_order(bo))),
-            };
-            let unsigned = match sign {
-                '+' => true,
-                '-' => false,
-                _ => return Err(Error::Signal(messages::unknown_sign(sign))),
-            };
-            (byte_order, unsigned)
+        let mut chars = bosign.chars();
+        let bo = chars
+            .next()
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_BYTE_ORDER.to_string()))?;
+        let sign = chars
+            .next()
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_SIGN.to_string()))?;
+
+        let byte_order = match bo {
+            '0' => ByteOrder::LittleEndian,
+            '1' => ByteOrder::BigEndian,
+            _ => return Err(Error::Signal(messages::unknown_byte_order(bo))),
+        };
+        let unsigned = match sign {
+            '+' => true,
+            '-' => false,
+            _ => return Err(Error::Signal(messages::unknown_sign(sign))),
         };
 
-        // Now next token: (factor,offset)
+        Ok((start_bit, length, byte_order, unsigned, rest))
+    }
+
+    /// Parse factor and offset: `(factor,offset)`
+    /// Returns `(factor, offset, remaining_string)`
+    fn parse_factor_offset(rest: &str) -> Result<(f64, f64, &str)> {
         let rest = rest.trim_start();
-        let Some((f_and_rest, rest)) = rest.trim_start().split_once(')') else {
-            return Err(Error::Signal(
-                messages::SIGNAL_PARSE_MISSING_CLOSING_PAREN.to_string(),
-            ));
-        };
+        let (f_and_rest, rest) = rest.trim_start().split_once(')').ok_or_else(|| {
+            Error::Signal(messages::SIGNAL_PARSE_MISSING_CLOSING_PAREN.to_string())
+        })?;
         let f_and_rest = f_and_rest.trim_start();
         let f_and_rest = f_and_rest.strip_prefix('(').ok_or_else(|| {
             Error::Signal(messages::SIGNAL_PARSE_MISSING_OPENING_PAREN.to_string())
@@ -237,6 +230,7 @@ impl Signal {
             .split_once(',')
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_MISSING_COMMA.to_string()))?;
         let (factor_str, offset_str) = (factor_str.trim(), offset_str.trim());
+
         let factor: f64 = if factor_str.is_empty() {
             0.
         } else {
@@ -251,14 +245,16 @@ impl Signal {
                 .parse()
                 .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_OFFSET.to_string()))?
         };
-        let rest = rest.trim_start();
 
-        // Next token: [min|max]
-        let Some((minmax, rest)) = rest.split_once(']') else {
-            return Err(Error::Signal(
-                messages::SIGNAL_PARSE_MISSING_CLOSING_BRACKET.to_string(),
-            ));
-        };
+        Ok((factor, offset, rest.trim_start()))
+    }
+
+    /// Parse min/max range: `[min|max]`
+    /// Returns `(min, max, remaining_string)`
+    fn parse_range(rest: &str) -> Result<(f64, f64, &str)> {
+        let (minmax, rest) = rest.split_once(']').ok_or_else(|| {
+            Error::Signal(messages::SIGNAL_PARSE_MISSING_CLOSING_BRACKET.to_string())
+        })?;
         let minmax = minmax.trim_start().strip_prefix('[').ok_or_else(|| {
             Error::Signal(messages::SIGNAL_PARSE_MISSING_OPENING_BRACKET.to_string())
         })?;
@@ -266,6 +262,7 @@ impl Signal {
             Error::Signal(messages::SIGNAL_PARSE_MISSING_PIPE_IN_RANGE.to_string())
         })?;
         let (min_str, max_str) = (min_str.trim(), max_str.trim());
+
         let min: f64 = if min_str.is_empty() {
             0.
         } else {
@@ -280,16 +277,19 @@ impl Signal {
                 .parse()
                 .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_MAX.to_string()))?
         };
-        let mut rest = rest.trim_start();
 
-        // Now: unit in double quotes
+        Ok((min, max, rest.trim_start()))
+    }
+
+    /// Parse unit: `"unit"` or `""`
+    /// Returns `(unit, remaining_string)`
+    fn parse_unit(rest: &str) -> Result<(Option<Box<str>>, &str)> {
         if !rest.starts_with('"') {
             return Err(Error::Signal(
                 messages::SIGNAL_PARSE_EXPECTED_UNIT_QUOTE.to_string(),
             ));
         }
-        rest = &rest[1..];
-        // Pre-allocate unit string (most units are short, 1-10 chars)
+        let mut rest = &rest[1..];
         let mut unit_str = String::with_capacity(10);
         for c in rest.chars() {
             if c == '"' {
@@ -297,7 +297,6 @@ impl Signal {
             }
             unit_str.push(c);
         }
-        // Advance past the closing quote in rest
         rest = rest[unit_str.len()..].trim_start();
         if rest.starts_with('"') {
             rest = &rest[1..];
@@ -307,22 +306,32 @@ impl Signal {
         } else {
             Some(unit_str.into_boxed_str())
         };
-        let rest = rest.trim_start();
+        Ok((unit, rest.trim_start()))
+    }
 
-        // Receivers
-        let receivers = if rest.is_empty() {
+    /// Parse receivers: * or space-separated list or empty
+    fn parse_receivers(rest: &str) -> Receivers {
+        if rest.is_empty() {
             Receivers::None
         } else if rest == "*" {
             Receivers::Broadcast
         } else {
-            // Pre-allocate receivers Vec (most signals have 1-3 receivers)
             let nodes: Vec<Box<str>> = rest.split_whitespace().map(Into::into).collect();
             if nodes.is_empty() {
                 Receivers::None
             } else {
                 Receivers::Nodes(nodes)
             }
-        };
+        }
+    }
+
+    pub(super) fn parse(line: &str) -> Result<Self> {
+        let (name, rest) = Self::parse_name_and_prefix(line)?;
+        let (start_bit, length, byte_order, unsigned, rest) = Self::parse_position(rest)?;
+        let (factor, offset, rest) = Self::parse_factor_offset(rest)?;
+        let (min, max, rest) = Self::parse_range(rest)?;
+        let (unit, rest) = Self::parse_unit(rest)?;
+        let receivers = Self::parse_receivers(rest);
 
         // Validate the parsed signal using the same validation as new()
         Self::validate(name, start_bit, length, min, max)?;
@@ -1156,5 +1165,426 @@ mod tests {
             signal3.to_dbc_string(),
             " SG_ Flag : 24|1@1+ (1,0) [0|1] \"\""
         );
+    }
+
+    // Tests for helper parsing functions
+
+    #[test]
+    fn test_parse_name_and_prefix_valid() {
+        let result = Signal::parse_name_and_prefix("SG_ RPM : 0|16@0+");
+        assert!(result.is_ok());
+        let (name, rest) = result.unwrap();
+        assert_eq!(name, "RPM");
+        assert_eq!(rest, "0|16@0+");
+    }
+
+    #[test]
+    fn test_parse_name_and_prefix_with_whitespace() {
+        let result = Signal::parse_name_and_prefix("  SG_ Temperature : 16|8@0-");
+        assert!(result.is_ok());
+        let (name, rest) = result.unwrap();
+        assert_eq!(name, "Temperature");
+        assert_eq!(rest, "16|8@0-");
+    }
+
+    #[test]
+    fn test_parse_name_and_prefix_missing_prefix() {
+        let result = Signal::parse_name_and_prefix("RPM : 0|16@0+");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_EXPECTED_SG)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_name_and_prefix_missing_colon() {
+        let result = Signal::parse_name_and_prefix("SG_ RPM 0|16@0+");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_MISSING_COLON)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_position_valid() {
+        let result = Signal::parse_position("0|16@0+ (0.25,0)");
+        assert!(result.is_ok());
+        let (start_bit, length, byte_order, unsigned, rest) = result.unwrap();
+        assert_eq!(start_bit, 0);
+        assert_eq!(length, 16);
+        assert_eq!(byte_order, ByteOrder::LittleEndian);
+        assert!(unsigned);
+        assert_eq!(rest, "(0.25,0)");
+    }
+
+    #[test]
+    fn test_parse_position_big_endian_signed() {
+        let result = Signal::parse_position("16|8@1- (1,-40)");
+        assert!(result.is_ok());
+        let (start_bit, length, byte_order, unsigned, rest) = result.unwrap();
+        assert_eq!(start_bit, 16);
+        assert_eq!(length, 8);
+        assert_eq!(byte_order, ByteOrder::BigEndian);
+        assert!(!unsigned);
+        assert_eq!(rest, "(1,-40)");
+    }
+
+    #[test]
+    fn test_parse_position_missing_at() {
+        let result = Signal::parse_position("0|16+ (0.25,0)");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_EXPECTED_AT)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_position_missing_pipe() {
+        let result = Signal::parse_position("016@0+ (0.25,0)");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_EXPECTED_PIPE)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_position_invalid_byte_order() {
+        let result = Signal::parse_position("0|16@2+ (0.25,0)");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                // Check that it's about unknown byte order
+                // The message format is "Unknown byte order '{}'"
+                // Check against the format string template (before placeholder replacement)
+                let template_text = lang::FORMAT_UNKNOWN_BYTE_ORDER.split("{}").next().unwrap();
+                assert!(
+                    msg.contains(template_text.trim_end_matches(" '"))
+                        || msg.contains("Unknown")
+                        || msg.contains("byte order")
+                        || msg.contains("ByteOrder")
+                );
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_position_invalid_sign() {
+        let result = Signal::parse_position("0|16@0x (0.25,0)");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                // Check that it's about unknown sign
+                // The message format is "Unknown sign '{}'"
+                // Check against the format string template (before placeholder replacement)
+                let template_text = lang::FORMAT_UNKNOWN_SIGN.split("{}").next().unwrap();
+                assert!(
+                    msg.contains(template_text.trim_end_matches(" '"))
+                        || msg.contains("Unknown")
+                        || msg.contains("sign")
+                        || msg.contains("Sign")
+                );
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_position_invalid_start_bit() {
+        let result = Signal::parse_position("abc|16@0+ (0.25,0)");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_START_BIT)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_position_invalid_length() {
+        let result = Signal::parse_position("0|xyz@0+ (0.25,0)");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_LENGTH)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_factor_offset_valid() {
+        let result = Signal::parse_factor_offset("(0.25,0) [0|8000]");
+        assert!(result.is_ok());
+        let (factor, offset, rest) = result.unwrap();
+        assert_eq!(factor, 0.25);
+        assert_eq!(offset, 0.0);
+        assert_eq!(rest, "[0|8000]");
+    }
+
+    #[test]
+    fn test_parse_factor_offset_negative() {
+        let result = Signal::parse_factor_offset("(1,-40) [-40|215]");
+        assert!(result.is_ok());
+        let (factor, offset, rest) = result.unwrap();
+        assert_eq!(factor, 1.0);
+        assert_eq!(offset, -40.0);
+        assert_eq!(rest, "[-40|215]");
+    }
+
+    #[test]
+    fn test_parse_factor_offset_empty_values() {
+        let result = Signal::parse_factor_offset("( , ) [0|100]");
+        assert!(result.is_ok());
+        let (factor, offset, rest) = result.unwrap();
+        assert_eq!(factor, 0.0);
+        assert_eq!(offset, 0.0);
+        assert_eq!(rest, "[0|100]");
+    }
+
+    #[test]
+    fn test_parse_factor_offset_missing_closing_paren() {
+        let result = Signal::parse_factor_offset("(0.25,0 [0|8000]");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                assert!(msg.contains(lang::SIGNAL_PARSE_MISSING_CLOSING_PAREN));
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_factor_offset_missing_opening_paren() {
+        let result = Signal::parse_factor_offset("0.25,0) [0|8000]");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                assert!(msg.contains(lang::SIGNAL_PARSE_MISSING_OPENING_PAREN));
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_factor_offset_missing_comma() {
+        let result = Signal::parse_factor_offset("(0.25) [0|8000]");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_MISSING_COMMA)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_factor_offset_invalid_factor() {
+        let result = Signal::parse_factor_offset("(abc,0) [0|8000]");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_FACTOR)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_factor_offset_invalid_offset() {
+        let result = Signal::parse_factor_offset("(0.25,xyz) [0|8000]");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_OFFSET)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_valid() {
+        let result = Signal::parse_range("[0|8000] \"rpm\"");
+        assert!(result.is_ok());
+        let (min, max, rest) = result.unwrap();
+        assert_eq!(min, 0.0);
+        assert_eq!(max, 8000.0);
+        assert_eq!(rest, "\"rpm\"");
+    }
+
+    #[test]
+    fn test_parse_range_negative() {
+        let result = Signal::parse_range("[-40|215] \"°C\"");
+        assert!(result.is_ok());
+        let (min, max, rest) = result.unwrap();
+        assert_eq!(min, -40.0);
+        assert_eq!(max, 215.0);
+        assert_eq!(rest, "\"°C\"");
+    }
+
+    #[test]
+    fn test_parse_range_empty_values() {
+        let result = Signal::parse_range("[ | ] \"\"");
+        assert!(result.is_ok());
+        let (min, max, rest) = result.unwrap();
+        assert_eq!(min, 0.0);
+        assert_eq!(max, 0.0);
+        assert_eq!(rest, "\"\"");
+    }
+
+    #[test]
+    fn test_parse_range_missing_closing_bracket() {
+        let result = Signal::parse_range("[0|8000 \"rpm\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                assert!(msg.contains(lang::SIGNAL_PARSE_MISSING_CLOSING_BRACKET));
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_missing_opening_bracket() {
+        let result = Signal::parse_range("0|8000] \"rpm\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                assert!(msg.contains(lang::SIGNAL_PARSE_MISSING_OPENING_BRACKET));
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_missing_pipe() {
+        let result = Signal::parse_range("[08000] \"rpm\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                assert!(msg.contains(lang::SIGNAL_PARSE_MISSING_PIPE_IN_RANGE));
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_invalid_min() {
+        let result = Signal::parse_range("[abc|8000] \"rpm\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_MIN)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_range_invalid_max() {
+        let result = Signal::parse_range("[0|xyz] \"rpm\"");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_MAX)),
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unit_valid() {
+        let result = Signal::parse_unit("\"rpm\" *");
+        assert!(result.is_ok());
+        let (unit, rest) = result.unwrap();
+        assert_eq!(unit.as_ref().map(AsRef::as_ref), Some("rpm"));
+        assert_eq!(rest, "*");
+    }
+
+    #[test]
+    fn test_parse_unit_empty() {
+        let result = Signal::parse_unit("\"\" *");
+        assert!(result.is_ok());
+        let (unit, rest) = result.unwrap();
+        assert_eq!(unit, None);
+        assert_eq!(rest, "*");
+    }
+
+    #[test]
+    fn test_parse_unit_with_special_chars() {
+        let result = Signal::parse_unit("\"°C\" TCM");
+        assert!(result.is_ok());
+        let (unit, rest) = result.unwrap();
+        assert_eq!(unit.as_ref().map(AsRef::as_ref), Some("°C"));
+        assert_eq!(rest, "TCM");
+    }
+
+    #[test]
+    fn test_parse_unit_missing_quote() {
+        let result = Signal::parse_unit("rpm *");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Signal(msg) => {
+                assert!(msg.contains(lang::SIGNAL_PARSE_EXPECTED_UNIT_QUOTE));
+            }
+            _ => panic!("Expected Signal error"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unit_percent() {
+        let result = Signal::parse_unit("\"%\" *");
+        assert!(result.is_ok());
+        let (unit, rest) = result.unwrap();
+        assert_eq!(unit.as_ref().map(AsRef::as_ref), Some("%"));
+        assert_eq!(rest, "*");
+    }
+
+    #[test]
+    fn test_parse_receivers_broadcast() {
+        let result = Signal::parse_receivers("*");
+        assert_eq!(result, Receivers::Broadcast);
+    }
+
+    #[test]
+    fn test_parse_receivers_none_empty() {
+        let result = Signal::parse_receivers("");
+        assert_eq!(result, Receivers::None);
+    }
+
+    #[test]
+    fn test_parse_receivers_single_node() {
+        let result = Signal::parse_receivers("TCM");
+        match result {
+            Receivers::Nodes(nodes) => {
+                assert_eq!(nodes.len(), 1);
+                assert_eq!(nodes[0].as_ref(), "TCM");
+            }
+            _ => panic!("Expected Nodes variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_receivers_multiple_nodes() {
+        let result = Signal::parse_receivers("TCM BCM ECM");
+        match result {
+            Receivers::Nodes(nodes) => {
+                assert_eq!(nodes.len(), 3);
+                assert_eq!(nodes[0].as_ref(), "TCM");
+                assert_eq!(nodes[1].as_ref(), "BCM");
+                assert_eq!(nodes[2].as_ref(), "ECM");
+            }
+            _ => panic!("Expected Nodes variant"),
+        }
+    }
+
+    #[test]
+    fn test_parse_receivers_whitespace_only() {
+        let result = Signal::parse_receivers("   ");
+        assert_eq!(result, Receivers::None);
+    }
+
+    #[test]
+    fn test_parse_receivers_with_extra_whitespace() {
+        let result = Signal::parse_receivers("  TCM   BCM  ");
+        match result {
+            Receivers::Nodes(nodes) => {
+                assert_eq!(nodes.len(), 2);
+                assert_eq!(nodes[0].as_ref(), "TCM");
+                assert_eq!(nodes[1].as_ref(), "BCM");
+            }
+            _ => panic!("Expected Nodes variant"),
+        }
     }
 }

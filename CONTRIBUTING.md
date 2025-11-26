@@ -14,6 +14,11 @@ This project adheres to a code of conduct that all contributors are expected to 
 - Git
 - Basic familiarity with Rust and the DBC file format
 
+**Note on Rust Toolchain:**
+- **For development**: We recommend using the **latest stable** Rust toolchain for the best developer experience (better error messages, newer features, improved tooling).
+- **For formatting consistency**: The project uses `rust-toolchain.toml` to pin the formatting toolchain to MSRV (1.85.0). When you run `cargo fmt`, it will automatically use this pinned version, ensuring consistent code formatting across all workstations.
+- **For clippy**: The pre-commit hook and CI use **latest stable** clippy for better linting (newer lints, improved checks). You can run `rustup run stable cargo clippy` to use the latest clippy locally, or just `cargo clippy` if you're already on latest stable.
+
 ### Setting Up the Development Environment
 
 1. Fork the repository on GitHub
@@ -30,6 +35,11 @@ This project adheres to a code of conduct that all contributors are expected to 
    ```bash
    cargo test
    ```
+5. Install git hooks (recommended):
+   ```bash
+   ./setup-git-hooks.sh
+   ```
+   This installs a pre-commit hook that automatically runs clippy and formatting checks before each commit.
 
 ## Development Workflow
 
@@ -53,17 +63,42 @@ This project adheres to a code of conduct that all contributors are expected to 
    ```bash
    cargo clippy --all-targets --all-features -- -D warnings
    ```
+   **Note**: If you've installed the git hooks (step 5 in setup), clippy will run automatically on commit.
 
 5. Format your code:
    ```bash
    cargo fmt
    ```
+   **Note**: The pre-commit hook also checks formatting automatically.
 
 6. Check that the code compiles in both `std` and `no_std` modes:
    ```bash
    cargo check --all-targets
    cargo check --all-targets --no-default-features
    ```
+
+7. Check code coverage (optional but recommended):
+   ```bash
+   # Install cargo-llvm-cov using prebuilt binary (recommended)
+   # This avoids compilation issues with MSRV
+   host=$(rustc -vV | grep '^host:' | cut -d' ' -f2)
+   curl --proto '=https' --tlsv1.2 -fsSL \
+     "https://github.com/taiki-e/cargo-llvm-cov/releases/latest/download/cargo-llvm-cov-$host.tar.gz" \
+     | tar xzf - -C "$HOME/.cargo/bin"
+   
+   # Alternative: Use cargo-binstall (if installed)
+   # cargo binstall cargo-llvm-cov
+   
+   # Generate coverage report
+   cargo llvm-cov --all-features --workspace
+   
+   # Generate HTML report (opens in browser)
+   cargo llvm-cov --all-features --workspace --html
+   ```
+   **Note**: 
+   - Code coverage is automatically checked in CI (uses latest stable Rust)
+   - Local installation requires prebuilt binaries due to MSRV (1.85.0) compatibility
+   - Aim for at least 80% coverage
 
 ### Coding Standards
 
