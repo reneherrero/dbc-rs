@@ -164,14 +164,14 @@ This table shows which DBC file format features are currently implemented:
 | Signal name | ✅ | ✅ | |
 | Start bit | ✅ | ✅ | |
 | Length (bits) | ✅ | ✅ | |
-| Byte order (`@0`/`@1`) | ⚠️ | ❌ | Parsed but not stored; write always uses `@1+` |
-| Sign (`+`/`-`) | ⚠️ | ❌ | Parsed but not stored; write always uses `+` |
+| Byte order (`@0`/`@1`) | ✅ | ✅ | Parsed and stored; correctly written |
+| Sign (`+`/`-`) | ✅ | ✅ | Parsed and stored; correctly written |
 | Factor (scaling) | ✅ | ✅ | |
 | Offset | ✅ | ✅ | |
 | Min value | ✅ | ✅ | |
 | Max value | ✅ | ✅ | |
 | Unit | ✅ | ✅ | |
-| Receivers | ❌ | ❌ | Receiver nodes not parsed or written |
+| Receivers | ✅ | ✅ | Receiver nodes parsed and written (Broadcast `*`, specific nodes, or None) |
 
 ### Extended Features
 
@@ -195,7 +195,7 @@ This table shows which DBC file format features are currently implemented:
 
 | Feature | Parse | Write | Notes |
 |---------|-------|-------|-------|
-| 29-bit Extended CAN IDs | ✅ | ✅ | Parsed as u32 but not validated |
+| 29-bit Extended CAN IDs | ✅ | ✅ | Parsed as u32 and validated (range: 2048-536870911) |
 | Signal multiplexing | ❌ | ❌ | |
 | Signal type definitions | ❌ | ❌ | |
 | Category definitions | ❌ | ❌ | |
@@ -210,7 +210,6 @@ This table shows which DBC file format features are currently implemented:
 - Round-trip save/load for basic features
 
 ### ⚠️ Partially Implemented
-- Signal byte order and sign: Parsed but not stored; always written as `@1+`
 - Comments: Single-line `//` comments are ignored during parsing
 
 ### ❌ Not Yet Implemented
@@ -219,7 +218,6 @@ This table shows which DBC file format features are currently implemented:
 - Attributes (BA_DEF_, BA_DEF_DEF_, BA_)
 - Signal groups (SIG_GROUP_)
 - Environment variables (EV_)
-- Signal receivers in signal definitions
 - Signal multiplexing
 - Advanced node relationships
 
@@ -429,13 +427,11 @@ let dbc3 = Dbc::parse_from(string)?;
 
 ## Limitations
 
-1. **Byte Order & Sign**: Currently, all signals are written with `@1+` (big-endian, unsigned) regardless of how they were parsed. The parser extracts these values but doesn't store them.
+1. **Extended Features**: Many advanced DBC features (attributes, value tables, structured comments, etc.) are not yet supported. Files containing these features will parse successfully but the extended data will be lost on save.
 
-2. **Signal Receivers**: Receiver nodes in signal definitions are not parsed or preserved.
+2. **Comments**: Single-line `//` comments are parsed but not preserved when saving.
 
-3. **Extended Features**: Many advanced DBC features (attributes, value tables, comments, etc.) are not yet supported. Files containing these features will parse successfully but the extended data will be lost on save.
-
-4. **Validation**: Limited validation of CAN IDs, DLC values, and signal bit ranges.
+3. **Signal Multiplexing**: Multiplexed signals are not yet supported.
 
 ## Usage Patterns
 
@@ -833,17 +829,20 @@ let msg2 = Message::builder()
 ### Module Structure
 
 ```
-dbc-rs/
+dbc/src/
 ├── lib.rs          # Main library entry point, re-exports
 ├── dbc.rs          # DBC file structure and parsing
 ├── message.rs      # CAN message definitions
 ├── signal.rs       # Signal definitions with validation
 ├── nodes.rs        # Node/ECU management
 ├── version.rs      # Version string parsing
+├── byte_order.rs   # Byte order (endianness) enum
+├── receivers.rs   # Signal receiver specification
 └── error/
-    ├── mod.rs      # Error types
+    ├── mod.rs      # Error types and Result type alias
     ├── messages.rs # Error message formatting
     └── lang/       # Internationalized error messages
+        ├── mod.rs  # Language selection logic
         ├── en.rs   # English (default)
         ├── fr.rs   # French
         ├── es.rs   # Spanish
@@ -854,20 +853,22 @@ dbc-rs/
 ### Data Flow
 
 1. **Parsing**: `Dbc::parse()` → tokenizes input → validates → creates structures
-2. **Construction**: `new()` methods → validate input → create immutable structures
+2. **Construction**: Builder pattern (`.builder()`) → validate input → create immutable structures
+   - Builders use internal `new()` methods which perform validation
+   - Public API uses builders, not direct `new()` methods
 3. **Access**: Getter methods provide read-only access to internal data
 4. **Serialization**: `save()` / `to_dbc_string()` → convert structures back to DBC format
 
 ### Validation Strategy
 
 - **Parse-time validation**: Basic format validation during parsing
-- **Construction-time validation**: Comprehensive validation in `new()` methods
+- **Construction-time validation**: Comprehensive validation in builder `build()` methods and internal `new()` methods
 - **Shared validation**: Same validation logic used in both parsing and construction
 - **Early failure**: Validation errors are returned immediately, not deferred
 
 ### Error Handling
 
-- **Result-based**: All fallible operations return `Result<T, Error>`
+- **Result-based**: All fallible operations return `Result<T>` (type alias for `Result<T, Error>`)
 - **Categorized errors**: Errors are categorized by type:
   - `Error::Signal` - Signal-specific validation errors
   - `Error::Message` - Message-specific validation errors
@@ -882,8 +883,6 @@ dbc-rs/
 
 Contributions are welcome! Areas that need work:
 
-- Full byte order and sign support in signals
-- Signal receiver parsing
 - Value tables and enumerations (VAL_TABLE_, VAL_)
 - Structured comments (CM_)
 - Attributes (BA_DEF_, BA_, etc.)

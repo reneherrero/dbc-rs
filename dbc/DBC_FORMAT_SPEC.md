@@ -408,16 +408,15 @@ The current `dbc-rs` implementation supports:
   - Factor and offset
   - Min and max values
   - Units
-  - Basic byte order support (assumes `@1+` in save)
+  - Byte order and sign (fully supported - parsed, stored, and written correctly)
+  - Signal receivers (fully supported - parsed, stored, and written correctly)
+  - 29-bit extended CAN IDs (fully supported and validated)
 
 **Not yet implemented:**
 - ❌ VAL_ (value descriptions)
-- ❌ CM_ (comments)
+- ❌ CM_ (structured comments)
 - ❌ BA_ (attributes)
 - ❌ EV_ (environment variables)
-- ❌ Signal receivers parsing
-- ❌ Full byte order and sign handling in parsing
-- ❌ 29-bit extended CAN IDs
 - ❌ Signal multiplexing
 
 ## References

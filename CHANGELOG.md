@@ -95,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PartialEq Support**: Equality comparison for testing
 
 #### Testing
-- **Comprehensive Test Suite**: 28+ tests covering:
+- **Comprehensive Test Suite**: 151+ tests covering:
   - Parsing edge cases
   - Validation scenarios
   - Error conditions
