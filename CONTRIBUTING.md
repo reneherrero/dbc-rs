@@ -85,12 +85,18 @@ cargo clippy --no-default-features --target thumbv7m-none-eabi --package dbc-rs 
 - If you've installed the git hooks (step 5 in setup), clippy will run atomatically on commit.
 - When running clippy for `no_std` targets, you **must** use --no-default-features`, otherwise it will try to use `std` features hich aren't available on embedded targets.
 
-### Formatting your code:
+### Formatting Code:
 
 ```bash
 cargo fmt
 ```
 **Note**: The pre-commit hook also checks formatting automatically.
+
+### Verifying the Documentation
+
+```bash
+cargo doc --workspace --no-deps --document-private-items
+```
 
 ### Code Coverage
 

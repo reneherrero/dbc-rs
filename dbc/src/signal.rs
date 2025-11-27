@@ -99,7 +99,7 @@ impl Signal {
     /// - `min > max` (invalid range)
     ///
     /// Note: Signal boundary validation (checking if signal fits within message DLC)
-    /// is performed in [`Message::validate`], not here, to support both CAN (8 bytes)
+    /// is performed in [`crate::Message::validate`], not here, to support both CAN (8 bytes)
     /// and CAN FD (64 bytes) message sizes.
     ///
     /// This is an internal constructor. For public API usage, use [`Signal::builder()`] instead.
