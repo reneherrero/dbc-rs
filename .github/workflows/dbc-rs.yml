@@ -119,22 +119,6 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
         run: cargo doc --no-deps -p dbc-rs --document-private-items
 
-  test-languages:
-    name: Test language features
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        lang: [lang-fr, lang-es, lang-de, lang-ja]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build library with ${{ matrix.lang }} feature
-        run: cargo build --verbose --features ${{ matrix.lang }} -p dbc-rs
-      - name: Run tests with ${{ matrix.lang }} feature
-        run: cargo test --verbose --features ${{ matrix.lang }} -p dbc-rs
-
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
