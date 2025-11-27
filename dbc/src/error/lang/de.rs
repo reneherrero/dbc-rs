@@ -44,7 +44,8 @@ pub const MESSAGE_ID_REQUIRED: &str = "id ist erforderlich";
 pub const MESSAGE_DLC_REQUIRED: &str = "dlc ist erforderlich";
 pub const MESSAGE_SENDER_EMPTY: &str = "Nachrichtensender darf nicht leer sein";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "Nachrichten-DLC muss mindestens 1 Byte betragen";
-pub const MESSAGE_DLC_TOO_LARGE: &str = "Nachrichten-DLC darf 8 Bytes nicht überschreiten";
+pub const MESSAGE_DLC_TOO_LARGE: &str =
+    "Nachrichten-DLC darf 64 Bytes nicht überschreiten (CAN FD Maximum)";
 pub const MESSAGE_INVALID_FORMAT: &str = "Ungültiges Nachrichtenformat";
 pub const MESSAGE_INVALID_ID: &str = "Ungültige Nachrichten-ID";
 pub const MESSAGE_INVALID_DLC: &str = "Ungültiger DLC";
@@ -58,7 +59,8 @@ pub const SIGNAL_NAME_EMPTY: &str = "Signalname darf nicht leer sein";
 pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bit ist erforderlich";
 pub const SIGNAL_LENGTH_REQUIRED: &str = "length ist erforderlich";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signallänge muss mindestens 1 Bit betragen";
-pub const SIGNAL_LENGTH_TOO_LARGE: &str = "Signallänge darf 64 Bits nicht überschreiten";
+pub const SIGNAL_LENGTH_TOO_LARGE: &str =
+    "Signallänge darf 512 Bits nicht überschreiten (CAN FD Maximum)";
 pub const SIGNAL_OVERLAP: &str = "Signale überlappen sich in der Nachricht";
 
 // ============================================================================
@@ -99,13 +101,13 @@ pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Doppelter Knotenname: '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "Nachricht '{}' hat einen Sender '{}', der nicht in der Knotenliste steht";
 pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Signal '{}' erstreckt sich über die Nachrichtengrenze hinaus: start_bit {} + length {} = {} > {} (DLC {} Bytes)";
-pub const FORMAT_SIGNAL_EXTENDS_BEYOND_CAN: &str = "Signal erstreckt sich über die CAN-Nachrichtengrenze hinaus: start_bit {} + length {} = {} > 64";
 pub const FORMAT_INVALID_RANGE: &str = "Ungültiger Bereich: min {} > max {}";
 pub const FORMAT_UNKNOWN_BYTE_ORDER: &str = "Unbekannte Byte-Reihenfolge '{}'";
 pub const FORMAT_UNKNOWN_SIGN: &str = "Unbekanntes Vorzeichen '{}'";
 pub const FORMAT_PARSE_NUMBER_FAILED: &str = "Fehler beim Parsen der Zahl: {}";
 pub const FORMAT_INVALID_UTF8: &str = "Ungültiges UTF-8: {}";
 pub const FORMAT_READ_FAILED: &str = "Fehler beim Lesen: {}";
-pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "Nachrichten-ID {} liegt außerhalb des gültigen Bereichs (Standard 11-Bit: 0-2047, Erweitert 29-Bit: 2048-536870911)";
+pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "Nachrichten-ID {} ({} dezimal) liegt außerhalb des gültigen Bereichs (Standard 11-Bit: 0x000-0x7FF (0-2,047 dezimal), Erweitert 29-Bit: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 dezimal))";
 pub const FORMAT_SIGNAL_OVERLAP: &str =
     "Signale '{}' und '{}' überlappen sich in der Nachricht '{}'";
+pub const FORMAT_LINE_NUMBER: &str = "{} (Zeile {})";

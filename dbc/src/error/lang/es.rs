@@ -45,7 +45,8 @@ pub const MESSAGE_ID_REQUIRED: &str = "id es requerido";
 pub const MESSAGE_DLC_REQUIRED: &str = "dlc es requerido";
 pub const MESSAGE_SENDER_EMPTY: &str = "El remitente del mensaje no puede estar vacío";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "El DLC del mensaje debe ser de al menos 1 byte";
-pub const MESSAGE_DLC_TOO_LARGE: &str = "El DLC del mensaje no puede exceder 8 bytes";
+pub const MESSAGE_DLC_TOO_LARGE: &str =
+    "El DLC del mensaje no puede exceder 64 bytes (máximo CAN FD)";
 pub const MESSAGE_INVALID_FORMAT: &str = "Formato de mensaje inválido";
 pub const MESSAGE_INVALID_ID: &str = "ID de mensaje inválido";
 pub const MESSAGE_INVALID_DLC: &str = "DLC inválido";
@@ -59,7 +60,8 @@ pub const SIGNAL_NAME_EMPTY: &str = "El nombre de la señal no puede estar vací
 pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bit es requerido";
 pub const SIGNAL_LENGTH_REQUIRED: &str = "length es requerido";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "La longitud de la señal debe ser de al menos 1 bit";
-pub const SIGNAL_LENGTH_TOO_LARGE: &str = "La longitud de la señal no puede exceder 64 bits";
+pub const SIGNAL_LENGTH_TOO_LARGE: &str =
+    "La longitud de la señal no puede exceder 512 bits (máximo CAN FD)";
 pub const SIGNAL_OVERLAP: &str = "Las señales se superponen en el mensaje";
 
 // ============================================================================
@@ -100,13 +102,12 @@ pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Nombre de nodo duplicado: '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "El mensaje '{}' tiene un remitente '{}' que no está en la lista de nodos";
 pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "La señal '{}' se extiende más allá del límite del mensaje: start_bit {} + length {} = {} > {} (DLC {} bytes)";
-pub const FORMAT_SIGNAL_EXTENDS_BEYOND_CAN: &str =
-    "La señal se extiende más allá del límite del mensaje CAN: start_bit {} + length {} = {} > 64";
 pub const FORMAT_INVALID_RANGE: &str = "Rango inválido: min {} > max {}";
 pub const FORMAT_UNKNOWN_BYTE_ORDER: &str = "Orden de bytes desconocido '{}'";
 pub const FORMAT_UNKNOWN_SIGN: &str = "Signo desconocido '{}'";
 pub const FORMAT_PARSE_NUMBER_FAILED: &str = "Error al analizar el número: {}";
 pub const FORMAT_INVALID_UTF8: &str = "UTF-8 inválido: {}";
 pub const FORMAT_READ_FAILED: &str = "Error al leer: {}";
-pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "El ID de mensaje {} está fuera del rango válido (11 bits estándar: 0-2047, 29 bits extendido: 2048-536870911)";
+pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "El ID de mensaje {} ({} decimal) está fuera del rango válido (11 bits estándar: 0x000-0x7FF (0-2,047 decimal), 29 bits extendido: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 decimal))";
 pub const FORMAT_SIGNAL_OVERLAP: &str = "Las señales '{}' y '{}' se superponen en el mensaje '{}'";
+pub const FORMAT_LINE_NUMBER: &str = "{} (línea {})";

@@ -1,10 +1,16 @@
+use crate::{Error, Result, error::messages};
 use alloc::{
     format,
     string::{String, ToString},
     vec::Vec,
 };
-
-use crate::{Error, Result, error::messages};
+use core::{
+    option::{
+        Option,
+        Option::{None, Some},
+    },
+    result::Result::{Err, Ok},
+};
 
 /// Represents the version string from a DBC file.
 ///
@@ -71,8 +77,13 @@ impl Version {
         }
         .trim();
 
-        if version.is_empty() {
-            return Err(Error::Version(messages::VERSION_EMPTY.to_string()));
+        // Allow empty version string (VERSION "")
+        if version == "\"\"" || version.is_empty() {
+            return Ok(Version {
+                major: 0,
+                minor: None,
+                patch: None,
+            });
         }
 
         // Must be enclosed in double quotes
@@ -140,9 +151,10 @@ impl Version {
         }
     }
 
-    /// Format version in DBC file format (e.g., `VERSION "1.0"`)
+    /// Format version in DBC file format (e.g., `VERSION "1.0"` or `VERSION ""`)
     ///
     /// Useful for debugging and visualization of the version in DBC format.
+    /// Empty versions (major=0, minor=None, patch=None) are output as `VERSION ""`.
     ///
     /// # Examples
     ///
@@ -151,10 +163,17 @@ impl Version {
     ///
     /// let version = Version::builder().major(1).minor(0).build()?;
     /// assert_eq!(version.to_dbc_string(), "VERSION \"1.0\"");
+    ///
+    /// let empty_version = Version::builder().major(0).build()?;
+    /// assert_eq!(empty_version.to_dbc_string(), "VERSION \"\"");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
+        // Empty version (major=0, minor=None, patch=None) outputs as VERSION ""
+        if self.major == 0 && self.minor.is_none() && self.patch.is_none() {
+            return "VERSION \"\"".to_string();
+        }
         format!("VERSION \"{}\"", self.to_string())
     }
 }
@@ -423,16 +442,11 @@ mod tests {
 
     #[test]
     fn test_version_parse_empty_quotes() {
-        let result = Version::parse("VERSION \"\"");
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Version(msg) => {
-                // Empty version string should trigger parse error for major
-                let template_text = lang::FORMAT_PARSE_NUMBER_FAILED.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
-            }
-            _ => panic!("Expected Version error"),
-        }
+        // Empty version string is now allowed
+        let version = Version::parse("VERSION \"\"").unwrap();
+        assert_eq!(version.major(), 0);
+        assert_eq!(version.minor(), None);
+        assert_eq!(version.patch(), None);
     }
 
     #[test]
@@ -483,9 +497,18 @@ mod tests {
 
     #[test]
     fn test_version_parse_zero_parts() {
-        // This should fail because after stripping quotes, we get empty string
-        let result = Version::parse("VERSION \"\"");
-        assert!(result.is_err());
+        // Empty version string is now allowed
+        let version = Version::parse("VERSION \"\"").unwrap();
+        assert_eq!(version.major(), 0);
+        assert_eq!(version.minor(), None);
+        assert_eq!(version.patch(), None);
+    }
+
+    #[test]
+    fn test_version_empty_round_trip() {
+        // Test that empty version can be parsed and serialized correctly
+        let version = Version::parse("VERSION \"\"").unwrap();
+        assert_eq!(version.to_dbc_string(), "VERSION \"\"");
     }
 
     #[test]

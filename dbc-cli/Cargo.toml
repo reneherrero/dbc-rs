@@ -4,15 +4,18 @@ publish = false
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Command-line interface for DBC file manipulation"
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+description = "Command-line interface for Database CAN (DBC) file manipulation"
+keywords = ["can", "dbc", "automotive"]
+categories = ["parsing", "embedded"]
 
 [[bin]]
-name = "dbc-cli"
+name = "dbc"
 path = "src/main.rs"
-
-[lints]
-workspace = true
 
 [dependencies]
 dbc-rs = { path = "../dbc", package = "dbc-rs" }

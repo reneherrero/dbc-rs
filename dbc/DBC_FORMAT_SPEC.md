@@ -29,7 +29,7 @@ These are protocol-specific extensions rather than a new version of the DBC form
 
 | Statement      | Purpose                                      | Typical Location                    |
 |----------------|----------------------------------------------|-------------------------------------|
-| `VERSION`      | Declares the logical revision of the file    | First non-comment line              |
+| `VERSION`      | Declares the logical revision of the file    | First non-comment line (optional)   |
 | `NS_`          | Enumerates which optional keywords appear    | Immediately after `VERSION` (optional) |
 | `BS_`          | Bit-timing defaults for CAN bus              | Optional, usually before `BU_`      |
 | `BU_`          | Lists ECU/node names                         | Before messages that reference them |
@@ -43,7 +43,7 @@ These are protocol-specific extensions rather than a new version of the DBC form
 | `SIG_VALTYPE_` | Sets integer/float encoding per signal       | After signals                       |
 | `EV_`          | Declares environment variables               | Anywhere                            |
 
-Only `VERSION`, `BU_`, `BO_`, and `SG_` are strictly required for a minimal database; everything else augments metadata or tooling hints.
+Only `BU_`, `BO_`, and `SG_` are strictly required for a minimal database. `VERSION` is optional (if omitted, an empty version is assumed). Everything else augments metadata or tooling hints.
 
 ## File Structure
 
@@ -63,11 +63,15 @@ VERSION "version_string"
 **Example:**
 ```
 VERSION "1.0"
+VERSION ""  # Empty version string (allowed, represents "no version specified")
 ```
 
 **Notes:**
 - The version string is enclosed in double quotes
-- This is typically the first line in a DBC file
+- **VERSION is optional**: The `VERSION` statement may be omitted entirely. If omitted, parsers typically assume an empty version (represented as `VERSION ""`)
+- This is typically the first line in a DBC file (when present)
+- **Empty version strings are allowed**: `VERSION ""` is valid and represents "no version specified" (per DBC format specification)
+- When empty, the version is typically represented internally as `0` but should be output as an empty string to preserve the original format
 
 ---
 
@@ -120,7 +124,10 @@ BO_ <CAN_ID> <Message_Name> : <DLC> <Transmitter>
 **Parameters:**
 - `<CAN_ID>`: The CAN identifier (decimal, typically 0-2047 for 11-bit or 0-536870911 for 29-bit)
 - `<Message_Name>`: Name of the message (alphanumeric, may contain underscores)
-- `<DLC>`: Data Length Code (1-8 bytes, typically 8)
+- `<DLC>`: Data Length Code (1-64 bytes)
+  - **Classic CAN Standard (CAN 2.0A)**: 1-8 bytes (64 bits maximum payload)
+  - **Classic CAN Extended (CAN 2.0B)**: 1-8 bytes (64 bits maximum payload)
+  - **CAN FD (Flexible Data Rate, ISO/Bosch)**: 1-64 bytes (512 bits maximum payload)  
 - `<Transmitter>`: Node name that transmits this message (must be in BU_ list)
 
 **Example:**
@@ -131,7 +138,8 @@ BO_ 256 EngineData : 8 ECM
 **Notes:**
 - Messages are followed by signal definitions (SG_)
 - CAN IDs should be unique within a DBC file
-- DLC must be between 1 and 8
+- DLC must be between 1 and 64 bytes (supports CAN 2.0A, CAN 2.0B, and CAN FD)
+- All signals must fit within the message boundary: `DLC * 8 bits`
 
 ---
 

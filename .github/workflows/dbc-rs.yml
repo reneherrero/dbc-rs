@@ -150,8 +150,10 @@ jobs:
       - name: Generate code coverage
         run: |
           cargo llvm-cov \
-            --all-features \
-            --package dbc-rs \
+            --features std \
+            --workspace \
+            --tests \
+            --lib \
             --ignore-filename-regex "^(tests|examples|benches)/" \
             --fail-under-lines 80 \
             --lcov \
@@ -163,4 +165,18 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
+
+  real-world-tests:
+    name: Real-World Tests (opendbc)
+    runs-on: ubuntu-latest
+    continue-on-error: true  # Don't block build if opendbc unavailable or some files fail
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install git (for cloning opendbc)
+        run: sudo apt-get update && sudo apt-get install -y git
+      - name: Run real-world tests
+        run: cargo test --features real-world-tests --test real_world_tests --verbose
 

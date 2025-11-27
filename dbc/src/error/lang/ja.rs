@@ -45,7 +45,8 @@ pub const MESSAGE_ID_REQUIRED: &str = "idが必要です";
 pub const MESSAGE_DLC_REQUIRED: &str = "dlcが必要です";
 pub const MESSAGE_SENDER_EMPTY: &str = "メッセージ送信者を空にすることはできません";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "メッセージDLCは少なくとも1バイトである必要があります";
-pub const MESSAGE_DLC_TOO_LARGE: &str = "メッセージDLCは8バイトを超えることはできません";
+pub const MESSAGE_DLC_TOO_LARGE: &str =
+    "メッセージDLCは64バイト（CAN FD最大値）を超えることはできません";
 pub const MESSAGE_INVALID_FORMAT: &str = "無効なメッセージ形式";
 pub const MESSAGE_INVALID_ID: &str = "無効なメッセージID";
 pub const MESSAGE_INVALID_DLC: &str = "無効なDLC";
@@ -59,7 +60,8 @@ pub const SIGNAL_NAME_EMPTY: &str = "信号名を空にすることはできま�
 pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bitが必要です";
 pub const SIGNAL_LENGTH_REQUIRED: &str = "lengthが必要です";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "信号長は少なくとも1ビットである必要があります";
-pub const SIGNAL_LENGTH_TOO_LARGE: &str = "信号長は64ビットを超えることはできません";
+pub const SIGNAL_LENGTH_TOO_LARGE: &str =
+    "信号長は512ビット（CAN FD最大値）を超えることはできません";
 pub const SIGNAL_OVERLAP: &str = "信号がメッセージ内で重複しています";
 
 // ============================================================================
@@ -99,14 +101,12 @@ pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "メッセージ'{}'には送信者'{}'がありますが、ノードリストにありません";
 pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str =
     "信号'{}'がメッセージ境界を超えています: start_bit {} + length {} = {} > {}（DLC {}バイト）";
-pub const FORMAT_SIGNAL_EXTENDS_BEYOND_CAN: &str =
-    "信号がCANメッセージ境界を超えています: start_bit {} + length {} = {} > 64";
 pub const FORMAT_INVALID_RANGE: &str = "無効な範囲: min {} > max {}";
 pub const FORMAT_UNKNOWN_BYTE_ORDER: &str = "不明なバイト順序'{}'";
 pub const FORMAT_UNKNOWN_SIGN: &str = "不明な符号'{}'";
 pub const FORMAT_PARSE_NUMBER_FAILED: &str = "数値の解析に失敗しました: {}";
 pub const FORMAT_INVALID_UTF8: &str = "無効なUTF-8: {}";
 pub const FORMAT_READ_FAILED: &str = "読み取りに失敗しました: {}";
-pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str =
-    "メッセージID {} が有効範囲外です（標準11ビット: 0-2047、拡張29ビット: 2048-536870911）";
+pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "メッセージID {} ({} 進数) が有効範囲外です（標準11ビット: 0x000-0x7FF (0-2,047 進数)、拡張29ビット: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 進数)）";
 pub const FORMAT_SIGNAL_OVERLAP: &str = "信号 '{}' と '{}' がメッセージ '{}' で重複しています";
+pub const FORMAT_LINE_NUMBER: &str = "{} (行 {})";

@@ -280,8 +280,7 @@ fn test_parse_complete_dbc_file() {
     assert_eq!(wheel_speed_front_right.unit(), Some("km/h"));
     // Verify this signal now fits within the 6-byte message (48 bits)
     assert!(
-        u16::from(wheel_speed_front_right.start_bit())
-            + u16::from(wheel_speed_front_right.length())
+        wheel_speed_front_right.start_bit() + wheel_speed_front_right.length()
             <= u16::from(brake_msg.dlc()) * 8
     );
 

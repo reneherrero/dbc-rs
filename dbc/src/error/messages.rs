@@ -1,5 +1,6 @@
 use super::lang;
-use alloc::{format, string::String};
+use alloc::{format, string::String, vec::Vec};
+use core::option::Option::Some;
 
 /// Message formatting functions.
 ///
@@ -58,6 +59,12 @@ pub(crate) fn format_nodes_error(details: &str) -> String {
     format!("{}: {}", lang::NODES_ERROR_CATEGORY, details)
 }
 
+/// Format an error message with line number
+pub(crate) fn with_line_number(msg: &str, line_number: usize) -> String {
+    let args: [&dyn core::fmt::Display; 2] = [&msg, &line_number];
+    replace_placeholders(lang::FORMAT_LINE_NUMBER, &args)
+}
+
 // ============================================================================
 // Helper functions for formatted messages
 // ============================================================================
@@ -113,8 +120,8 @@ pub(crate) fn sender_not_in_nodes(msg_name: &str, sender: &str) -> String {
 /// Format signal extends beyond message boundary error
 pub(crate) fn signal_extends_beyond_message(
     signal_name: &str,
-    start_bit: u8,
-    length: u8,
+    start_bit: u16,
+    length: u16,
     end_bit: u16,
     max_bits: u16,
     dlc: u8,
@@ -128,12 +135,6 @@ pub(crate) fn signal_extends_beyond_message(
         &dlc,
     ];
     replace_placeholders(lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE, &args)
-}
-
-/// Format signal extends beyond CAN boundary error
-pub(crate) fn signal_extends_beyond_can(start_bit: u8, length: u8, end_bit: u16) -> String {
-    let args: [&dyn core::fmt::Display; 3] = [&start_bit, &length, &end_bit];
-    replace_placeholders(lang::FORMAT_SIGNAL_EXTENDS_BEYOND_CAN, &args)
 }
 
 /// Format invalid range error
@@ -176,8 +177,37 @@ pub(crate) fn read_failed(err: impl core::fmt::Display) -> String {
 
 /// Format message ID out of range error
 pub(crate) fn message_id_out_of_range(id: u32) -> String {
-    let args: [&dyn core::fmt::Display; 1] = [&id];
+    // Format ID in hex with underscores for readability (e.g., 0x1234_5678)
+    let hex_str = format!("{id:08X}");
+    let hex_id = if hex_str.len() == 8 {
+        format!("0x{}_{}", &hex_str[..4], &hex_str[4..])
+    } else {
+        format!("0x{hex_str}")
+    };
+
+    // Format ID in decimal with commas for readability (no_std compatible)
+    let decimal_str = format!("{id}");
+    let decimal_id = format_number_with_commas(&decimal_str);
+
+    let args: [&dyn core::fmt::Display; 2] = [&hex_id as &dyn core::fmt::Display, &decimal_id];
     replace_placeholders(lang::FORMAT_MESSAGE_ID_OUT_OF_RANGE, &args)
+}
+
+/// Format a number string with comma separators for thousands
+fn format_number_with_commas(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() + s.len() / 3);
+    let chars: Vec<char> = s.chars().collect();
+    let len = chars.len();
+
+    for (i, &ch) in chars.iter().enumerate() {
+        // Add comma before every group of 3 digits from the right (but not at the start)
+        if i > 0 && (len - i) % 3 == 0 {
+            result.push(',');
+        }
+        result.push(ch);
+    }
+
+    result
 }
 
 /// Format signal overlap error

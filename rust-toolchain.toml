@@ -1,11 +1,12 @@
-# Rust toolchain configuration for dbc-rs
-#
-# This file ensures consistent formatting across all developers.
-# Cargo and rustup will automatically use this toolchain when present.
-#
-# Formatting (rustfmt): Uses this pinned MSRV version for consistency.
-# Clippy: Should use latest stable (see pre-commit hook and CI) for better linting.
 [toolchain]
-channel = "1.85.0"
-components = ["rustfmt"]
+channel = "stable"
 profile = "minimal"
+components = ["rustfmt", "clippy"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "thumbv7m-none-eabi",
+]

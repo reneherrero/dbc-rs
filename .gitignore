@@ -2,6 +2,7 @@
 **/*.rs.bk
 Cargo.lock
 *.pdb
+rust_out
 
 # Coverage artifacts
 llvm-cov-target/

@@ -174,39 +174,85 @@ impl Dbc {
     /// - [`parse_bytes`](Self::parse_bytes) - Parse from bytes
     /// - [`parse_from`](Self::parse_from) - Parse from owned String
     /// - [`from_reader`](Self::from_reader) - Parse from `std::io::Read` (requires `std` feature)
+    ///
+    /// # Panics
+    ///
+    /// This function may panic if the internal iterator state is inconsistent.
+    /// In practice, this should never happen with valid input.
     pub fn parse(data: &str) -> Result<Self> {
-        let mut lines = data.lines().peekable();
+        let mut line_iter = data.lines().enumerate().peekable();
+        //TODO: This is a potential security vulnerability. We should use a more robust iterator.
+        // Helper closure to wrap errors with line numbers
+        let wrap_error = |e: &Error, ln: usize| -> Error {
+            match e {
+                Error::Dbc(msg) => Error::Dbc(messages::with_line_number(msg, ln)),
+                Error::Version(msg) => Error::Version(messages::with_line_number(msg, ln)),
+                Error::Nodes(msg) => Error::Nodes(messages::with_line_number(msg, ln)),
+                Error::Message(msg) => Error::Message(messages::with_line_number(msg, ln)),
+                Error::Signal(msg) => Error::Signal(messages::with_line_number(msg, ln)),
+                Error::InvalidData(msg) => Error::InvalidData(messages::with_line_number(msg, ln)),
+            }
+        };
 
-        // Must start with VERSION statement
-        let Some(version) = lines.next() else {
+        // Skip empty lines and comments at the beginning
+        while let Some((_, line)) = line_iter.peek() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("//") {
+                line_iter.next();
+            } else {
+                break;
+            }
+        }
+
+        // VERSION statement is optional
+        let version = if let Some((line_num, line)) = line_iter.peek() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("VERSION") {
+                let line_num = *line_num;
+                let (_, version_line) = line_iter.next().unwrap();
+                Version::parse(version_line).map_err(|e| wrap_error(&e, line_num + 1))?
+            } else {
+                // Default to empty version if VERSION line is omitted
+                Version::builder().major(0).build().unwrap()
+            }
+        } else {
             return Err(Error::Dbc(messages::DBC_EMPTY_FILE.to_string()));
         };
-        let version = Version::parse(version)?;
 
         let mut nodes: Option<Nodes> = None;
         let mut messages: Vec<Message> = Vec::new();
 
-        while let Some(line) = lines.next() {
-            if line.starts_with("BU_") {
-                nodes = Some(Nodes::parse(line)?);
-            } else if line.starts_with("BO_") {
-                let message = line;
+        while let Some((line_num, line)) = line_iter.next() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with("//") {
+                continue;
+            }
 
-                // Get signals associated message
+            if trimmed.starts_with("BU_:") {
+                nodes = Some(Nodes::parse(trimmed).map_err(|e| wrap_error(&e, line_num + 1))?);
+            } else if trimmed.starts_with("BO_ ") {
+                let message = trimmed;
+
+                // Get signals associated with message
                 // Pre-allocate with estimated capacity (most messages have 1-8 signals)
                 let mut signals: Vec<Signal> = Vec::with_capacity(8);
-                while let Some(signal) = lines.peek() {
+                while let Some((signal_line_num, signal)) = line_iter.peek() {
                     let signal = signal.trim_start();
 
-                    if signal.trim_start().starts_with("SG_") {
-                        signals.push(Signal::parse(signal)?);
-                        lines.next();
+                    if signal.trim_start().starts_with("SG_ ") {
+                        signals.push(
+                            Signal::parse(signal)
+                                .map_err(|e| wrap_error(&e, *signal_line_num + 1))?,
+                        );
+                        line_iter.next();
                     } else {
                         break;
                     }
                 }
 
-                messages.push(Message::parse(message, signals)?);
+                messages.push(
+                    Message::parse(message, signals).map_err(|e| wrap_error(&e, line_num + 1))?,
+                );
             }
         }
 
@@ -1208,6 +1254,92 @@ BO_ 512 BrakeData : 4 TCM
         let result = Dbc::new(version, nodes, messages);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().messages().len(), 10_000);
+    }
+
+    #[test]
+    fn test_parse_without_version() {
+        // DBC file without VERSION line should default to empty version
+        let data = r#"
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.version().major(), 0);
+        assert_eq!(dbc.version().minor(), None);
+        assert_eq!(dbc.version().patch(), None);
+    }
+
+    #[test]
+    fn test_parse_without_version_with_comment() {
+        // DBC file with comment and no VERSION line
+        let data = r#"// This is a comment
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.version().major(), 0);
+    }
+
+    #[test]
+    fn test_parse_error_with_line_number() {
+        // Test that errors include line numbers
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+BO_ 257 Invalid : 8 ECM
+ SG_ InvalidSignal : invalid|16@1+ (0.25,0) [0|8000] "rpm"
+"#;
+        let result = Dbc::parse(data);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = match err {
+            Error::Signal(s) => s,
+            Error::Message(s) => s,
+            _ => panic!("Expected Signal or Message error"),
+        };
+        // Check for line number pattern: "(line", "(ligne", "(línea", "(Zeile", "(行"
+        assert!(
+            msg.contains("(line")
+                || msg.contains("(ligne")
+                || msg.contains("(línea")
+                || msg.contains("(Zeile")
+                || msg.contains("(行"),
+            "Error message should contain line number, got: {}",
+            msg
+        );
+    }
+
+    #[test]
+    fn test_parse_error_version_with_line_number() {
+        // Test that version parsing errors include line numbers
+        let data = r#"VERSION invalid
+
+BU_: ECM
+"#;
+        let result = Dbc::parse(data);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let msg = match err {
+            Error::Version(s) => s,
+            _ => panic!("Expected Version error"),
+        };
+        // Check for line number pattern
+        assert!(
+            msg.contains("(line")
+                || msg.contains("(ligne")
+                || msg.contains("(línea")
+                || msg.contains("(Zeile")
+                || msg.contains("(行"),
+            "Error message should contain line number, got: {}",
+            msg
+        );
     }
 }
 

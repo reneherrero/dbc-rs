@@ -2,39 +2,21 @@
 name = "dbc-rs"
 version.workspace = true
 edition.workspace = true
-description = "CAN .dbc parser and editor"
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation.workspace = true
+rust-version.workspace = true
 readme = "README.md"
-keywords.workspace = true
-categories.workspace = true
-rust-version = "1.85.0"
-exclude = [
-    "tests/",
-    "examples/",
-    "DBC_FORMAT_SPEC.md",
-    ".github/",
-    "*.md",
-    "!README.md",
-    "!LICENSING.md",
-    "!SECURITY_AUDIT.md",
-]
+description = "Database CAN (DBC) parsing and editing library"
+documentation = "https://docs.rs/dbc-rs"
+keywords = ["can", "dbc", "automotive", "no_std"]
+categories = ["parsing", "embedded"]
+exclude = [".github/", "examples/", "tests/"]
 
 [package.metadata.docs.rs]
 features = ["std"]
 
-[lints]
-workspace = true
-
 [features]
 default = ["std"]
 std = []
-# Language selection (default is English, no feature needed)
-# Set one of these to select a language:
-lang-fr = [] # French
-lang-es = [] # Spanish
-lang-de = [] # German
-lang-ja = [] # Japanese

@@ -4,6 +4,15 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use core::{
+    convert::{AsRef, Into},
+    iter::IntoIterator,
+    option::{
+        Option,
+        Option::{None, Some},
+    },
+    result::Result::{Err, Ok},
+};
 
 /// Represents the list of nodes (ECUs) defined in a DBC file.
 ///

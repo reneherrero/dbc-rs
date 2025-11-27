@@ -1,6 +1,5 @@
 use alloc::string::String;
-use core::fmt;
-use core::num::ParseIntError;
+use core::{convert::From, fmt, num::ParseIntError};
 
 pub mod lang;
 pub(crate) mod messages;

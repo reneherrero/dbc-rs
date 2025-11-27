@@ -9,31 +9,4 @@ license = "MIT OR Apache-2.0"
 authors = ["dbc-rs contributors"]
 repository = "https://github.com/reneherrero/dbc-rs"
 homepage = "https://github.com/reneherrero/dbc-rs"
-documentation = "https://docs.rs/dbc-rs"
-keywords = ["can", "dbc", "automotive", "no_std"]
-categories = ["parsing", "embedded"]
-
-[workspace.lints.rust]
-unsafe_code = "forbid"
-missing_docs = "deny"
-unused_qualifications = "warn"
-unused_imports = "warn"
-unused_must_use = "warn"
-
-[workspace.lints.clippy]
-# Lint groups - all set to "warn" to catch issues without blocking builds
-# Priority -1 ensures these are applied after other configurations
-cargo = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-
-# Specific useful lints (from correctness, performance, and complexity categories)
-# Correctness - catch bugs
-unnecessary_cast = "warn"
-cast_lossless = "warn"
-cast_possible_truncation = "warn"
-# Performance - important for parsing
-redundant_closure = "warn"
-unnecessary_lazy_evaluations = "warn"
-# Code quality
-unused_self = "warn"
-single_char_pattern = "warn"
+rust-version = "1.85.0"

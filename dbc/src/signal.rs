@@ -7,6 +7,14 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use core::{
+    convert::{AsRef, Into},
+    option::{
+        Option,
+        Option::{None, Some},
+    },
+    result::Result::{Err, Ok},
+};
 
 /// Represents a signal within a CAN message.
 ///
@@ -37,8 +45,8 @@ use alloc::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
     name: Box<str>,
-    start_bit: u8,
-    length: u8,
+    start_bit: u16,
+    length: u16,
     byte_order: ByteOrder,
     unsigned: bool,
     factor: f64,
@@ -51,26 +59,27 @@ pub struct Signal {
 
 impl Signal {
     /// Validate signal parameters
-    fn validate(name: &str, start_bit: u8, length: u8, min: f64, max: f64) -> Result<()> {
+    fn validate(name: &str, length: u16, min: f64, max: f64) -> Result<()> {
         if name.trim().is_empty() {
             return Err(Error::Signal(messages::SIGNAL_NAME_EMPTY.to_string()));
         }
 
-        // Validate length: must be between 1 and 64 bits
+        // Validate length: must be between 1 and 512 bits
+        // - Classic CAN (2.0A/2.0B): DLC up to 8 bytes (64 bits)
+        // - CAN FD: DLC up to 64 bytes (512 bits)
+        // Signal length is validated against message DLC in Message::validate
         if length == 0 {
             return Err(Error::Signal(messages::SIGNAL_LENGTH_TOO_SMALL.to_string()));
         }
-        if length > 64 {
+        if length > 512 {
             return Err(Error::Signal(messages::SIGNAL_LENGTH_TOO_LARGE.to_string()));
         }
 
-        // Validate start_bit + length doesn't exceed 64 (CAN message max size)
-        let end_bit = u16::from(start_bit) + u16::from(length);
-        if end_bit > 64 {
-            return Err(Error::Signal(messages::signal_extends_beyond_can(
-                start_bit, length, end_bit,
-            )));
-        }
+        // Note: start_bit validation (boundary checks and overlap detection) is done in
+        // Message::validate, not here, because:
+        // 1. The actual message size depends on DLC (1-64 bytes for CAN FD)
+        // 2. Overlap detection requires comparing multiple signals
+        // 3. This allows signals to be created independently and validated when added to a message
 
         // Validate min <= max
         if min > max {
@@ -86,16 +95,19 @@ impl Signal {
     ///
     /// Returns an error if:
     /// - `name` is empty
-    /// - `length` is 0 or greater than 64
-    /// - `start_bit + length` exceeds 64 (signal would overflow CAN message)
+    /// - `length` is 0 or greater than 512 (CAN FD maximum)
     /// - `min > max` (invalid range)
+    ///
+    /// Note: Signal boundary validation (checking if signal fits within message DLC)
+    /// is performed in [`Message::validate`], not here, to support both CAN (8 bytes)
+    /// and CAN FD (64 bytes) message sizes.
     ///
     /// This is an internal constructor. For public API usage, use [`Signal::builder()`] instead.
     #[allow(clippy::too_many_arguments)] // Internal method, builder pattern is the public API
     pub(crate) fn new(
         name: impl AsRef<str>,
-        start_bit: u8,
-        length: u8,
+        start_bit: u16,
+        length: u16,
         byte_order: ByteOrder,
         unsigned: bool,
         factor: f64,
@@ -106,7 +118,7 @@ impl Signal {
         receivers: Receivers,
     ) -> Result<Self> {
         let name_str = name.as_ref();
-        Self::validate(name_str, start_bit, length, min, max)?;
+        Self::validate(name_str, length, min, max)?;
 
         Ok(Self {
             name: name_str.into(),
@@ -166,7 +178,7 @@ impl Signal {
 
     /// Parse position: `start_bit|length@byteOrderSign`
     /// Returns `(start_bit, length, byte_order, unsigned, remaining_string)`
-    fn parse_position(rest: &str) -> Result<(u8, u8, ByteOrder, bool, &str)> {
+    fn parse_position(rest: &str) -> Result<(u16, u16, ByteOrder, bool, &str)> {
         let mut tokens = rest.splitn(2, ' ');
         let pos = tokens
             .next()
@@ -184,11 +196,11 @@ impl Signal {
             .split_once('|')
             .ok_or_else(|| Error::Signal(messages::SIGNAL_PARSE_EXPECTED_PIPE.to_string()))?;
 
-        let start_bit: u8 = start_bit_str
+        let start_bit: u16 = start_bit_str
             .trim()
             .parse()
             .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_START_BIT.to_string()))?;
-        let length: u8 = length_str
+        let length: u16 = length_str
             .trim()
             .parse()
             .map_err(|_| Error::Signal(messages::SIGNAL_PARSE_INVALID_LENGTH.to_string()))?;
@@ -355,7 +367,7 @@ impl Signal {
         let receivers = Self::parse_receivers(rest)?;
 
         // Validate the parsed signal using the same validation as new()
-        Self::validate(name, start_bit, length, min, max)?;
+        Self::validate(name, length, min, max)?;
 
         Ok(Signal {
             name: name.into(),
@@ -382,14 +394,14 @@ impl Signal {
     /// Get the starting bit position within the message.
     #[inline]
     #[must_use]
-    pub fn start_bit(&self) -> u8 {
+    pub fn start_bit(&self) -> u16 {
         self.start_bit
     }
 
     /// Get the signal length in bits.
     #[inline]
     #[must_use]
-    pub fn length(&self) -> u8 {
+    pub fn length(&self) -> u16 {
         self.length
     }
 
@@ -586,8 +598,8 @@ impl Signal {
 #[derive(Debug, Clone)]
 pub struct SignalBuilder {
     name: Option<Box<str>>,
-    start_bit: Option<u8>,
-    length: Option<u8>,
+    start_bit: Option<u16>,
+    length: Option<u16>,
     byte_order: ByteOrder,
     unsigned: bool,
     factor: f64,
@@ -624,14 +636,14 @@ impl SignalBuilder {
 
     /// Set the start bit position (required)
     #[must_use]
-    pub fn start_bit(mut self, start_bit: u8) -> Self {
+    pub fn start_bit(mut self, start_bit: u16) -> Self {
         self.start_bit = Some(start_bit);
         self
     }
 
     /// Set the signal length in bits (required)
     #[must_use]
-    pub fn length(mut self, length: u8) -> Self {
+    pub fn length(mut self, length: u16) -> Self {
         self.length = Some(length);
         self
     }
@@ -714,14 +726,14 @@ impl SignalBuilder {
             .name
             .as_ref()
             .ok_or_else(|| Error::Signal(messages::SIGNAL_NAME_EMPTY.to_string()))?;
-        let start_bit = self
-            .start_bit
+        // Validate that start_bit is provided (required for building, but not validated here)
+        self.start_bit
             .ok_or_else(|| Error::Signal(messages::SIGNAL_START_BIT_REQUIRED.to_string()))?;
         let length = self
             .length
             .ok_or_else(|| Error::Signal(messages::SIGNAL_LENGTH_REQUIRED.to_string()))?;
 
-        Signal::validate(name.as_ref(), start_bit, length, self.min, self.max)
+        Signal::validate(name.as_ref(), length, self.min, self.max)
     }
 
     /// Build the `Signal` from the builder
@@ -841,10 +853,11 @@ mod tests {
 
     #[test]
     fn test_signal_new_length_too_large() {
+        // length > 512 should fail validation (CAN FD maximum is 512 bits)
         let result = Signal::new(
             "Test",
             0,
-            65,
+            513,
             ByteOrder::BigEndian,
             true,
             1.0,
@@ -863,10 +876,15 @@ mod tests {
 
     #[test]
     fn test_signal_new_overflow() {
-        let result = Signal::new(
+        use crate::message::Message;
+
+        // Signal with start_bit + length > 64 should be created successfully
+        // (validation against message DLC happens in Message::validate)
+        // This signal would fit in a CAN FD message (64 bytes = 512 bits)
+        let signal = Signal::new(
             "Test",
             60,
-            10,
+            10, // 60 + 10 = 70, fits in CAN FD (512 bits)
             ByteOrder::BigEndian,
             true,
             1.0,
@@ -876,15 +894,20 @@ mod tests {
             None::<&str>,
             Receivers::None,
         );
+        assert!(signal.is_ok());
+        let signal = signal.unwrap();
+
+        // But it should fail when added to a message with DLC < 9 bytes
+        let result = Message::new(256, "TestMessage", 8, "ECM", vec![signal]);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => {
+            Error::Message(msg) => {
                 // Check for format template text (language-agnostic) - extract text before first placeholder
                 let template_text =
-                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_CAN.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end()));
+                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
             }
-            _ => panic!("Expected Signal error"),
+            _ => panic!("Expected Message error"),
         }
     }
 
@@ -1077,24 +1100,34 @@ mod tests {
 
     #[test]
     fn test_parse_signal_overflow() {
-        // start_bit + length > 64 should fail validation
+        use crate::message::Message;
+
+        // Signal with start_bit + length > 64 should parse successfully
+        // (validation against message DLC happens in Message::validate)
+        // This signal would fit in a CAN FD message (64 bytes = 512 bits)
         let line = r#" SG_ Test : 60|10@0+ (1,0) [0|100] "unit" *"#;
-        let err = Signal::parse(line).unwrap_err();
-        match err {
-            Error::Signal(msg) => {
+        let signal = Signal::parse(line).unwrap();
+        assert_eq!(signal.start_bit(), 60);
+        assert_eq!(signal.length(), 10);
+
+        // But it should fail when added to a message with DLC < 9 bytes
+        let result = Message::new(256, "TestMessage", 8, "ECM", vec![signal]);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Message(msg) => {
                 // Check for format template text (language-agnostic) - extract text before first placeholder
                 let template_text =
-                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_CAN.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end()));
+                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
+                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
             }
-            _ => panic!("Expected Signal error"),
+            _ => panic!("Expected Message error"),
         }
     }
 
     #[test]
     fn test_parse_signal_length_too_large() {
-        // length > 64 should fail validation
-        let line = r#" SG_ Test : 0|65@0+ (1,0) [0|100] "unit" *"#;
+        // length > 512 should fail validation (CAN FD maximum is 512 bits)
+        let line = r#" SG_ Test : 0|513@0+ (1,0) [0|100] "unit" *"#;
         let err = Signal::parse(line).unwrap_err();
         match err {
             Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)),
