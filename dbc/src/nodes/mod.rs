@@ -29,6 +29,67 @@ pub struct Nodes<'a> {
     nodes: &'a [&'a str],
 }
 
+// Shared parsing logic
+fn parse_nodes_str<'a>(parser: &mut Parser<'a>) -> ParseResult<Vec<&'a str>> {
+    const BU_KEYWORD: &str = "BU_";
+    // Expect "BU_:" keyword
+    // Note: When called from Dbc::parse, find_next_keyword already advanced past "BU_",
+    // so we try to expect "BU_" first, and if that fails, we're already past it and just expect ":"
+    if parser.expect(BU_KEYWORD.as_bytes()).is_ok() {
+        // Successfully consumed "BU_", now expect ":"
+        parser
+            .expect(b":")
+            .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
+    } else {
+        // Already past "BU_" from find_next_keyword
+        // find_next_keyword advances to right after "BU_", which should be at ":" or whitespace
+        // Check if we're already at ":" (no whitespace) or need to skip whitespace first
+        let remaining = parser.remaining();
+        if remaining.is_empty() || !remaining.starts_with(b":") {
+            // Not at ":", skip whitespace and try again
+            parser.skip_newlines_and_spaces();
+        }
+        parser
+            .expect(b":")
+            .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
+    }
+
+    // Skip optional whitespace after ":"
+    parser.skip_newlines_and_spaces();
+
+    // Parse node names one by one
+    use alloc::vec::Vec;
+    let mut node_names: Vec<&str> = Vec::new();
+
+    loop {
+        // Skip whitespace before each node name
+        let _ = parser.skip_whitespace();
+
+        // Check if we're at EOF or end of line
+        if parser.remaining().is_empty() {
+            break;
+        }
+
+        // Try to parse an identifier (node name)
+        match parser.parse_identifier() {
+            Ok(node) => {
+                node_names.push(node);
+                // Check for too many nodes (DoS protection)
+                const MAX_NODES: usize = 256;
+                if node_names.len() > MAX_NODES {
+                    return Err(ParseError::Version(messages::NODES_TOO_MANY));
+                }
+            }
+            Err(_) => {
+                // No more identifiers, break
+                break;
+            }
+        }
+    }
+
+    Ok(node_names)
+}
+
 // Shared validation function
 #[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn validate_nodes(_nodes: &[&str]) -> ParseResult<()> {
@@ -53,7 +114,6 @@ pub(crate) fn validate_nodes(_nodes: &[&str]) -> ParseResult<()> {
 #[cfg(feature = "std")]
 impl Nodes {
     pub(crate) const BU_: &'static str = "BU_";
-    const MAX_NODES: usize = 256;
 
     #[allow(dead_code)] // Used in tests
     pub(crate) fn new(nodes: &[&str]) -> Result<Self> {
@@ -64,55 +124,7 @@ impl Nodes {
     }
 
     pub(crate) fn parse<'b>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        // Expect "BU_:" keyword
-        // Note: When called from Dbc::parse, find_next_keyword already advanced past "BU_",
-        // so we try to expect "BU_" first, and if that fails, we're already past it and just expect ":"
-        if parser.expect(Self::BU_.as_bytes()).is_ok() {
-            // Successfully consumed "BU_", now expect ":"
-            parser.expect(b":")?;
-        } else {
-            // Already past "BU_" from find_next_keyword
-            // find_next_keyword advances to right after "BU_", which should be at ":" or whitespace
-            // Check if we're already at ":" (no whitespace) or need to skip whitespace first
-            let remaining = parser.remaining();
-            if remaining.is_empty() || !remaining.starts_with(b":") {
-                // Not at ":", skip whitespace and try again
-                parser.skip_newlines_and_spaces();
-            }
-            parser.expect(b":")?;
-        }
-
-        // Skip optional whitespace after ":"
-        parser.skip_newlines_and_spaces();
-
-        // Parse node names one by one
-        use alloc::vec::Vec;
-        let mut node_names: Vec<&str> = Vec::new();
-
-        loop {
-            // Skip whitespace before each node name
-            let _ = parser.skip_whitespace();
-
-            // Check if we're at EOF or end of line
-            if parser.remaining().is_empty() {
-                break;
-            }
-
-            // Try to parse an identifier (node name)
-            match parser.parse_identifier() {
-                Ok(node) => {
-                    node_names.push(node);
-                    // Check for too many nodes (DoS protection)
-                    if node_names.len() > Self::MAX_NODES {
-                        return Err(ParseError::Version(messages::NODES_TOO_MANY));
-                    }
-                }
-                Err(_) => {
-                    // No more identifiers, break
-                    break;
-                }
-            }
-        }
+        let node_names = parse_nodes_str(parser)?;
 
         if node_names.is_empty() {
             // No nodes specified, return empty nodes
@@ -195,55 +207,7 @@ impl<'a> Nodes<'a> {
     #[allow(dead_code)] // Used in Dbc::parse
     #[must_use]
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        // Expect "BU_:" keyword
-        // Note: When called from Dbc::parse, find_next_keyword already advanced past "BU_",
-        // so we try to expect "BU_" first, and if that fails, we're already past it and just expect ":"
-        if parser.expect(Self::BU_.as_bytes()).is_ok() {
-            // Successfully consumed "BU_", now expect ":"
-            parser.expect(b":")?;
-        } else {
-            // Already past "BU_" from find_next_keyword
-            // find_next_keyword advances to right after "BU_", which should be at ":" or whitespace
-            // Check if we're already at ":" (no whitespace) or need to skip whitespace first
-            let remaining = parser.remaining();
-            if remaining.is_empty() || !remaining.starts_with(b":") {
-                // Not at ":", skip whitespace and try again
-                parser.skip_newlines_and_spaces();
-            }
-            parser.expect(b":")?;
-        }
-
-        // Skip optional whitespace after ":"
-        parser.skip_newlines_and_spaces();
-
-        // Parse node names one by one
-        use alloc::vec::Vec;
-        let mut node_names: Vec<&str> = Vec::new();
-
-        loop {
-            // Skip whitespace before each node name
-            let _ = parser.skip_whitespace();
-
-            // Check if we're at EOF or end of line
-            if parser.remaining().is_empty() {
-                break;
-            }
-
-            // Try to parse an identifier (node name)
-            match parser.parse_identifier() {
-                Ok(node) => {
-                    node_names.push(node);
-                    // Check for too many nodes (DoS protection)
-                    if node_names.len() > Self::MAX_NODES {
-                        return Err(ParseError::Version(messages::NODES_TOO_MANY));
-                    }
-                }
-                Err(_) => {
-                    // No more identifiers, break
-                    break;
-                }
-            }
-        }
+        let node_names = parse_nodes_str(parser)?;
 
         if node_names.is_empty() {
             return Ok(Nodes { nodes: &[] });

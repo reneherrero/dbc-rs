@@ -200,12 +200,12 @@ impl<'a> Parser<'a> {
     #[allow(dead_code)]
     pub(crate) fn parse_u32(&mut self) -> ParseResult<u32> {
         let start_pos = self.pos;
-        // Read until whitespace, colon, or end of input
+        // Read until whitespace, colon, pipe, @, or end of input
         while self.pos < self.input.len() {
             let byte = self.input[self.pos];
             if byte.is_ascii_digit() {
                 self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
+            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@') {
                 break;
             } else {
                 return Err(ParseError::Expected("Expected number"));
@@ -252,6 +252,14 @@ impl<'a> Parser<'a> {
         let start_pos = self.pos;
         let mut has_dot = false;
         let mut has_e = false;
+
+        // Allow leading sign (+ or -)
+        if self.pos < self.input.len() {
+            let byte = self.input[self.pos];
+            if byte == b'+' || byte == b'-' {
+                self.pos += 1;
+            }
+        }
 
         // Read until whitespace, delimiter, or end of input
         while self.pos < self.input.len() {
