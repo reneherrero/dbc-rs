@@ -747,7 +747,7 @@ BO_ 256 Engine : 8 ECM
         assert!(saved.contains("VERSION \"1.0\""));
         assert!(saved.contains("BU_: ECM"));
         assert!(saved.contains("BO_ 256 EngineData : 8 ECM"));
-        assert!(saved.contains("SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *"));
+        assert!(saved.contains("SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *")); // BigEndian = @0
     }
 
     #[test]
