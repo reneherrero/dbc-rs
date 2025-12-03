@@ -3,17 +3,19 @@
 //! This example demonstrates how to create a DBC file from scratch using
 //! the builder pattern for all components.
 
-use dbc_rs::{ByteOrder, Dbc, Message, Nodes, Receivers, Signal, Version};
+use dbc_rs::{
+    ByteOrder, DbcBuilder, MessageBuilder, NodesBuilder, Receivers, SignalBuilder, VersionBuilder,
+};
 
 fn main() -> Result<(), dbc_rs::Error> {
     // Create version "1.0" using builder
-    let version = Version::builder().major(1).minor(0).build()?;
+    let version = VersionBuilder::new().major(1).minor(0).build()?;
 
     // Create nodes: ECM and TCM using builder
-    let nodes = Nodes::builder().add_node("ECM").add_node("TCM").build()?;
+    let nodes = NodesBuilder::new().add_node("ECM").add_node("TCM").build()?;
 
     // Create signals for Engine message using the builder pattern
-    let rpm_signal = Signal::builder()
+    let rpm_signal = SignalBuilder::new()
         .name("RPM")
         .start_bit(0)
         .length(16)
@@ -27,7 +29,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .receivers(Receivers::None)
         .build()?;
 
-    let temp_signal = Signal::builder()
+    let temp_signal = SignalBuilder::new()
         .name("Temp")
         .start_bit(16)
         .length(8)
@@ -42,7 +44,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .build()?;
 
     // Create signals for Brake message
-    let pressure_signal = Signal::builder()
+    let pressure_signal = SignalBuilder::new()
         .name("Pressure")
         .start_bit(0)
         .length(16)
@@ -57,7 +59,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .build()?;
 
     // Create Engine message (ID 256, DLC 8, sender ECM) using the builder pattern
-    let engine_message = Message::builder()
+    let engine_message = MessageBuilder::new()
         .id(256)
         .name("Engine")
         .dlc(8)
@@ -67,7 +69,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .build()?;
 
     // Create Brake message (ID 512, DLC 4, sender TCM) using the builder pattern
-    let brake_message = Message::builder()
+    let brake_message = MessageBuilder::new()
         .id(512)
         .name("Brake")
         .dlc(4)
@@ -76,7 +78,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .build()?;
 
     // Create DBC with all components using the builder pattern
-    let dbc = Dbc::builder()
+    let dbc = DbcBuilder::new()
         .version(version)
         .nodes(nodes)
         .add_message(engine_message)
@@ -84,7 +86,10 @@ fn main() -> Result<(), dbc_rs::Error> {
         .build()?;
 
     // Verify the created DBC
-    println!("Created DBC with version: {}", dbc.version().to_string());
+    println!(
+        "Created DBC with version: {}",
+        dbc.version().map(|v| v.to_string()).unwrap_or_default()
+    );
     println!("Nodes: {}", dbc.nodes().to_string());
     println!("Messages: {}", dbc.messages().len());
 

@@ -1,0 +1,215 @@
+use crate::{
+    ByteOrder, Receivers,
+    error::{Error, Result, messages},
+    signal::Signal,
+};
+
+type SignalFields = (
+    String,
+    u16,
+    u16,
+    ByteOrder,
+    bool,
+    f64,
+    f64,
+    f64,
+    f64,
+    Option<String>,
+    Receivers,
+);
+
+#[derive(Debug, Clone)]
+pub struct SignalBuilder {
+    name: Option<String>,
+    start_bit: Option<u16>,
+    length: Option<u16>,
+    byte_order: ByteOrder,
+    unsigned: bool,
+    factor: f64,
+    offset: f64,
+    min: f64,
+    max: f64,
+    unit: Option<String>,
+    receivers: Receivers,
+}
+
+impl Default for SignalBuilder {
+    fn default() -> Self {
+        Self {
+            name: None,
+            start_bit: None,
+            length: None,
+            byte_order: ByteOrder::BigEndian,
+            unsigned: true,
+            factor: 1.0,
+            offset: 0.0,
+            min: 0.0,
+            max: 0.0,
+            unit: None,
+            receivers: Receivers::Broadcast,
+        }
+    }
+}
+
+impl SignalBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    #[must_use]
+    pub fn name(mut self, name: impl AsRef<str>) -> Self {
+        self.name = Some(name.as_ref().to_string());
+        self
+    }
+
+    #[must_use]
+    pub fn start_bit(mut self, start_bit: u16) -> Self {
+        self.start_bit = Some(start_bit);
+        self
+    }
+
+    #[must_use]
+    pub fn length(mut self, length: u16) -> Self {
+        self.length = Some(length);
+        self
+    }
+
+    #[must_use]
+    pub fn byte_order(mut self, byte_order: ByteOrder) -> Self {
+        self.byte_order = byte_order;
+        self
+    }
+
+    #[must_use]
+    pub fn unsigned(mut self, unsigned: bool) -> Self {
+        self.unsigned = unsigned;
+        self
+    }
+
+    #[must_use]
+    pub fn factor(mut self, factor: f64) -> Self {
+        self.factor = factor;
+        self
+    }
+
+    #[must_use]
+    pub fn offset(mut self, offset: f64) -> Self {
+        self.offset = offset;
+        self
+    }
+
+    #[must_use]
+    pub fn min(mut self, min: f64) -> Self {
+        self.min = min;
+        self
+    }
+
+    #[must_use]
+    pub fn max(mut self, max: f64) -> Self {
+        self.max = max;
+        self
+    }
+
+    #[must_use]
+    pub fn unit(mut self, unit: impl AsRef<str>) -> Self {
+        self.unit = Some(unit.as_ref().to_string());
+        self
+    }
+
+    #[must_use]
+    pub fn no_unit(mut self) -> Self {
+        self.unit = None;
+        self
+    }
+
+    #[must_use]
+    pub fn receivers(mut self, receivers: Receivers) -> Self {
+        self.receivers = receivers;
+        self
+    }
+
+    fn extract_fields(self) -> Result<SignalFields> {
+        let name = self
+            .name
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_NAME_EMPTY.to_string()))?;
+        let start_bit = self
+            .start_bit
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_START_BIT_REQUIRED.to_string()))?;
+        let length = self
+            .length
+            .ok_or_else(|| Error::Signal(messages::SIGNAL_LENGTH_REQUIRED.to_string()))?;
+        Ok((
+            name,
+            start_bit,
+            length,
+            self.byte_order,
+            self.unsigned,
+            self.factor,
+            self.offset,
+            self.min,
+            self.max,
+            self.unit,
+            self.receivers,
+        ))
+    }
+
+    #[must_use = "validation result should be checked"]
+    pub fn validate(self) -> Result<Self> {
+        let (
+            name,
+            _start_bit,
+            length,
+            byte_order,
+            unsigned,
+            factor,
+            offset,
+            min,
+            max,
+            unit,
+            receivers,
+        ) = self.extract_fields()?;
+        Signal::validate(&name, length, min, max).map_err(Error::from)?;
+        Ok(Self {
+            name: Some(name),
+            start_bit: Some(_start_bit),
+            length: Some(length),
+            byte_order,
+            unsigned,
+            factor,
+            offset,
+            min,
+            max,
+            unit,
+            receivers,
+        })
+    }
+
+    pub fn build(self) -> Result<Signal> {
+        let (
+            name,
+            start_bit,
+            length,
+            byte_order,
+            unsigned,
+            factor,
+            offset,
+            min,
+            max,
+            unit,
+            receivers,
+        ) = self.extract_fields()?;
+        Signal::new(
+            &name,
+            start_bit,
+            length,
+            byte_order,
+            unsigned,
+            factor,
+            offset,
+            min,
+            max,
+            unit.as_deref(),
+            receivers,
+        )
+    }
+}

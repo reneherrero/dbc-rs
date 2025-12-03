@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSING.md)
 [![CI](https://github.com/reneherrero/dbc-rs/workflows/dbc-cli%20CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions/workflows/dbc-cli.yml)
 
-Command-line interface for DBC (CAN Database) file manipulation.
+Aims to be a `candump` replacement in Rust with scripting (Python FFI)
 
 ## Installation
 
