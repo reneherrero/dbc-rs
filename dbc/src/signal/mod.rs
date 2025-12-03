@@ -469,10 +469,11 @@ impl Signal {
         result.push_str(&self.length().to_string());
         result.push('@');
 
-        // Byte order: 0 for LittleEndian, 1 for BigEndian
+        // Byte order: 0 for BigEndian (Motorola), 1 for LittleEndian (Intel)
+        // Per Vector DBC spec v1.0.1: "Big endian is stored as '0', little endian is stored as '1'"
         match self.byte_order() {
-            ByteOrder::LittleEndian => result.push('0'),
-            ByteOrder::BigEndian => result.push('1'),
+            ByteOrder::BigEndian => result.push('0'), // @0 = Big Endian (Motorola)
+            ByteOrder::LittleEndian => result.push('1'), // @1 = Little Endian (Intel)
         }
 
         // Sign: + for unsigned, - for signed
@@ -969,7 +970,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             signal1.to_dbc_string(),
-            " SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *"
+            " SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *"
         );
 
         // Test with Nodes receiver
@@ -989,7 +990,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             signal2.to_dbc_string(),
-            " SG_ Temperature : 16|8@0- (1,-40) [-40|215] \"°C\" TCM BCM"
+            " SG_ Temperature : 16|8@1- (1,-40) [-40|215] \"°C\" TCM BCM"
         );
 
         // Test with None receiver and empty unit
@@ -1009,7 +1010,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             signal3.to_dbc_string(),
-            " SG_ Flag : 24|1@1+ (1,0) [0|1] \"\""
+            " SG_ Flag : 24|1@0+ (1,0) [0|1] \"\""
         );
     }
 

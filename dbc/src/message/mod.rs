@@ -706,8 +706,8 @@ mod tests {
         let dbc_str = message.to_dbc_string_with_signals();
 
         assert!(dbc_str.contains("BO_ 256 EngineData : 8 ECM"));
-        assert!(dbc_str.contains("SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *"));
-        assert!(dbc_str.contains("SG_ Temperature : 16|8@0- (1,-40) [-40|215] \"°C\""));
+        assert!(dbc_str.contains("SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *")); // BigEndian = @0
+        assert!(dbc_str.contains("SG_ Temperature : 16|8@1- (1,-40) [-40|215] \"°C\"")); // LittleEndian = @1
     }
 
     #[test]

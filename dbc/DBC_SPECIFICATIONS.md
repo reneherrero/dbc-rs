@@ -106,7 +106,7 @@ DBC files that focus solely on CAN communication without additional data for sys
 ## Version
 
 ```bnf
-version = ['VERSION' '"' { CANdb_version_string } '"' ] ;
+version = ['VERSION' '"' char_string '"' ] ;
 ```
 
 **Notes:**
@@ -117,7 +117,7 @@ version = ['VERSION' '"' { CANdb_version_string } '"' ] ;
 ## New Symbols
 
 ```bnf
-new_symbols = [ '_NS' ':' ['CM_'] ['BA_DEF_'] ['BA_'] ['VAL_']
+new_symbols = [ 'NS_' ':' ['CM_'] ['BA_DEF_'] ['BA_'] ['VAL_']
 ['CAT_DEF_'] ['CAT_'] ['FILTER'] ['BA_DEF_DEF_'] ['EV_DATA_']
 ['ENVVAR_DATA_'] ['SGTYPE_'] ['SGTYPE_VAL_'] ['BA_DEF_SGTYPE_']
 ['BA_SGTYPE_'] ['SIG_TYPE_REF_'] ['VAL_TABLE_'] ['SIG_GROUP_']
@@ -212,7 +212,7 @@ A pseudo-message named `VECTOR__INDEPENDENT_SIG_MSG` may exist in DBC files. Thi
 The message's signal section lists all signals contained within the message, including their bit positions in the message's data field and their properties.
 
 ```bnf
-signal = 'SG_' signal_name multiplexer_indicator ':' start_bit '|' signal_size '@' byte_order value_type '(' factor ',' offset ')' '[' minimum '|' maximum ']' unit receiver {',' receiver} ;
+signal = 'SG_' signal_name multiplexer_indicator ':' start_bit '|' signal_size '@' byte_order value_type '(' factor ',' offset ')' '[' minimum '|' maximum ']' unit receivers ;
 signal_name = DBC_identifier ;
 ```
 
@@ -624,11 +624,11 @@ attribute_value_for_object = 'BA_' attribute_name (attribute_value | 'BU_' node_
 
 # Extended Multiplexing
 
-Extended multiplexing enables defining multiple multiplexer switches within a single message. It also allows using multiple multiplexer switch values for each multiplexed signal.
+Extended multiplexing enables defining multiple multiplexor switches within a single message. It also allows using multiple multiplexor switch values for each multiplexed signal.
 
 The extended multiplexing section contains multiplexed signals for which following conditions were fulfilled:
 
-- The multiplexed signal is multiplexed by more than one multiplexer switch value
+- The multiplexed signal is multiplexed by more than one multiplexor switch value
 - The multiplexed signal belongs to a message which contains more than one multiplexor switch
 
 ```bnf
