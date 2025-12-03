@@ -1,4 +1,6 @@
 #[cfg(feature = "std")]
+use crate::Signal;
+#[cfg(feature = "std")]
 use crate::{Error, Result, error::messages};
 use crate::{Message, Nodes, Version};
 #[allow(unused_imports)] // Used by Dbc::parse, which is part of the public API
@@ -103,66 +105,169 @@ impl Dbc {
         // Initialize the parser with the input data as bytes
         let mut parser = Parser::new(data.as_bytes())?;
 
-        // Find keywords, skip certain keywords, handle VERSION and BU_
+        // Find keywords, skip certain keywords, handle VERSION, BU_, BO_, and SG_
         let mut version: Option<Version> = None;
+        let mut nodes: Option<Nodes> = None;
 
-        // Use static strings from lib.rs for matching
+        // Use static strings for matching
         const CM_: &str = "CM_";
         const NS_: &str = "NS_";
         const BS_: &str = "BS_";
+        const BO_: &str = "BO_";
+        const SG_: &str = "SG_";
+        const VAL_TABLE_: &str = "VAL_TABLE_";
+        const BA_DEF_: &str = "BA_DEF_";
+        const BA_DEF_DEF_: &str = "BA_DEF_DEF_";
+        const BA_: &str = "BA_";
+        const VAL_: &str = "VAL_";
+        const SIG_GROUP_: &str = "SIG_GROUP_";
+        const SIG_VALTYPE_: &str = "SIG_VALTYPE_";
+        const EV_: &str = "EV_";
+        const BO_TX_BU_: &str = "BO_TX_BU_";
+
+        #[cfg(feature = "std")]
+        let mut messages: Vec<Message> = Vec::new();
 
         loop {
-            let keyword = parser.find_next_keyword()?;
+            let keyword_result = parser.find_next_keyword();
+
+            let keyword = match keyword_result {
+                Ok(kw) => kw,
+                Err(ParseError::UnexpectedEof) => {
+                    // End of file, break and return
+                    break;
+                }
+                Err(e) => return Err(e),
+            };
 
             match keyword {
-                CM_ => {
-                    // TODO: Implement CM_ (comment) parsing
-                    // Skip CM_ lines - advance to end of line
+                CM_ | NS_ | BS_ | VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | VAL_ | SIG_GROUP_
+                | SIG_VALTYPE_ | EV_ | BO_TX_BU_ => {
+                    // Skip unsupported sections - advance to end of line
                     parser.skip_to_end_of_line();
-                    // Continue to next keyword
                     continue;
                 }
-                NS_ => {
-                    // TODO: Implement NS_ (new symbol) parsing
-                    // Skip NS_ lines - advance to end of line
-                    parser.skip_to_end_of_line();
-                    // Continue to next keyword
-                    continue;
-                }
-                BS_ => {
-                    // TODO: Implement BS_ (bit timing) parsing
-                    // Skip BS_ lines - advance to end of line
-                    parser.skip_to_end_of_line();
-                    // Continue to next keyword
-                    continue;
-                }
-                // TODO: Implement CS_ parsing when encountered
                 Version::VERSION => {
                     // Found VERSION, parse it
                     version = Some(Version::parse(&mut parser)?);
-                    // Continue to find next keyword (BU_)
                     continue;
                 }
                 Nodes::BU_ => {
-                    // Parse nodes and return
-                    let nodes = Nodes::parse(&mut parser)?;
-                    return Ok(Self {
-                        version,
-                        nodes,
-                        #[cfg(feature = "std")]
-                        messages: Vec::new(),
-                        #[cfg(not(feature = "std"))]
-                        messages: &[],
-                    });
+                    // Parse nodes
+                    nodes = Some(Nodes::parse(&mut parser)?);
+                    continue;
+                }
+                BO_ => {
+                    // Parse message and its signals
+                    #[cfg(feature = "std")]
+                    {
+                        // Parse the BO_ line to get message info
+                        // find_next_keyword already consumed "BO_", so we can parse directly
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse message ID
+                        let id = parser
+                            .parse_u32()
+                            .map_err(|_| ParseError::Version(messages::MESSAGE_INVALID_ID))?;
+
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse message name
+                        let name = parser
+                            .parse_identifier()
+                            .map_err(|_| ParseError::Version(messages::MESSAGE_NAME_EMPTY))?;
+
+                        parser.skip_newlines_and_spaces();
+                        parser.expect(b":").map_err(|_| ParseError::Expected("Expected colon"))?;
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse DLC
+                        let dlc = parser
+                            .parse_u8()
+                            .map_err(|_| ParseError::Version(messages::MESSAGE_INVALID_DLC))?;
+
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse sender
+                        let sender = parser
+                            .parse_identifier()
+                            .map_err(|_| ParseError::Version(messages::MESSAGE_SENDER_EMPTY))?;
+
+                        // Skip to end of line (there may be whitespace after sender)
+                        parser.skip_to_end_of_line();
+
+                        // Now parse all signals that follow (SG_ lines)
+                        let mut signals: Vec<Signal> = Vec::new();
+                        loop {
+                            // Skip whitespace and newlines
+                            parser.skip_newlines_and_spaces();
+
+                            // Check if we're at EOF
+                            if parser.remaining().is_empty() {
+                                break;
+                            }
+
+                            // Check if next input starts with "SG_" (peek without consuming)
+                            let remaining = parser.remaining();
+                            if remaining.starts_with(b"SG_") && remaining.len() > 3 {
+                                let next_byte = remaining[3];
+                                if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
+                                    // It's a signal line, parse it
+                                    // find_next_keyword will consume "SG_" and advance past it
+                                    let _kw = parser.find_next_keyword().map_err(|e| match e {
+                                        ParseError::Expected(_) => {
+                                            ParseError::Expected("Expected SG_ keyword")
+                                        }
+                                        _ => e,
+                                    })?; // This will be "SG_"
+                                    // Now parse the signal (Signal::parse handles the fact that "SG_" was already consumed)
+                                    let signal = Signal::parse(&mut parser)?;
+                                    signals.push(signal);
+                                    continue;
+                                }
+                            }
+
+                            // Not a signal, restore position and break
+                            // Note: We can't restore position directly, but skip_newlines_and_spaces() already advanced us
+                            // So we need to break and let the outer loop handle the next keyword
+                            break;
+                        }
+
+                        // Validate and create message with signals
+                        // Use Message::new which handles validation
+                        let message = Message::new(id, name, dlc, sender, signals)
+                            .map_err(|_| ParseError::Version(messages::MESSAGE_NAME_EMPTY))?;
+                        messages.push(message);
+                    }
+                    continue;
+                }
+                SG_ => {
+                    // Standalone signal (shouldn't happen in valid DBC, but handle gracefully)
+                    #[cfg(feature = "std")]
+                    {
+                        let _ = Signal::parse(&mut parser)?;
+                    }
+                    continue;
                 }
                 _ => {
-                    // Any other keyword should fail
-                    return Err(ParseError::Expected(
-                        "Expected VERSION, BU_, CM_, NS_, or BS_ keyword",
-                    ));
+                    // Unknown keyword, skip line
+                    parser.skip_to_end_of_line();
+                    continue;
                 }
             }
         }
+
+        // Ensure we have nodes (required by DBC spec)
+        let nodes = nodes.ok_or(ParseError::Version(messages::DBC_NODES_REQUIRED))?;
+
+        Ok(Self {
+            version,
+            nodes,
+            #[cfg(feature = "std")]
+            messages,
+            #[cfg(not(feature = "std"))]
+            messages: &[],
+        })
 
         // The loop above should always return, so this code is unreachable
         // but kept for reference of the old implementation

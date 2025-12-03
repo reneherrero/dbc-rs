@@ -23,6 +23,37 @@ pub struct Version<'a> {
     version: &'a str,
 }
 
+// Shared parsing logic
+fn parse_version_str<'a>(parser: &mut Parser<'a>) -> ParseResult<&'a str> {
+    const VERSION_KEYWORD: &str = "VERSION";
+    // Note: When called from Dbc::parse, find_next_keyword already consumed "VERSION"
+    // So we try to expect "VERSION" first, and if that fails, we're already past it
+    if parser.expect(VERSION_KEYWORD.as_bytes()).is_ok() {
+        // Successfully consumed "VERSION", now skip whitespace and expect quote
+        parser
+            .skip_whitespace()?
+            .expect(b"\"")
+            .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
+    } else {
+        // Already past "VERSION" from find_next_keyword
+        // find_next_keyword advances to right after "VERSION", which should be at whitespace or quote
+        // Skip whitespace if present, then expect quote
+        let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
+        parser
+            .expect(b"\"")
+            .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
+    }
+
+    // Read version content until closing quote (allow any printable characters)
+    // Use a reasonable max length for version strings (e.g., 255 characters)
+    // Note: take_until_quote already advances past the closing quote
+    const MAX_VERSION_LENGTH: u16 = 255;
+    let version_bytes = parser.take_until_quote(false, MAX_VERSION_LENGTH)?;
+
+    // Convert bytes to string slice using the parser's input
+    core::str::from_utf8(version_bytes).map_err(|_| ParseError::Version(lang::VERSION_INVALID))
+}
+
 // Implementation for std (owned String)
 #[cfg(feature = "std")]
 impl Version {
@@ -34,19 +65,7 @@ impl Version {
     }
 
     pub(crate) fn parse<'a>(parser: &mut Parser<'a>) -> ParseResult<Self> {
-        // Expect "VERSION" keyword, skip whitespace, expect opening quote
-        parser.expect(Self::VERSION.as_bytes())?.skip_whitespace()?.expect(b"\"")?;
-
-        // Read version content until closing quote (allow any printable characters)
-        // Use a reasonable max length for version strings (e.g., 255 characters)
-        // Note: take_until_quote already advances past the closing quote
-        const MAX_VERSION_LENGTH: u16 = 255;
-        let version_bytes = parser.take_until_quote(false, MAX_VERSION_LENGTH)?;
-
-        // Convert bytes to string slice using the parser's input
-        let version_str = core::str::from_utf8(version_bytes)
-            .map_err(|_| ParseError::Version(lang::VERSION_INVALID))?;
-
+        let version_str = parse_version_str(parser)?;
         // Convert to owned String for std builds
         Ok(Version {
             version: version_str.to_string(),
@@ -82,19 +101,7 @@ impl<'a> Version<'a> {
     #[allow(dead_code)] // Used in Dbc::parse
     #[must_use]
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        // Expect "VERSION" keyword, skip whitespace, expect opening quote
-        parser.expect(Self::VERSION.as_bytes())?.skip_whitespace()?.expect(b"\"")?;
-
-        // Read version content until closing quote (allow any printable characters)
-        // Use a reasonable max length for version strings (e.g., 255 characters)
-        // Note: take_until_quote already advances past the closing quote
-        const MAX_VERSION_LENGTH: u16 = 255;
-        let version_bytes = parser.take_until_quote(false, MAX_VERSION_LENGTH)?;
-
-        // Convert bytes to string slice using the parser's input
-        let version_str = core::str::from_utf8(version_bytes)
-            .map_err(|_| ParseError::Version(lang::VERSION_INVALID))?;
-
+        let version_str = parse_version_str(parser)?;
         Ok(Version {
             version: version_str,
         })

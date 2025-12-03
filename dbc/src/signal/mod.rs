@@ -140,11 +140,13 @@ impl Signal {
             return Err(ParseError::Expected("Expected byte order"));
         }
         let bo_byte = remaining[0];
-        parser.expect(&[bo_byte])?;
+        parser
+            .expect(&[bo_byte])
+            .map_err(|_| ParseError::Expected("Expected byte order digit"))?;
 
         let byte_order = match bo_byte {
-            b'0' => ByteOrder::LittleEndian,
-            b'1' => ByteOrder::BigEndian,
+            b'0' => ByteOrder::BigEndian,    // 0 = Motorola (big-endian)
+            b'1' => ByteOrder::LittleEndian, // 1 = Intel (little-endian)
             _ => return Err(ParseError::InvalidChar(bo_byte as char)),
         };
 
@@ -154,7 +156,9 @@ impl Signal {
             return Err(ParseError::Expected("Expected sign"));
         }
         let sign_byte = remaining[0];
-        parser.expect(&[sign_byte])?;
+        parser
+            .expect(&[sign_byte])
+            .map_err(|_| ParseError::Expected("Expected sign (+ or -)"))?;
 
         let unsigned = match sign_byte {
             b'+' => true,
@@ -173,7 +177,7 @@ impl Signal {
             .map_err(|_| ParseError::Expected("Expected opening parenthesis"))?;
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse factor (may be empty, default to 0.0)
         let factor = if parser.remaining().starts_with(b",") || parser.remaining().starts_with(b")")
@@ -189,7 +193,7 @@ impl Signal {
         parser.expect(b",").map_err(|_| ParseError::Expected("Expected comma"))?;
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse offset (may be empty, default to 0.0)
         let offset = if parser.remaining().starts_with(b")") {
@@ -201,7 +205,7 @@ impl Signal {
         };
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Expect closing parenthesis
         parser
@@ -219,7 +223,7 @@ impl Signal {
             .map_err(|_| ParseError::Expected("Expected opening bracket"))?;
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse min (may be empty, default to 0.0)
         let min = if parser.remaining().starts_with(b"|") || parser.remaining().starts_with(b"]") {
@@ -234,7 +238,7 @@ impl Signal {
         parser.expect(b"|").map_err(|_| ParseError::Expected("Expected pipe"))?;
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse max (may be empty, default to 0.0)
         let max = if parser.remaining().starts_with(b"]") {
@@ -246,7 +250,7 @@ impl Signal {
         };
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Expect closing bracket
         parser
@@ -295,53 +299,76 @@ impl Signal {
 
     #[allow(dead_code)] // Reserved for future message parsing implementation
     pub(crate) fn parse<'b>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        // Expect "SG_" prefix (should already be consumed by find_next_keyword, but handle both cases)
-        if parser.expect(b"SG_").is_err() {
-            // Already past "SG_" from find_next_keyword, continue
+        // When called from Dbc::parse, find_next_keyword already consumed "SG_" and advanced past it
+        // So the parser is now at the space after "SG_". We just need to skip that whitespace.
+        // But if "SG_" wasn't consumed (standalone call), we need to expect it first.
+        // Check if we need to consume "SG_" by looking at the remaining input
+        let remaining = parser.remaining();
+        if remaining.starts_with(b"SG_") {
+            // "SG_" is still there, consume it
+            parser.expect(b"SG_").map_err(|_| ParseError::Expected("Expected SG_"))?;
         }
+        // Otherwise, we're already past "SG_" from find_next_keyword
 
-        // Skip whitespace
-        let _ = parser.skip_whitespace();
+        // Skip whitespace after "SG_"
+        parser.skip_newlines_and_spaces();
 
         // Parse signal name (identifier)
         let name = parser
             .parse_identifier()
             .map_err(|_| ParseError::Version(messages::SIGNAL_NAME_EMPTY))?;
 
-        // Skip whitespace (optional before colon)
-        let _ = parser.skip_whitespace();
+        // Skip whitespace (optional before colon) - handle multiplexer indicator
+        // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
+        // For now, we just skip whitespace and any potential multiplexer indicator
+        parser.skip_newlines_and_spaces();
+
+        // Skip potential multiplexer indicator (m followed by number, or M)
+        // For simplicity, skip any 'm' or 'M' followed by digits or space
+        let remaining = parser.remaining();
+        if !remaining.is_empty() && (remaining[0] == b'm' || remaining[0] == b'M') {
+            // Skip 'm' or 'M'
+            parser.expect(&[remaining[0]]).ok();
+            // Skip any digits that follow
+            while !parser.remaining().is_empty() && parser.remaining()[0].is_ascii_digit() {
+                parser.expect(&[parser.remaining()[0]]).ok();
+            }
+            // Skip whitespace after multiplexer indicator
+            parser.skip_newlines_and_spaces();
+        }
 
         // Expect colon
         parser.expect(b":").map_err(|_| ParseError::Expected("Expected colon"))?;
 
         // Skip whitespace after colon
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse position: start_bit|length@byteOrderSign
         let (start_bit, length, byte_order, unsigned) = Self::parse_position(parser)?;
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse factor and offset: (factor,offset)
         let (factor, offset) = Self::parse_factor_offset(parser)?;
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse range: [min|max]
         let (min, max) = Self::parse_range(parser)?;
 
         // Skip whitespace
-        let _ = parser.skip_whitespace();
+        parser.skip_newlines_and_spaces();
 
         // Parse unit: "unit" or ""
         let unit = Self::parse_unit(parser)?;
 
-        // Skip whitespace
-        let _ = parser.skip_whitespace();
+        // Skip whitespace (but not newlines) before parsing receivers
+        // Newlines indicate end of signal line, so we need to preserve them for Receivers::parse
+        let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
 
-        // Parse receivers
+        // Parse receivers (may be empty/None if at end of line)
         let receivers = Receivers::parse(parser)?;
 
         // Validate the parsed signal using the same validation as new()

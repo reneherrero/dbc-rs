@@ -6,9 +6,10 @@ mod std {
     use dbc_rs::Dbc;
 
     #[test]
-    #[ignore]
     fn test_parse_simple_dbc() {
-        let dbc = Dbc::from_file("tests/data/simple.dbc").expect("Failed to parse simple.dbc");
+        let content =
+            std::fs::read_to_string("tests/data/simple.dbc").expect("Failed to read simple.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse simple.dbc");
 
         // Verify version
         assert_eq!(
@@ -44,10 +45,10 @@ mod std {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_multiplexed_dbc() {
-        let dbc =
-            Dbc::from_file("tests/data/multiplexed.dbc").expect("Failed to parse multiplexed.dbc");
+        let content = std::fs::read_to_string("tests/data/multiplexed.dbc")
+            .expect("Failed to read multiplexed.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse multiplexed.dbc");
 
         // Verify version
         assert_eq!(
@@ -85,9 +86,10 @@ mod std {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_minimal_dbc() {
-        let dbc = Dbc::from_file("tests/data/minimal.dbc").expect("Failed to parse minimal.dbc");
+        let content =
+            std::fs::read_to_string("tests/data/minimal.dbc").expect("Failed to read minimal.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse minimal.dbc");
 
         // Verify version (just major, no minor/patch)
         assert_eq!(dbc.version().map(|v| v.to_string()), Some("1".to_string()));
@@ -111,10 +113,10 @@ mod std {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_extended_ids_dbc() {
-        let dbc = Dbc::from_file("tests/data/extended_ids.dbc")
-            .expect("Failed to parse extended_ids.dbc");
+        let content = std::fs::read_to_string("tests/data/extended_ids.dbc")
+            .expect("Failed to read extended_ids.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse extended_ids.dbc");
 
         // Verify version
         assert_eq!(
@@ -144,10 +146,10 @@ mod std {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_broadcast_signals_dbc() {
-        let dbc = Dbc::from_file("tests/data/broadcast_signals.dbc")
-            .expect("Failed to parse broadcast_signals.dbc");
+        let content = std::fs::read_to_string("tests/data/broadcast_signals.dbc")
+            .expect("Failed to read broadcast_signals.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse broadcast_signals.dbc");
 
         // Verify nodes
         assert!(dbc.nodes().contains("BROADCASTER"));
@@ -187,10 +189,11 @@ mod std {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_complete_dbc_file() {
         // Parse the complete.dbc file
-        let dbc = Dbc::from_file("tests/data/complete.dbc").expect("Failed to parse complete.dbc");
+        let content = std::fs::read_to_string("tests/data/complete.dbc")
+            .expect("Failed to read complete.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse complete.dbc");
 
         // Verify basic structure
         assert_eq!(

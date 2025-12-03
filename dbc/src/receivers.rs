@@ -16,67 +16,87 @@ pub enum Receivers<'a> {
     None,
 }
 
+// Shared parsing logic
+fn parse_receivers_str<'a>(parser: &mut Parser<'a>) -> ParseResult<Option<Vec<&'a str>>> {
+    const MAX_RECEIVER_NODES: usize = 64;
+
+    // Skip any leading spaces (but not newlines - newlines indicate end of line)
+    let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
+
+    // Check if we're at EOF or newline (end of signal line)
+    let remaining = parser.remaining();
+    if remaining.is_empty() {
+        return Ok(None);
+    }
+
+    // Check if we're at a newline (end of signal line)
+    #[cfg(feature = "std")]
+    if remaining.starts_with(b"\n") || remaining.starts_with(b"\r") {
+        return Ok(None);
+    }
+
+    // Check if next character is '*'
+    if remaining.starts_with(b"*") {
+        parser
+            .expect(b"*")
+            .map_err(|_| ParseError::Expected("Expected broadcast marker *"))?;
+        return Ok(Some(vec![])); // Special marker for broadcast
+    }
+
+    // Parse space-separated identifiers
+    use alloc::vec::Vec;
+    let mut nodes: Vec<&str> = Vec::new();
+
+    loop {
+        // Skip spaces (but not newlines)
+        let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
+
+        // Check if we're at EOF or newline (end of signal line)
+        let remaining = parser.remaining();
+        if remaining.is_empty() {
+            break;
+        }
+
+        // Check if we're at a newline (end of signal line) - only for std
+        #[cfg(feature = "std")]
+        if remaining.starts_with(b"\n") || remaining.starts_with(b"\r") {
+            break;
+        }
+
+        // Try to parse an identifier
+        match parser.parse_identifier() {
+            Ok(node) => {
+                nodes.push(node);
+                // Check for too many receiver nodes (DoS protection)
+                if nodes.len() > MAX_RECEIVER_NODES {
+                    return Err(ParseError::Version(messages::SIGNAL_RECEIVERS_TOO_MANY));
+                }
+            }
+            Err(_) => {
+                // No more identifiers, break
+                break;
+            }
+        }
+    }
+
+    if nodes.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(nodes))
+    }
+}
+
 #[cfg(feature = "std")]
 impl Receivers {
     pub(crate) fn parse<'b>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        const MAX_RECEIVER_NODES: usize = 64;
-
-        // Skip any leading whitespace
-        let _ = parser.skip_whitespace();
-
-        // Check if we're at EOF
-        if parser.remaining().is_empty() {
-            return Ok(Receivers::None);
-        }
-
-        // Check if next character is '*'
-        let remaining = parser.remaining();
-        if remaining.starts_with(b"*") {
-            parser.expect(b"*")?;
-            return Ok(Receivers::Broadcast);
-        }
-
-        // Parse space-separated identifiers
-        use alloc::vec::Vec;
-        let mut nodes: Vec<&str> = Vec::new();
-
-        loop {
-            // Skip whitespace
-            let _ = parser.skip_whitespace();
-
-            // Check if we're at EOF or end of line
-            if parser.remaining().is_empty() {
-                break;
+        match parse_receivers_str(parser)? {
+            None => Ok(Receivers::None),
+            Some(nodes) if nodes.is_empty() => Ok(Receivers::Broadcast),
+            Some(nodes) => {
+                // Convert to owned Vec<String>
+                let nodes: Vec<String> = nodes.into_iter().map(|s| s.to_string()).collect();
+                Ok(Receivers::Nodes(nodes))
             }
-
-            // Check if we're at a newline (end of signal line)
-            if parser.remaining().starts_with(b"\n") || parser.remaining().starts_with(b"\r") {
-                break;
-            }
-
-            // Try to parse an identifier
-            match parser.parse_identifier() {
-                Ok(node) => {
-                    nodes.push(node);
-                    // Check for too many receiver nodes (DoS protection)
-                    if nodes.len() > MAX_RECEIVER_NODES {
-                        return Err(ParseError::Version(messages::SIGNAL_RECEIVERS_TOO_MANY));
-                    }
-                }
-                Err(_) => {
-                    // No more identifiers, break
-                    break;
-                }
-            }
-        }
-
-        if nodes.is_empty() {
-            Ok(Receivers::None)
-        } else {
-            // Convert to owned Vec<String>
-            let nodes: Vec<String> = nodes.into_iter().map(|s| s.to_string()).collect();
-
-            Ok(Receivers::Nodes(nodes))
         }
     }
 }
@@ -85,61 +105,17 @@ impl Receivers {
 impl<'a> Receivers<'a> {
     #[allow(dead_code)] // Used by Signal::parse, which is reserved for future use
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        const MAX_RECEIVER_NODES: usize = 64;
-
-        // Skip any leading whitespace
-        let _ = parser.skip_whitespace();
-
-        // Check if we're at EOF
-        if parser.remaining().is_empty() {
-            return Ok(Receivers::None);
-        }
-
-        // Check if next character is '*'
-        let remaining = parser.remaining();
-        if remaining.starts_with(b"*") {
-            parser.expect(b"*")?;
-            return Ok(Receivers::Broadcast);
-        }
-
-        // Parse space-separated identifiers
-        use alloc::vec::Vec;
-        let mut nodes: Vec<&str> = Vec::new();
-
-        loop {
-            // Skip whitespace
-            let _ = parser.skip_whitespace();
-
-            // Check if we're at EOF or end of line
-            if parser.remaining().is_empty() {
-                break;
+        match parse_receivers_str(parser)? {
+            None => Ok(Receivers::None),
+            Some(nodes) if nodes.is_empty() => Ok(Receivers::Broadcast),
+            Some(nodes) => {
+                // For no_std, we need to leak the Vec to get a static slice
+                // This is safe because the parser's input lifetime ensures the data is valid
+                use alloc::boxed::Box;
+                let boxed: Box<[&'b str]> = nodes.into_boxed_slice();
+                let leaked = Box::leak(boxed);
+                Ok(Receivers::Nodes(leaked))
             }
-
-            // Try to parse an identifier
-            match parser.parse_identifier() {
-                Ok(node) => {
-                    nodes.push(node);
-                    // Check for too many receiver nodes (DoS protection)
-                    if nodes.len() > MAX_RECEIVER_NODES {
-                        return Err(ParseError::Version(messages::SIGNAL_RECEIVERS_TOO_MANY));
-                    }
-                }
-                Err(_) => {
-                    // No more identifiers, break
-                    break;
-                }
-            }
-        }
-
-        if nodes.is_empty() {
-            Ok(Receivers::None)
-        } else {
-            // For no_std, we need to leak the Vec to get a static slice
-            // This is safe because the parser's input lifetime ensures the data is valid
-            use alloc::boxed::Box;
-            let boxed: Box<[&'b str]> = nodes.into_boxed_slice();
-            let leaked = Box::leak(boxed);
-            Ok(Receivers::Nodes(leaked))
         }
     }
 }
