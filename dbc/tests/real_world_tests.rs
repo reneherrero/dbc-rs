@@ -240,21 +240,8 @@ fn test_parse_file(path: &Path, stats: &mut TestStats) {
         .unwrap_or_else(|| ".".to_string());
     let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
 
-    let content = match fs::read_to_string(path) {
-        Ok(content) => content,
-        Err(e) => {
-            stats.parse_failed += 1;
-            stats
-                .parse_errors
-                .entry(folder_path)
-                .or_default()
-                .push((filename, format!("Failed to read file: {}", e)));
-            return;
-        }
-    };
-
-    // Try to parse
-    match Dbc::parse(&content) {
+    // Try to parse directly from file
+    match Dbc::from_file(path) {
         Ok(dbc) => {
             stats.parsed_successfully += 1;
             stats.total_messages += dbc.messages().len();

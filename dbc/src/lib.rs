@@ -1,56 +1,3 @@
-//! # dbc-rs
-//!
-//! A clean, zero-dependency DBC (CAN Database) file parser and editor for Rust.
-//!
-//! This library provides a complete solution for parsing, validating, and writing DBC files
-//! in both `std` and `no_std` environments. It supports the core DBC file format features
-//! including messages, signals, nodes, and version information.
-//!
-//! ## Features
-//!
-//! - **Zero dependencies** - Pure Rust implementation
-//! - **`no_std` + alloc support** - Works on embedded targets without the standard library
-//! - **Full parsing and writing** - Parse DBC files and save them back
-//! - **Comprehensive validation** - CAN ID range validation, signal overlap detection, and more
-//! - **Internationalization** - Error messages in multiple languages (build-time selection)
-//!
-//! ## Quick Start
-//!
-//! ```rust
-//! use dbc_rs::Dbc;
-//!
-//! let content = "VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"";
-//! let dbc = Dbc::parse(content)?;
-//!
-//! println!("Version: {}", dbc.version().to_string());
-//! println!("Messages: {}", dbc.messages().len());
-//! # Ok::<(), dbc_rs::Error>(())
-//! ```
-//!
-//! ## Core Types
-//!
-//! - [`Dbc`] - The main structure representing a complete DBC file
-//! - [`Message`] - Represents a CAN message with ID, name, DLC, sender, and signals
-//! - [`Signal`] - Represents a signal within a message with scaling, offset, min/max, etc.
-//! - [`Nodes`] - Represents the list of ECUs/nodes on the CAN bus
-//! - [`Version`] - Represents the DBC file version (major.minor.patch)
-//! - [`Error`] - Error type for parsing and validation failures
-//!
-//! ## Module Structure
-//!
-//! The library is organized into modules:
-//! - Main DBC file structure and parsing logic (see [`Dbc`])
-//! - CAN message definitions (see [`Message`])
-//! - Signal definitions with validation (see [`Signal`])
-//! - Node/ECU management (see [`Nodes`])
-//! - Version string parsing and validation (see [`Version`])
-//! - Error types and internationalized error messages (see [`Error`])
-//!
-//! ## See Also
-//!
-//! - [README.md](../README.md) - Comprehensive documentation and examples
-//! - [Examples](../examples/) - Usage examples
-
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
@@ -60,18 +7,78 @@ mod dbc;
 mod error;
 mod message;
 mod nodes;
+mod parser;
 mod receivers;
 mod signal;
 mod version;
 
 pub use byte_order::ByteOrder;
-pub use dbc::Dbc;
-pub use error::{Error, Result};
-pub use message::Message;
-pub use nodes::Nodes;
-pub use receivers::Receivers;
-pub use signal::Signal;
-pub use version::Version;
 
-/// Library version
+pub use dbc::Dbc;
+#[cfg(feature = "std")]
+pub use dbc::DbcBuilder;
+
+pub use error::{Error, Result};
+
+pub use message::Message;
+#[cfg(feature = "std")]
+pub use message::MessageBuilder;
+
+pub use nodes::Nodes;
+#[cfg(feature = "std")]
+pub use nodes::NodesBuilder;
+
+pub(crate) use parser::Parser;
+
+pub use receivers::Receivers;
+
+pub use signal::Signal;
+#[cfg(feature = "std")]
+pub use signal::SignalBuilder;
+
+pub use version::Version;
+#[cfg(feature = "std")]
+pub use version::VersionBuilder;
+
+#[cfg(feature = "std")]
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
+const DBC_KEYWORDS: &[&str] = &[
+    "VECTOR__INDEPENDENT_SIG_MSG",
+    "VECTOR__XXX",
+    "BA_DEF_DEF_REL_",
+    "BA_DEF_SGTYPE_",
+    "SIGTYPE_VALTYPE_",
+    "ENVVAR_DATA_",
+    "SIG_TYPE_REF_",
+    "NS_DESC_",
+    "BA_DEF_REL_",
+    "BA_SGTYPE_",
+    "SGTYPE_VAL_",
+    "VAL_TABLE_",
+    "SIG_GROUP_",
+    "SIG_VALTYPE_",
+    "BO_TX_BU_",
+    "BU_SG_REL_",
+    "BU_EV_REL_",
+    "BU_BO_REL_",
+    "SG_MUL_VAL_",
+    "BA_DEF_DEF_",
+    "BA_DEF_",
+    "BA_REL_",
+    "CAT_DEF_",
+    "EV_DATA_",
+    "BA_",
+    "VAL_",
+    "CM_",
+    "CAT_",
+    "NS_",
+    "BS_",
+    "BU_",
+    "BO_",
+    "SG_",
+    "EV_",
+    "VERSION",
+    "FILTER",
+];

@@ -83,7 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive API Documentation**: All public APIs fully documented
 - **Module-level Documentation**: Detailed library overview
 - **Code Examples**: Examples for common use cases
-- **DBC Format Specification**: Detailed format documentation (`DBC_FORMAT_SPEC.md`)
+- **DBC Format Specification**: Detailed format documentation (`DBC_SPECIFICATIONS.md`)
 - **Contributing Guide**: Development guidelines (`CONTRIBUTING.md`)
 - **Usage Patterns**: Best practices and anti-patterns documented
 
