@@ -2,8 +2,6 @@ use crate::{
     Parser,
     error::{ParseError, ParseResult, lang},
 };
-#[cfg(not(feature = "std"))]
-use core::prelude::rust_2024::derive;
 
 #[cfg(feature = "std")]
 mod version_builder;
@@ -11,116 +9,76 @@ mod version_builder;
 #[cfg(feature = "std")]
 pub use version_builder::VersionBuilder;
 
-#[cfg(feature = "std")]
-#[derive(Debug, Clone)]
-pub struct Version {
-    version: String,
-}
-
-#[cfg(not(feature = "std"))]
 #[derive(Debug, Clone)]
 pub struct Version<'a> {
     version: &'a str,
 }
 
-// Shared parsing logic
-fn parse_version_str<'a>(parser: &mut Parser<'a>) -> ParseResult<&'a str> {
-    const VERSION_KEYWORD: &str = "VERSION";
-    // Note: When called from Dbc::parse, find_next_keyword already consumed "VERSION"
-    // So we try to expect "VERSION" first, and if that fails, we're already past it
-    if parser.expect(VERSION_KEYWORD.as_bytes()).is_ok() {
-        // Successfully consumed "VERSION", now skip whitespace and expect quote
-        parser
-            .skip_whitespace()?
-            .expect(b"\"")
-            .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
-    } else {
-        // Already past "VERSION" from find_next_keyword
-        // find_next_keyword advances to right after "VERSION", which should be at whitespace or quote
-        // Skip whitespace if present, then expect quote
-        let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
-        parser
-            .expect(b"\"")
-            .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
-    }
-
-    // Read version content until closing quote (allow any printable characters)
-    // Use a reasonable max length for version strings (e.g., 255 characters)
-    // Note: take_until_quote already advances past the closing quote
-    const MAX_VERSION_LENGTH: u16 = 255;
-    let version_bytes = parser.take_until_quote(false, MAX_VERSION_LENGTH)?;
-
-    // Convert bytes to string slice using the parser's input
-    core::str::from_utf8(version_bytes).map_err(|_| ParseError::Version(lang::VERSION_INVALID))
-}
-
-// Implementation for std (owned String)
-#[cfg(feature = "std")]
-impl Version {
-    pub(crate) const VERSION: &'static str = "VERSION";
-
-    #[allow(dead_code)] // Reserved for internal use or future API
-    pub(crate) fn new(version: String) -> Self {
+impl<'a> Version<'a> {
+    fn new(version: &'a str) -> Self {
+        // Validation should have been done prior (by builder or parse)
         Self { version }
     }
 
-    pub(crate) fn parse<'a>(parser: &mut Parser<'a>) -> ParseResult<Self> {
-        let version_str = parse_version_str(parser)?;
-        // Convert to owned String for std builds
-        Ok(Version {
-            version: version_str.to_string(),
-        })
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.version
-    }
-
-    #[must_use]
-    #[cfg(feature = "std")]
-    pub fn to_dbc_string(&self) -> String {
-        if self.version.is_empty() {
-            "VERSION \"\"".to_string()
-        } else {
-            format!("VERSION \"{}\"", self.version)
-        }
-    }
-
-    #[cfg(feature = "std")]
-    pub fn as_string(&self) -> String {
-        self.version.clone()
-    }
-}
-
-// Implementation for no_std (borrowed &str)
-#[cfg(not(feature = "std"))]
-impl<'a> Version<'a> {
-    #[allow(dead_code)] // Used in Dbc::parse
-    pub(crate) const VERSION: &'static str = "VERSION";
-
-    #[allow(dead_code)] // Used in Dbc::parse
-    #[must_use]
+    #[must_use = "parse result should be checked"]
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        let version_str = parse_version_str(parser)?;
-        Ok(Version {
-            version: version_str,
-        })
+        use crate::VERSION;
+        // Note: When called from Dbc::parse, find_next_keyword already consumed "VERSION"
+        // So we try to expect "VERSION" first, and if that fails, we're already past it
+        if parser.expect(VERSION.as_bytes()).is_ok() {
+            // Successfully consumed "VERSION", now skip whitespace and expect quote
+            parser
+                .skip_whitespace()?
+                .expect(b"\"")
+                .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
+        } else {
+            // Check if we're at the start of input and input doesn't start with "VERSION"
+            // If so, "VERSION" is required
+            // Note: expect() doesn't change position on failure, so we can check is_at_start() here
+            if parser.is_at_start() && !parser.starts_with(VERSION.as_bytes()) {
+                // Use the constant in the error message (VERSION is "VERSION")
+                return Err(ParseError::Expected("Expected 'VERSION' keyword"));
+            }
+            // Already past "VERSION" from find_next_keyword
+            // find_next_keyword advances to right after "VERSION", which should be at whitespace or quote
+            // Skip whitespace if present, then expect quote
+            let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
+            parser
+                .expect(b"\"")
+                .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
+        }
+
+        // Read version content until closing quote (allow any printable characters)
+        // Use a reasonable max length for version strings (e.g., 255 characters)
+        // Note: take_until_quote already advances past the closing quote
+        const MAX_VERSION_LENGTH: u16 = 255;
+        let version_bytes = parser.take_until_quote(false, MAX_VERSION_LENGTH)?;
+
+        // Convert bytes to string slice using the parser's input
+        let version_str = core::str::from_utf8(version_bytes)
+            .map_err(|_| ParseError::Version(lang::VERSION_INVALID))?;
+
+        // Construct directly (validation already done during parsing)
+        Ok(Version::new(version_str))
     }
 
     pub fn as_str(&self) -> &'a str {
         self.version
     }
-}
 
-// Display implementation
-#[cfg(feature = "std")]
-impl core::fmt::Display for Version {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.version)
+    #[must_use]
+    #[cfg(feature = "std")]
+    pub fn to_dbc_string(&self) -> String {
+        use crate::VERSION;
+        if self.version.is_empty() {
+            format!("{} \"\"", VERSION)
+        } else {
+            format!("{} \"{}\"", VERSION, self.version)
+        }
     }
 }
 
-#[cfg(not(feature = "std"))]
+// Display implementation
 impl<'a> core::fmt::Display for Version<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.version)
@@ -138,7 +96,12 @@ mod tests {
         let line = b"VERSION \"1.0\"";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap();
+        #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1.0");
+        #[cfg(not(feature = "std"))]
+        assert_eq!(version.as_str(), "1.0");
+        #[cfg(not(feature = "std"))]
+        assert_eq!(version.as_str(), "1.0");
     }
 
     #[test]
@@ -203,7 +166,10 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_ok());
         let version = result.unwrap();
+        #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1");
+        #[cfg(not(feature = "std"))]
+        assert_eq!(version.as_str(), "1");
     }
 
     #[test]
@@ -213,7 +179,10 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_ok());
         let version = result.unwrap();
+        #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1.2.3");
+        #[cfg(not(feature = "std"))]
+        assert_eq!(version.as_str(), "1.2.3");
     }
 
     #[test]
@@ -223,7 +192,10 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_ok());
         let version = result.unwrap();
+        #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1.0");
+        #[cfg(not(feature = "std"))]
+        assert_eq!(version.as_str(), "1.0");
     }
 
     #[test]
@@ -231,7 +203,10 @@ mod tests {
         let line = b"VERSION \"\"";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap();
+        #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "");
+        #[cfg(not(feature = "std"))]
+        assert_eq!(version.as_str(), "");
     }
 
     #[test]
@@ -295,6 +270,9 @@ mod tests {
         let line = b"VERSION \"1.0-beta\"";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap();
+        #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1.0-beta");
+        #[cfg(not(feature = "std"))]
+        assert_eq!(version.as_str(), "1.0-beta");
     }
 }

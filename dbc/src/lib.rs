@@ -31,6 +31,8 @@ pub use nodes::NodesBuilder;
 pub(crate) use parser::Parser;
 
 pub use receivers::Receivers;
+#[cfg(feature = "std")]
+pub use receivers::ReceiversBuilder;
 
 pub use signal::Signal;
 #[cfg(feature = "std")]
@@ -41,44 +43,89 @@ pub use version::Version;
 pub use version::VersionBuilder;
 
 #[cfg(feature = "std")]
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// Maximum limits for two-pass parsing (no alloc)
+pub(crate) const MAX_MESSAGES: usize = 10_000;
+pub(crate) const MAX_SIGNALS_PER_MESSAGE: usize = 64;
+pub(crate) const MAX_NODES: usize = 256;
+
+// DBC file format keywords
+pub(crate) const VERSION: &str = "VERSION";
+pub(crate) const CM_: &str = "CM_";
+pub(crate) const NS_: &str = "NS_";
+pub(crate) const BS_: &str = "BS_";
+pub(crate) const BU_: &str = "BU_";
+pub(crate) const BO_: &str = "BO_";
+pub(crate) const SG_: &str = "SG_";
+pub(crate) const VAL_TABLE_: &str = "VAL_TABLE_";
+pub(crate) const BA_DEF_: &str = "BA_DEF_";
+pub(crate) const BA_DEF_DEF_: &str = "BA_DEF_DEF_";
+pub(crate) const BA_: &str = "BA_";
+pub(crate) const VAL_: &str = "VAL_";
+pub(crate) const SIG_GROUP_: &str = "SIG_GROUP_";
+pub(crate) const SIG_VALTYPE_: &str = "SIG_VALTYPE_";
+pub(crate) const EV_: &str = "EV_";
+pub(crate) const BO_TX_BU_: &str = "BO_TX_BU_";
+
+// Additional DBC keywords
+pub(crate) const VECTOR__INDEPENDENT_SIG_MSG: &str = "VECTOR__INDEPENDENT_SIG_MSG";
+pub(crate) const VECTOR__XXX: &str = "VECTOR__XXX";
+pub(crate) const BA_DEF_DEF_REL_: &str = "BA_DEF_DEF_REL_";
+pub(crate) const BA_DEF_SGTYPE_: &str = "BA_DEF_SGTYPE_";
+pub(crate) const SIGTYPE_VALTYPE_: &str = "SIGTYPE_VALTYPE_";
+pub(crate) const ENVVAR_DATA_: &str = "ENVVAR_DATA_";
+pub(crate) const SIG_TYPE_REF_: &str = "SIG_TYPE_REF_";
+pub(crate) const NS_DESC_: &str = "NS_DESC_";
+pub(crate) const BA_DEF_REL_: &str = "BA_DEF_REL_";
+pub(crate) const BA_SGTYPE_: &str = "BA_SGTYPE_";
+pub(crate) const SGTYPE_VAL_: &str = "SGTYPE_VAL_";
+pub(crate) const BU_SG_REL_: &str = "BU_SG_REL_";
+pub(crate) const BU_EV_REL_: &str = "BU_EV_REL_";
+pub(crate) const BU_BO_REL_: &str = "BU_BO_REL_";
+pub(crate) const SG_MUL_VAL_: &str = "SG_MUL_VAL_";
+pub(crate) const BA_REL_: &str = "BA_REL_";
+pub(crate) const CAT_DEF_: &str = "CAT_DEF_";
+pub(crate) const EV_DATA_: &str = "EV_DATA_";
+pub(crate) const CAT_: &str = "CAT_";
+pub(crate) const FILTER: &str = "FILTER";
 
 #[cfg_attr(not(feature = "std"), allow(dead_code))]
 const DBC_KEYWORDS: &[&str] = &[
-    "VECTOR__INDEPENDENT_SIG_MSG",
-    "VECTOR__XXX",
-    "BA_DEF_DEF_REL_",
-    "BA_DEF_SGTYPE_",
-    "SIGTYPE_VALTYPE_",
-    "ENVVAR_DATA_",
-    "SIG_TYPE_REF_",
-    "NS_DESC_",
-    "BA_DEF_REL_",
-    "BA_SGTYPE_",
-    "SGTYPE_VAL_",
-    "VAL_TABLE_",
-    "SIG_GROUP_",
-    "SIG_VALTYPE_",
-    "BO_TX_BU_",
-    "BU_SG_REL_",
-    "BU_EV_REL_",
-    "BU_BO_REL_",
-    "SG_MUL_VAL_",
-    "BA_DEF_DEF_",
-    "BA_DEF_",
-    "BA_REL_",
-    "CAT_DEF_",
-    "EV_DATA_",
-    "BA_",
-    "VAL_",
-    "CM_",
-    "CAT_",
-    "NS_",
-    "BS_",
-    "BU_",
-    "BO_",
-    "SG_",
-    "EV_",
-    "VERSION",
-    "FILTER",
+    VECTOR__INDEPENDENT_SIG_MSG,
+    VECTOR__XXX,
+    BA_DEF_DEF_REL_,
+    BA_DEF_SGTYPE_,
+    SIGTYPE_VALTYPE_,
+    ENVVAR_DATA_,
+    SIG_TYPE_REF_,
+    NS_DESC_,
+    BA_DEF_REL_,
+    BA_SGTYPE_,
+    SGTYPE_VAL_,
+    VAL_TABLE_,
+    SIG_GROUP_,
+    SIG_VALTYPE_,
+    BO_TX_BU_,
+    BU_SG_REL_,
+    BU_EV_REL_,
+    BU_BO_REL_,
+    SG_MUL_VAL_,
+    BA_DEF_DEF_,
+    BA_DEF_,
+    BA_REL_,
+    CAT_DEF_,
+    EV_DATA_,
+    BA_,
+    VAL_,
+    CM_,
+    CAT_,
+    NS_,
+    BS_,
+    BU_,
+    BO_,
+    SG_,
+    EV_,
+    VERSION,
+    FILTER,
 ];

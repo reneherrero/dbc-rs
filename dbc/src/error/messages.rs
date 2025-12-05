@@ -6,11 +6,8 @@ use core::option::Option::Some;
 #[cfg(feature = "std")]
 pub(crate) use lang::{
     DBC_NODES_REQUIRED, DBC_VERSION_REQUIRED, MESSAGE_DLC_REQUIRED, MESSAGE_ID_REQUIRED,
-    MESSAGE_INVALID_DLC, MESSAGE_INVALID_ID, MESSAGE_NAME_EMPTY, MESSAGE_SENDER_EMPTY,
-    NODES_TOO_MANY, SIGNAL_LENGTH_REQUIRED, SIGNAL_NAME_EMPTY, SIGNAL_PARSE_INVALID_FACTOR,
-    SIGNAL_PARSE_INVALID_LENGTH, SIGNAL_PARSE_INVALID_MAX, SIGNAL_PARSE_INVALID_MIN,
-    SIGNAL_PARSE_INVALID_OFFSET, SIGNAL_PARSE_INVALID_START_BIT, SIGNAL_PARSE_UNIT_TOO_LONG,
-    SIGNAL_RECEIVERS_TOO_MANY, SIGNAL_START_BIT_REQUIRED, VERSION_EMPTY,
+    MESSAGE_NAME_EMPTY, MESSAGE_SENDER_EMPTY, NODES_TOO_MANY, SIGNAL_LENGTH_REQUIRED,
+    SIGNAL_NAME_EMPTY, SIGNAL_RECEIVERS_TOO_MANY, SIGNAL_START_BIT_REQUIRED, VERSION_EMPTY,
 };
 #[cfg(not(feature = "std"))]
 pub(crate) use lang::{NODES_TOO_MANY, SIGNAL_RECEIVERS_TOO_MANY};
@@ -19,26 +16,32 @@ pub(crate) use lang::{NODES_TOO_MANY, SIGNAL_RECEIVERS_TOO_MANY};
 // Formatting functions
 // ============================================================================
 
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn format_invalid_data(details: &str) -> String {
     format!("{}: {}", lang::INVALID_DATA_CATEGORY, details)
 }
 
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn format_signal_error(details: &str) -> String {
     format!("{}: {}", lang::SIGNAL_ERROR_CATEGORY, details)
 }
 
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn format_message_error(details: &str) -> String {
     format!("{}: {}", lang::MESSAGE_ERROR_CATEGORY, details)
 }
 
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn format_dbc_error(details: &str) -> String {
     format!("{}: {}", lang::DBC_ERROR_CATEGORY, details)
 }
 
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn format_version_error(details: &str) -> String {
     format!("{}: {}", lang::VERSION_ERROR_CATEGORY, details)
 }
 
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn format_nodes_error(details: &str) -> String {
     format!("{}: {}", lang::NODES_ERROR_CATEGORY, details)
 }
@@ -138,6 +141,7 @@ pub(crate) fn unknown_sign(sign: char) -> String {
     replace_placeholders(lang::FORMAT_UNKNOWN_SIGN, &args)
 }
 
+#[cfg_attr(not(feature = "std"), allow(dead_code))]
 pub(crate) fn parse_number_failed(err: impl core::fmt::Display) -> String {
     let args: [&dyn core::fmt::Display; 1] = [&err];
     replace_placeholders(lang::FORMAT_PARSE_NUMBER_FAILED, &args)

@@ -44,12 +44,15 @@ impl VersionBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Version> {
+    pub fn build(self) -> Result<Version<'static>> {
         let version = self
             .version
             .ok_or_else(|| Error::Version(messages::VERSION_EMPTY.to_string()))?;
 
-        Ok(Version { version })
+        // Convert owned String to static reference by leaking Box<str>
+        let boxed: Box<str> = version.into_boxed_str();
+        let static_ref: &'static str = Box::leak(boxed);
+        Ok(Version::new(static_ref))
     }
 }
 

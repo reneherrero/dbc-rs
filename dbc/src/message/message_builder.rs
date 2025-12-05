@@ -11,7 +11,7 @@ pub struct MessageBuilder {
     name: Option<String>,
     dlc: Option<u8>,
     sender: Option<String>,
-    signals: Vec<Signal>,
+    signals: Vec<Signal<'static>>,
 }
 
 #[cfg(feature = "std")]
@@ -45,19 +45,19 @@ impl MessageBuilder {
     }
 
     #[must_use]
-    pub fn add_signal(mut self, signal: Signal) -> Self {
+    pub fn add_signal(mut self, signal: Signal<'static>) -> Self {
         self.signals.push(signal);
         self
     }
 
     #[must_use]
-    pub fn add_signals(mut self, signals: impl IntoIterator<Item = Signal>) -> Self {
+    pub fn add_signals(mut self, signals: impl IntoIterator<Item = Signal<'static>>) -> Self {
         self.signals.extend(signals);
         self
     }
 
     #[must_use]
-    pub fn signals(mut self, signals: Vec<Signal>) -> Self {
+    pub fn signals(mut self, signals: Vec<Signal<'static>>) -> Self {
         self.signals = signals;
         self
     }
@@ -68,7 +68,7 @@ impl MessageBuilder {
         self
     }
 
-    fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<Signal>)> {
+    fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<Signal<'static>>)> {
         let id = self
             .id
             .ok_or_else(|| Error::Message(messages::MESSAGE_ID_REQUIRED.to_string()))?;
@@ -87,7 +87,19 @@ impl MessageBuilder {
     #[must_use = "validation result should be checked"]
     pub fn validate(self) -> Result<Self> {
         let (id, name, dlc, sender, signals) = self.extract_fields()?;
-        Message::validate(id, &name, dlc, &sender, &signals).map_err(Error::from)?;
+        // Convert Vec to Option array for validation (all Some)
+        let signals_options: Vec<Option<Signal<'static>>> =
+            signals.iter().cloned().map(Some).collect();
+        let signals_options_slice: &[Option<Signal<'static>>] = &signals_options;
+        Message::validate_internal(
+            id,
+            &name,
+            dlc,
+            &sender,
+            signals_options_slice,
+            signals_options_slice.len(),
+        )
+        .map_err(Error::from)?;
         Ok(Self {
             id: Some(id),
             name: Some(name),
@@ -97,8 +109,39 @@ impl MessageBuilder {
         })
     }
 
-    pub fn build(self) -> Result<Message> {
+    pub fn build(self) -> Result<Message<'static>> {
         let (id, name, dlc, sender, signals) = self.extract_fields()?;
-        Message::new(id, &name, dlc, &sender, signals)
+        // Convert Vec to Option array for validation (all Some)
+        let signals_options: Vec<Option<Signal<'static>>> =
+            signals.iter().cloned().map(Some).collect();
+        let signals_options_slice: &[Option<Signal<'static>>] = &signals_options;
+        // Validate before construction
+        Message::validate_internal(
+            id,
+            &name,
+            dlc,
+            &sender,
+            signals_options_slice,
+            signals_options_slice.len(),
+        )
+        .map_err(|e| match e {
+            crate::error::ParseError::Version(msg) => Error::Message(String::from(msg)),
+            _ => Error::ParseError(e),
+        })?;
+        // Convert owned strings to static references by leaking Box<str>
+        let name_boxed: Box<str> = name.into_boxed_str();
+        let name_static: &'static str = Box::leak(name_boxed);
+        let sender_boxed: Box<str> = sender.into_boxed_str();
+        let sender_static: &'static str = Box::leak(sender_boxed);
+        // Convert Vec to slice and leak to get static lifetime
+        let signals_boxed: Box<[Signal<'static>]> = signals.into_boxed_slice();
+        let signals_static: &'static [Signal<'static>] = Box::leak(signals_boxed);
+        Ok(Message::new(
+            id,
+            name_static,
+            dlc,
+            sender_static,
+            signals_static,
+        ))
     }
 }

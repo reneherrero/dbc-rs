@@ -1,5 +1,5 @@
 use crate::{
-    ByteOrder, Receivers,
+    ByteOrder, Receivers, ReceiversBuilder,
     error::{Error, Result, messages},
     signal::Signal,
 };
@@ -15,7 +15,7 @@ type SignalFields = (
     f64,
     f64,
     Option<String>,
-    Receivers,
+    Receivers<'static>,
 );
 
 #[derive(Debug, Clone)]
@@ -30,7 +30,7 @@ pub struct SignalBuilder {
     min: f64,
     max: f64,
     unit: Option<String>,
-    receivers: Receivers,
+    receivers: Receivers<'static>,
 }
 
 impl Default for SignalBuilder {
@@ -46,7 +46,7 @@ impl Default for SignalBuilder {
             min: 0.0,
             max: 0.0,
             unit: None,
-            receivers: Receivers::Broadcast,
+            receivers: ReceiversBuilder::new().broadcast().build().unwrap(),
         }
     }
 }
@@ -123,7 +123,7 @@ impl SignalBuilder {
     }
 
     #[must_use]
-    pub fn receivers(mut self, receivers: Receivers) -> Self {
+    pub fn receivers(mut self, receivers: Receivers<'static>) -> Self {
         self.receivers = receivers;
         self
     }
@@ -184,7 +184,7 @@ impl SignalBuilder {
         })
     }
 
-    pub fn build(self) -> Result<Signal> {
+    pub fn build(self) -> Result<Signal<'static>> {
         let (
             name,
             start_bit,
@@ -198,8 +198,22 @@ impl SignalBuilder {
             unit,
             receivers,
         ) = self.extract_fields()?;
-        Signal::new(
-            &name,
+        // Convert owned strings to static references by leaking Box<str>
+        let name_boxed: Box<str> = name.into_boxed_str();
+        let name_static: &'static str = Box::leak(name_boxed);
+        let unit_static: Option<&'static str> = if let Some(u) = unit {
+            let boxed: Box<str> = u.into_boxed_str();
+            Some(Box::leak(boxed))
+        } else {
+            None
+        };
+        // Validate before construction
+        Signal::validate(name_static, length, min, max).map_err(|e| match e {
+            crate::error::ParseError::Version(msg) => Error::Signal(String::from(msg)),
+            _ => Error::ParseError(e),
+        })?;
+        Ok(Signal::new(
+            name_static,
             start_bit,
             length,
             byte_order,
@@ -208,8 +222,8 @@ impl SignalBuilder {
             offset,
             min,
             max,
-            unit.as_deref(),
+            unit_static,
             receivers,
-        )
+        ))
     }
 }

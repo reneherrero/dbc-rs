@@ -1,15 +1,6 @@
-#[cfg(feature = "std")]
-use crate::error::Result;
 use crate::{
     Parser,
     error::{ParseError, ParseResult, messages},
-};
-use core::{
-    option::{
-        Option,
-        Option::{None, Some},
-    },
-    result::Result::{Err, Ok},
 };
 
 #[cfg(feature = "std")]
@@ -17,163 +8,176 @@ pub mod nodes_builder;
 
 #[cfg(feature = "std")]
 pub use nodes_builder::NodesBuilder;
-#[cfg(feature = "std")]
-#[derive(Debug, Clone)]
-pub struct Nodes {
-    nodes: Vec<String>,
-}
 
-#[cfg(not(feature = "std"))]
 #[derive(Debug)]
 pub struct Nodes<'a> {
-    nodes: &'a [&'a str],
+    nodes: [Option<&'a str>; crate::MAX_NODES],
+    count: usize,
 }
 
-// Shared parsing logic
-fn parse_nodes_str<'a>(parser: &mut Parser<'a>) -> ParseResult<Vec<&'a str>> {
-    const BU_KEYWORD: &str = "BU_";
-    // Expect "BU_:" keyword
-    // Note: When called from Dbc::parse, find_next_keyword already advanced past "BU_",
-    // so we try to expect "BU_" first, and if that fails, we're already past it and just expect ":"
-    if parser.expect(BU_KEYWORD.as_bytes()).is_ok() {
-        // Successfully consumed "BU_", now expect ":"
-        parser
-            .expect(b":")
-            .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
-    } else {
-        // Already past "BU_" from find_next_keyword
-        // find_next_keyword advances to right after "BU_", which should be at ":" or whitespace
-        // Check if we're already at ":" (no whitespace) or need to skip whitespace first
-        let remaining = parser.remaining();
-        if remaining.is_empty() || !remaining.starts_with(b":") {
-            // Not at ":", skip whitespace and try again
-            parser.skip_newlines_and_spaces();
+impl<'a> Default for Nodes<'a> {
+    fn default() -> Self {
+        Self {
+            nodes: [const { None }; crate::MAX_NODES],
+            count: 0,
         }
-        parser
-            .expect(b":")
-            .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
     }
+}
 
-    // Skip optional whitespace after ":"
-    parser.skip_newlines_and_spaces();
-
-    // Parse node names one by one
-    use alloc::vec::Vec;
-    let mut node_names: Vec<&str> = Vec::new();
-
-    loop {
-        // Skip whitespace before each node name
-        let _ = parser.skip_whitespace();
-
-        // Check if we're at EOF or end of line
-        if parser.remaining().is_empty() {
-            break;
+impl<'a> Nodes<'a> {
+    // Shared validation function
+    pub(crate) fn validate_nodes(nodes: &[&str]) -> ParseResult<()> {
+        use crate::error::lang;
+        // Check for too many nodes (DoS protection)
+        if nodes.len() > crate::MAX_NODES {
+            return Err(ParseError::Version(messages::NODES_TOO_MANY));
         }
 
-        // Try to parse an identifier (node name)
-        match parser.parse_identifier() {
-            Ok(node) => {
-                node_names.push(node);
-                // Check for too many nodes (DoS protection)
-                const MAX_NODES: usize = 256;
-                if node_names.len() > MAX_NODES {
-                    return Err(ParseError::Version(messages::NODES_TOO_MANY));
+        // Check for duplicate node names (case-sensitive)
+        for (i, node1) in nodes.iter().enumerate() {
+            for node2 in nodes.iter().skip(i + 1) {
+                if *node1 == *node2 {
+                    return Err(ParseError::Version(lang::NODES_DUPLICATE_NAME));
                 }
             }
-            Err(_) => {
-                // No more identifiers, break
-                break;
+        }
+        Ok(())
+    }
+
+    #[allow(dead_code)] // Used by NodesBuilder
+    pub(crate) fn new(nodes: &[&'a str]) -> Self {
+        // Validation should have been done prior (by builder)
+        let mut node_array: [Option<&'a str>; crate::MAX_NODES] =
+            [const { None }; crate::MAX_NODES];
+        let count = nodes.len().min(crate::MAX_NODES);
+        for (i, node) in nodes.iter().take(crate::MAX_NODES).enumerate() {
+            node_array[i] = Some(*node);
+        }
+        Self {
+            nodes: node_array,
+            count,
+        }
+    }
+
+    #[must_use = "parse result should be checked"]
+    pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
+        // Expect "BU_:" keyword
+        // Note: When called from Dbc::parse, find_next_keyword already advanced past "BU_",
+        // so we try to expect "BU_" first, and if that fails, we're already past it and just expect ":"
+        if parser.expect(crate::BU_.as_bytes()).is_ok() {
+            // Successfully consumed "BU_", now expect ":"
+            parser
+                .expect(b":")
+                .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
+        } else {
+            // Already past "BU_" from find_next_keyword
+            // find_next_keyword advances to right after "BU_", which should be at ":" or whitespace
+            // Try to expect ":" - if it fails, skip whitespace and try again
+            if parser.expect(b":").is_err() {
+                // Not at ":", skip whitespace and try again
+                parser.skip_newlines_and_spaces();
+                parser
+                    .expect(b":")
+                    .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
             }
         }
-    }
 
-    Ok(node_names)
-}
+        // Skip optional whitespace after ":"
+        parser.skip_newlines_and_spaces();
 
-// Shared validation function
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
-pub(crate) fn validate_nodes(_nodes: &[&str]) -> ParseResult<()> {
-    // // Check for too many nodes (DoS protection)
-    // const MAX_NODES: usize = 256;
-    // if nodes.len() > MAX_NODES {
-    //     return Err(ParseError::Version(messages::NODES_TOO_MANY));
-    // }
+        // Parse node names into fixed-size array
+        let mut node_names: [Option<&'b str>; crate::MAX_NODES] =
+            [const { None }; crate::MAX_NODES];
+        let mut count = 0;
 
-    // // Check for duplicate node names (case-sensitive)
-    // for (i, node1) in nodes.iter().enumerate() {
-    //     for node2 in nodes.iter().skip(i + 1) {
-    //         if *node1 == *node2 {
-    //             return Err(ParseError::Version(messages::NODES_TOO_MANY));
-    //         }
-    //     }
-    // }
-    Ok(())
-}
+        loop {
+            // Skip whitespace before each node name
+            let _ = parser.skip_whitespace();
 
-// Implementation for std (owned Vec<String>)
-#[cfg(feature = "std")]
-impl Nodes {
-    pub(crate) const BU_: &'static str = "BU_";
-
-    #[allow(dead_code)] // Used in tests
-    pub(crate) fn new(nodes: &[&str]) -> Result<Self> {
-        validate_nodes(nodes)?;
-        // Convert to owned Vec<String>
-        let nodes_vec: Vec<String> = nodes.iter().map(|s| s.to_string()).collect();
-        Ok(Self { nodes: nodes_vec })
-    }
-
-    pub(crate) fn parse<'b>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        let node_names = parse_nodes_str(parser)?;
-
-        if node_names.is_empty() {
-            // No nodes specified, return empty nodes
-            return Ok(Nodes { nodes: Vec::new() });
+            // Try to parse an identifier (node name)
+            // parse_identifier() will fail if we're at EOF
+            match parser.parse_identifier() {
+                Ok(node) => {
+                    if count >= crate::MAX_NODES {
+                        return Err(ParseError::Version(messages::NODES_TOO_MANY));
+                    }
+                    node_names[count] = Some(node);
+                    count += 1;
+                }
+                Err(_) => {
+                    // No more identifiers, break
+                    break;
+                }
+            }
         }
 
-        // Validate nodes
-        validate_nodes(&node_names)?;
+        if count == 0 {
+            return Ok(Nodes {
+                nodes: [const { None }; crate::MAX_NODES],
+                count: 0,
+            });
+        }
 
-        // Convert to owned Vec<String>
-        let nodes_vec: Vec<String> = node_names.into_iter().map(|s| s.to_string()).collect();
-        Ok(Nodes { nodes: nodes_vec })
+        // Collect valid node names into a slice for validation and construction
+        // We use a stack-allocated array to avoid allocation
+        let mut node_refs: [&'b str; crate::MAX_NODES] = [""; crate::MAX_NODES];
+        for i in 0..count {
+            if let Some(node) = node_names[i] {
+                node_refs[i] = node;
+            }
+        }
+
+        // Validate before construction
+        Self::validate_nodes(&node_refs[..count])?;
+        // Construct directly (validation already done)
+        let mut node_array: [Option<&'a str>; crate::MAX_NODES] =
+            [const { None }; crate::MAX_NODES];
+        for (i, node) in node_refs.iter().take(count).enumerate() {
+            node_array[i] = Some(*node);
+        }
+        Ok(Self {
+            nodes: node_array,
+            count,
+        })
     }
 
-    #[inline]
     #[must_use]
-    pub fn nodes(&self) -> Option<&[String]> {
-        if self.nodes.is_empty() {
-            None
-        } else {
-            Some(&self.nodes)
-        }
+    pub fn nodes(&self) -> Option<&[&'a str]> {
+        // Can't return a slice from a stack array
+        // Return None and provide iter_nodes() instead
+        None
+    }
+
+    #[must_use = "iterator should be used"]
+    pub fn iter_nodes(&self) -> impl Iterator<Item = &'a str> + '_ {
+        (0..self.count).filter_map(move |i| self.nodes[i])
     }
 
     #[inline]
     #[must_use]
     pub fn contains(&self, node: &str) -> bool {
-        self.nodes.iter().any(|n| n == node)
+        self.iter_nodes().any(|n| n == node)
     }
 
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.count
     }
 
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.count == 0
     }
 
     #[allow(clippy::inherent_to_string)]
     #[cfg(feature = "std")]
     #[must_use]
     pub fn to_string(&self) -> String {
-        if self.nodes.is_empty() {
+        if self.count == 0 {
             return String::new();
         }
         // Pre-allocate: estimate ~10 chars per node name + spaces
-        let capacity = self.nodes.len() * 10;
+        let capacity = self.count * 10;
         let mut result = String::with_capacity(capacity);
-        for (i, node) in self.nodes.iter().enumerate() {
+        for (i, node) in self.iter_nodes().enumerate() {
             if i > 0 {
                 result.push(' ');
             }
@@ -185,7 +189,7 @@ impl Nodes {
     #[cfg(feature = "std")]
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
-        let mut result = String::from(Self::BU_);
+        let mut result = String::from(crate::BU_);
         result.push(':');
         let nodes_str = self.to_string();
         if !nodes_str.is_empty() {
@@ -196,58 +200,12 @@ impl Nodes {
     }
 }
 
-// Implementation for no_std (borrowed &[&str])
-#[cfg(not(feature = "std"))]
-impl<'a> Nodes<'a> {
-    #[allow(dead_code)] // Used in Dbc::parse
-    pub(crate) const BU_: &'static str = "BU_";
-    #[allow(dead_code)] // Used in validation
-    const MAX_NODES: usize = 256;
-
-    #[allow(dead_code)] // Used in Dbc::parse
-    #[must_use]
-    pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        let node_names = parse_nodes_str(parser)?;
-
-        if node_names.is_empty() {
-            return Ok(Nodes { nodes: &[] });
-        }
-
-        validate_nodes(&node_names)?;
-
-        // Use borrowed slice - no alloc needed
-        use alloc::boxed::Box;
-        let node_slice = Box::leak(node_names.into_boxed_slice());
-        Ok(Nodes { nodes: node_slice })
-    }
-
-    pub fn nodes(&self) -> Option<&[&'a str]> {
-        if self.nodes.is_empty() {
-            None
-        } else {
-            Some(self.nodes)
-        }
-    }
-
-    pub fn contains(&self, node: &str) -> bool {
-        self.nodes.iter().any(|n| *n == node)
-    }
-
-    pub fn len(&self) -> usize {
-        self.nodes.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
     use crate::{
-        Error, Parser,
+        Parser,
         error::{ParseError, lang},
     };
 
@@ -256,8 +214,8 @@ mod tests {
         let line = b"BU_: ECM TCM BCM ABS";
         let mut parser = Parser::new(line).unwrap();
         let nodes = Nodes::parse(&mut parser).unwrap();
-        let node_slice = nodes.nodes().unwrap();
-        assert_eq!(node_slice, &["ECM", "TCM", "BCM", "ABS"]);
+        let node_vec: alloc::vec::Vec<&str> = nodes.iter_nodes().collect();
+        assert_eq!(node_vec, &["ECM", "TCM", "BCM", "ABS"]);
     }
 
     #[test]
@@ -265,8 +223,8 @@ mod tests {
         let line = b"BU_: ONLYONE";
         let mut parser = Parser::new(line).unwrap();
         let nodes = Nodes::parse(&mut parser).unwrap();
-        let node_slice = nodes.nodes().unwrap();
-        assert_eq!(node_slice, &["ONLYONE"]);
+        let node_vec: alloc::vec::Vec<&str> = nodes.iter_nodes().collect();
+        assert_eq!(node_vec, &["ONLYONE"]);
     }
 
     #[test]
@@ -274,8 +232,8 @@ mod tests {
         let line = b"BU_:   Node1   Node2   ";
         let mut parser = Parser::new(line).unwrap();
         let nodes = Nodes::parse(&mut parser).unwrap();
-        let node_slice = nodes.nodes().unwrap();
-        assert_eq!(node_slice, &["Node1", "Node2"]);
+        let node_vec: alloc::vec::Vec<&str> = nodes.iter_nodes().collect();
+        assert_eq!(node_vec, &["Node1", "Node2"]);
     }
 
     #[test]
@@ -287,74 +245,106 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_nodes_new() {
-        let node_array = ["ECM", "TCM", "BCM"];
-        let nodes = Nodes::new(&node_array).unwrap();
+        use crate::nodes::NodesBuilder;
+        let nodes = NodesBuilder::new()
+            .add_node("ECM")
+            .add_node("TCM")
+            .add_node("BCM")
+            .build()
+            .unwrap();
         assert!(nodes.contains("ECM"));
         assert!(nodes.contains("TCM"));
         assert!(nodes.contains("BCM"));
         assert!(!nodes.contains("ABS"));
-        assert_eq!(nodes.nodes().unwrap().len(), 3);
+        assert_eq!(nodes.iter_nodes().count(), 3);
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_nodes_new_from_vec() {
-        let node_vec = vec!["Node1", "Node2", "Node3"];
-        let nodes = Nodes::new(&node_vec).unwrap();
+        use crate::nodes::NodesBuilder;
+        let nodes = NodesBuilder::new()
+            .add_node("Node1")
+            .add_node("Node2")
+            .add_node("Node3")
+            .build()
+            .unwrap();
         assert!(nodes.contains("Node1"));
-        assert_eq!(nodes.nodes().unwrap().len(), 3);
+        assert_eq!(nodes.iter_nodes().count(), 3);
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_nodes_new_from_slice() {
-        let node_slice = &["A", "B", "C"][..];
-        let nodes = Nodes::new(node_slice).unwrap();
+        use crate::nodes::NodesBuilder;
+        let nodes = NodesBuilder::new().add_node("A").add_node("B").add_node("C").build().unwrap();
         assert!(nodes.contains("A"));
-        assert_eq!(nodes.nodes().unwrap().len(), 3);
+        assert_eq!(nodes.iter_nodes().count(), 3);
     }
 
     #[test]
-    #[ignore]
+    #[cfg(feature = "std")]
     fn test_nodes_new_duplicate() {
-        let node_array = ["ECM", "TCM", "ECM"];
-        let result = Nodes::new(&node_array);
+        use crate::nodes::NodesBuilder;
+        let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
-            _ => panic!("Expected Nodes error"),
+        #[cfg(feature = "std")]
+        {
+            use crate::Error;
+            match result.unwrap_err() {
+                Error::Nodes(msg) => {
+                    assert!(msg.contains(lang::NODES_DUPLICATE_NAME))
+                }
+                _ => panic!("Expected Error::Nodes with NODES_DUPLICATE_NAME"),
+            }
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let _ = result;
+            panic!("Test requires std feature");
         }
     }
 
     #[test]
     #[cfg(feature = "std")]
     fn test_nodes_to_string_single() {
-        let node_array = ["ECM"];
-        let nodes = Nodes::new(&node_array).unwrap();
+        use crate::nodes::NodesBuilder;
+        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
         assert_eq!(nodes.to_string(), "ECM");
     }
 
     #[test]
     #[cfg(feature = "std")]
     fn test_nodes_to_string_multiple() {
-        let node_array = ["ECM", "TCM", "BCM"];
-        let nodes = Nodes::new(&node_array).unwrap();
+        use crate::nodes::NodesBuilder;
+        let nodes = NodesBuilder::new()
+            .add_node("ECM")
+            .add_node("TCM")
+            .add_node("BCM")
+            .build()
+            .unwrap();
         assert_eq!(nodes.to_string(), "ECM TCM BCM");
     }
 
     #[test]
     #[cfg(feature = "std")]
     fn test_nodes_to_dbc_string() {
-        let node_array_single = ["ECM"];
-        let nodes_single = Nodes::new(&node_array_single).unwrap();
+        use crate::nodes::NodesBuilder;
+        let nodes_single = NodesBuilder::new().add_node("ECM").build().unwrap();
         assert_eq!(nodes_single.to_dbc_string(), "BU_: ECM");
 
-        let node_array_multiple = ["ECM", "TCM", "BCM"];
-        let nodes_multiple = Nodes::new(&node_array_multiple).unwrap();
+        let nodes_multiple = NodesBuilder::new()
+            .add_node("ECM")
+            .add_node("TCM")
+            .add_node("BCM")
+            .build()
+            .unwrap();
         assert_eq!(nodes_multiple.to_dbc_string(), "BU_: ECM TCM BCM");
     }
 
     #[test]
-    #[ignore]
     fn test_nodes_parse_duplicate() {
         let line = b"BU_: ECM TCM ECM";
         let mut parser = Parser::new(line).unwrap();
@@ -368,35 +358,38 @@ mod tests {
 
     #[test]
     #[cfg(feature = "std")]
-    #[ignore]
     fn test_nodes_too_many() {
-        // Create a vector with 257 nodes (exceeds limit of 256)
-        let mut node_strings = Vec::new();
+        use crate::nodes::NodesBuilder;
+        // Create a builder with 257 nodes (exceeds limit of 256)
+        let mut builder = NodesBuilder::new();
         for i in 0..257 {
-            node_strings.push(format!("Node{i}"));
+            builder = builder.add_node(format!("Node{i}"));
         }
-        let node_refs: Vec<&str> = node_strings.iter().map(|s| s.as_str()).collect();
-        let result = Nodes::new(&node_refs);
+        let result = builder.build();
         assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Nodes(msg) => {
-                assert!(msg.contains(lang::NODES_TOO_MANY));
+        #[cfg(feature = "std")]
+        {
+            use crate::Error;
+            match result.unwrap_err() {
+                Error::Nodes(msg) => {
+                    assert!(msg.contains(lang::NODES_TOO_MANY));
+                }
+                _ => panic!("Expected Error::Nodes"),
             }
-            _ => panic!("Expected Nodes error"),
         }
     }
 
     #[test]
     #[cfg(feature = "std")]
     fn test_nodes_at_limit() {
-        // Create a vector with exactly 256 nodes (at the limit)
-        let mut node_strings = Vec::new();
+        use crate::nodes::NodesBuilder;
+        // Create a builder with exactly 256 nodes (at the limit)
+        let mut builder = NodesBuilder::new();
         for i in 0..256 {
-            node_strings.push(format!("Node{i}"));
+            builder = builder.add_node(format!("Node{i}"));
         }
-        let node_refs: Vec<&str> = node_strings.iter().map(|s| s.as_str()).collect();
-        let result = Nodes::new(&node_refs);
+        let result = builder.build();
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().nodes().unwrap().len(), 256);
+        assert_eq!(result.unwrap().len(), 256);
     }
 }
