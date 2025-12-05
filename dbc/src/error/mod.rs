@@ -1,51 +1,44 @@
-use alloc::string::String;
-use core::{convert::From, fmt, num::ParseIntError};
+#[cfg(feature = "std")]
+use core::fmt;
+use core::{convert::From, num::ParseIntError};
 
 pub mod lang;
 pub(crate) mod messages;
 
-#[cfg(feature = "std")]
 #[derive(Debug, PartialEq)]
 pub enum Error {
+    #[cfg(feature = "std")]
     InvalidData(String),
+
+    #[cfg(feature = "std")]
     Signal(String),
+
+    #[cfg(feature = "std")]
     Message(String),
+
+    #[cfg(feature = "std")]
     Dbc(String),
+
+    #[cfg(feature = "std")]
     Version(String),
+
+    #[cfg(feature = "std")]
     Nodes(String),
+
     ParseError(ParseError),
 }
 
-#[cfg(not(feature = "std"))]
-#[derive(Debug, PartialEq)]
-pub enum Error<'a> {
-    InvalidData(String),
-    Signal(String),
-    Message(String),
-    Dbc(String),
-    Version(String),
-    Nodes(String),
-    ParseError(ParseError<'a>),
-}
-
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg(feature = "std")]
 pub enum ParseError {
     UnexpectedEof,
-    Expected(&'static str),
-    InvalidChar(char),
-    MaxStrLength(u16),
-    Version(&'static str),
-}
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg(not(feature = "std"))]
-pub enum ParseError<'a> {
-    UnexpectedEof,
-    Expected(&'a str),
+    Expected(&'static str),
+
     InvalidChar(char),
+
     MaxStrLength(u16),
-    Version(&'a str),
+
+    Version(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -61,59 +54,9 @@ impl fmt::Display for ParseError {
     }
 }
 
-#[cfg(not(feature = "std"))]
-impl<'a> fmt::Display for ParseError<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::UnexpectedEof => write!(f, "Unexpected end of input"),
-            ParseError::Expected(msg) => write!(f, "Expected {}", msg),
-            ParseError::InvalidChar(c) => write!(f, "Invalid character: {}", c),
-            ParseError::MaxStrLength(max) => write!(f, "String length exceeds maximum: {}", max),
-            ParseError::Version(msg) => write!(f, "Version error: {}", msg),
-        }
-    }
-}
-
-#[cfg(feature = "std")]
 pub type Result<T> = core::result::Result<T, Error>;
-#[cfg(not(feature = "std"))]
-pub type Result<T> = core::result::Result<T, Error<'static>>;
 
-#[cfg(feature = "std")]
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
-#[cfg(not(feature = "std"))]
-pub type ParseResult<T> = core::result::Result<T, ParseError<'static>>;
-
-#[cfg(not(feature = "std"))]
-impl<'a> fmt::Display for Error<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::InvalidData(msg) => {
-                // Display the message with category prefix for better readability
-                write!(f, "{}", messages::format_invalid_data(msg))
-            }
-            Error::Signal(msg) => {
-                // Display the message with category prefix for better readability
-                write!(f, "{}", messages::format_signal_error(msg))
-            }
-            Error::Message(msg) => {
-                write!(f, "{}", messages::format_message_error(msg))
-            }
-            Error::Dbc(msg) => {
-                write!(f, "{}", messages::format_dbc_error(msg))
-            }
-            Error::Version(msg) => {
-                write!(f, "{}", messages::format_version_error(msg))
-            }
-            Error::Nodes(msg) => {
-                write!(f, "{}", messages::format_nodes_error(msg))
-            }
-            Error::ParseError(msg) => {
-                write!(f, "Parse Error: {}", msg)
-            }
-        }
-    }
-}
 
 #[cfg(feature = "std")]
 impl fmt::Display for Error {
@@ -154,22 +97,16 @@ impl From<ParseIntError> for Error {
 }
 
 #[cfg(not(feature = "std"))]
-impl<'a> From<ParseIntError> for Error<'a> {
-    fn from(err: ParseIntError) -> Self {
-        Error::InvalidData(messages::parse_number_failed(err))
+impl From<ParseIntError> for Error {
+    fn from(_err: ParseIntError) -> Self {
+        // In no_std, we can only return ParseError
+        // ParseIntError conversion is not fully supported in no_std
+        Error::ParseError(ParseError::Expected("Invalid number format"))
     }
 }
 
-#[cfg(feature = "std")]
 impl From<ParseError> for Error {
     fn from(err: ParseError) -> Self {
-        Error::ParseError(err)
-    }
-}
-
-#[cfg(not(feature = "std"))]
-impl<'a> From<ParseError<'a>> for Error<'a> {
-    fn from(err: ParseError<'a>) -> Self {
         Error::ParseError(err)
     }
 }
@@ -181,7 +118,7 @@ impl std::error::Error for Error {
     }
 }
 
-#[cfg(all(feature = "std", test))]
+#[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::Error;

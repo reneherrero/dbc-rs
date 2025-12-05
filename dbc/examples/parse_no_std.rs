@@ -1,14 +1,19 @@
-//! Example: Reading DBC files from string slices (no_std compatible).
+//! Example: Reading DBC files from string slices (pure no_std, no alloc).
 //!
-//! This example demonstrates parsing DBC files in `no_std` environments.
-//! The `Dbc::parse()` method works without the standard library and only
-//! requires `alloc` for the `Vec<Message>` storage.
+//! This example demonstrates parsing DBC files in pure `no_std` environments
+//! without any dependencies on `std` or `alloc`. The `Dbc::parse()` method
+//! works without the standard library and without allocation.
+//!
+//! Note: In pure no_std mode, messages are not parsed (they require alloc).
+//! Only VERSION and BU_ sections are parsed.
+
+// Note: This example demonstrates no_std usage, but the example itself
+// runs with std for output. The library code uses no_std when compiled
+// with --no-default-features.
 
 use dbc_rs::Dbc;
-#[cfg(not(feature = "std"))]
-extern crate alloc;
 
-fn main() -> Result<(), dbc_rs::Error> {
+fn main() {
     let dbc_content = r#"VERSION "1.0"
 
 BU_: ECM TCM
@@ -21,28 +26,26 @@ BO_ 512 Brake : 4 TCM
  SG_ Pressure : 0|16@1+ (0.1,0) [0|1000] "bar"
 "#;
 
-    // Parse from string slice (works in no_std)
-    println!("Parsing from &str (no_std compatible):");
-    let dbc = Dbc::parse(dbc_content)?;
-    println!("   Parsed {} messages", dbc.messages().len());
-    if let Some(version) = dbc.version() {
-        println!("   Version: {}", version.as_str());
-    } else {
-        println!("   Version: (none)");
-    }
-    if let Some(nodes) = dbc.nodes().nodes() {
-        let nodes_str: String =
-            nodes.iter().enumerate().fold(String::new(), |mut acc, (i, node)| {
-                if i > 0 {
-                    acc.push(' ');
-                }
-                acc.push_str(node);
-                acc
-            });
-        println!("   Nodes: {}", nodes_str);
-    } else {
-        println!("   Nodes: (none)");
-    }
+    // Parse from string slice (works in pure no_std, no alloc required)
+    if let Ok(dbc) = Dbc::parse(dbc_content) {
+        // Access version (no alloc required)
+        let _version_str = dbc.version().map(|v| v.as_str()).unwrap_or("");
 
-    Ok(())
+        // Access nodes using iterator (no alloc required)
+        // Note: iter_nodes() is only available in no_std builds
+        // In std builds, use nodes() method instead
+        #[cfg(not(feature = "std"))]
+        let _node_count = dbc.nodes().iter_nodes().count();
+        #[cfg(feature = "std")]
+        let _node_count = dbc.nodes().nodes().map(|n| n.len()).unwrap_or(0);
+
+        // In a real embedded system, you would use these values here
+        // For this example, we just verify parsing succeeded
+        // Messages are empty in no_std mode (require alloc)
+        let _messages_count = dbc.message_count(); // Will be 0 in no_std
+
+    // In embedded: set success flag, update status register, etc.
+    } else {
+        // In embedded: set error flag, trigger error handler, etc.
+    }
 }

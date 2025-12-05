@@ -91,7 +91,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         dbc.version().map(|v| v.to_string()).unwrap_or_default()
     );
     println!("Nodes: {}", dbc.nodes().to_string());
-    println!("Messages: {}", dbc.messages().len());
+    println!("Messages: {}", dbc.message_count());
 
     for msg in dbc.messages() {
         println!(
@@ -108,9 +108,9 @@ fn main() -> Result<(), dbc_rs::Error> {
                 sig.start_bit(),
                 sig.length(),
                 if sig.byte_order() == ByteOrder::LittleEndian {
-                    "0"
-                } else {
                     "1"
+                } else {
+                    "0"
                 },
                 sig.factor(),
                 sig.offset(),

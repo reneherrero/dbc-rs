@@ -1,4 +1,4 @@
-use crate::{error::Result, nodes::Nodes};
+use crate::{error::Error, error::Result, nodes::Nodes};
 
 #[derive(Debug, Default)]
 pub struct NodesBuilder {
@@ -35,7 +35,10 @@ impl NodesBuilder {
     fn extract_and_validate_nodes(self) -> Result<Vec<String>> {
         let node_strs: Vec<String> = self.nodes.into_iter().map(|s| s.to_string()).collect();
         let node_refs: Vec<&str> = node_strs.iter().map(|s| s.as_str()).collect();
-        super::validate_nodes(&node_refs)?;
+        super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
+            crate::error::ParseError::Version(msg) => Error::Nodes(String::from(msg)),
+            _ => Error::from(e),
+        })?;
         Ok(node_strs)
     }
 
@@ -45,9 +48,21 @@ impl NodesBuilder {
         Ok(Self { nodes: node_strs })
     }
 
-    pub fn build(self) -> Result<Nodes> {
+    pub fn build(self) -> Result<Nodes<'static>> {
         let node_strs = self.extract_and_validate_nodes()?;
-        Ok(Nodes { nodes: node_strs })
+        // Convert owned Strings to static references by leaking Box<str>
+        // This is acceptable for builder pattern where the caller owns the data
+        let mut node_refs: Vec<&'static str> = Vec::new();
+        for s in node_strs {
+            let boxed: Box<str> = s.into_boxed_str();
+            node_refs.push(Box::leak(boxed));
+        }
+        // Validate before construction
+        super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
+            crate::error::ParseError::Version(msg) => Error::Nodes(String::from(msg)),
+            _ => Error::from(e),
+        })?;
+        Ok(Nodes::new(&node_refs))
     }
 }
 
@@ -55,10 +70,9 @@ impl NodesBuilder {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{Error, error::lang};
+    use crate::{error::Error, error::lang};
 
     #[test]
-    #[ignore]
     fn test_nodes_builder_duplicate() {
         let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
@@ -69,7 +83,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_nodes_builder_too_many() {
         let mut builder = NodesBuilder::new();
         for i in 0..257 {

@@ -30,27 +30,31 @@ impl<'a> Parser<'a> {
         self.pos
     }
 
+    #[inline]
+    #[must_use]
+    pub(crate) fn is_at_start(&self) -> bool {
+        self.pos == 0
+    }
+
     pub fn skip_whitespace(&mut self) -> ParseResult<&mut Self> {
         if self.pos >= self.input.len() {
             return Err(ParseError::UnexpectedEof);
         }
 
-        match self.input.get(self.pos) {
-            Some(b' ') => {
-                while self.pos < self.input.len() && self.input[self.pos] == b' ' {
-                    self.pos += 1;
-                }
-                Ok(self)
+        if self.input[self.pos] == b' ' {
+            while self.pos < self.input.len() && self.input[self.pos] == b' ' {
+                self.pos += 1;
             }
-            Some(_) => Err(ParseError::Expected(err::EXPECTED_WHITESPACE)),
-            None => Err(ParseError::UnexpectedEof),
+            Ok(self)
+        } else {
+            Err(ParseError::Expected(err::EXPECTED_WHITESPACE))
         }
     }
 
     pub fn skip_newlines_and_spaces(&mut self) {
         while self.pos < self.input.len() {
             match self.input[self.pos] {
-                b'\n' | b'\r' | b' ' => {
+                b'\n' | b'\r' | b' ' | b'\t' => {
                     self.pos += 1;
                 }
                 _ => break,
@@ -68,13 +72,10 @@ impl<'a> Parser<'a> {
             return Err(ParseError::UnexpectedEof);
         }
 
-        // Use keywords from lib.rs
-        let remaining = self.remaining();
-
         // Try to match each keyword (checking longer ones first)
         for keyword in crate::DBC_KEYWORDS {
             let keyword_bytes = keyword.as_bytes();
-            if remaining.starts_with(keyword_bytes) {
+            if self.starts_with(keyword_bytes) {
                 // Check if the next character after the keyword is a valid delimiter
                 let next_pos = self.pos + keyword_bytes.len();
                 if next_pos >= self.input.len() {
@@ -102,12 +103,12 @@ impl<'a> Parser<'a> {
             return Ok(self);
         }
 
-        let remaining = self.remaining();
-        if remaining.len() < expected.len() {
+        // Check if we have enough remaining bytes
+        if self.input.len() - self.pos < expected.len() {
             return Err(ParseError::Expected(err::EXPECTED_PATTERN));
         }
 
-        if remaining.starts_with(expected) {
+        if self.starts_with(expected) {
             self.pos += expected.len();
             Ok(self)
         } else {
@@ -158,10 +159,16 @@ impl<'a> Parser<'a> {
                             }
                         }
                     } else {
-                        // For non-c_identifier, check if printable (32-126 in ASCII)
-                        if !(32..=126).contains(&byte) {
+                        // For non-c_identifier, allow any byte except control characters and quote
+                        // This allows UTF-8 multi-byte sequences
+                        // Only reject control characters (0-31) and DEL (127)
+                        // Note: We can't validate complete UTF-8 sequences here, but we allow
+                        // any byte that's not a control character, quote, or backslash
+                        if byte < 32 || byte == 127 {
+                            // Control character or DEL - reject
                             return Err(ParseError::InvalidChar(byte as char));
                         }
+                        // Allow all other bytes (including UTF-8 continuation bytes)
                     }
                     self.pos += 1;
                 }
@@ -174,8 +181,31 @@ impl<'a> Parser<'a> {
 
     #[inline]
     #[must_use]
-    pub(crate) fn remaining(&self) -> &'a [u8] {
+    fn remaining(&self) -> &'a [u8] {
         &self.input[self.pos..]
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.remaining().is_empty()
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn starts_with(&self, pattern: &[u8]) -> bool {
+        self.remaining().starts_with(pattern)
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn peek_byte_at(&self, offset: usize) -> Option<u8> {
+        let pos = self.pos + offset;
+        if pos < self.input.len() {
+            Some(self.input[pos])
+        } else {
+            None
+        }
     }
 
     #[allow(dead_code)] // Used in Dbc::parse
@@ -493,9 +523,10 @@ mod tests {
 
         #[test]
         fn succeeds_with_version() {
+            use crate::VERSION;
             let input = b"VERSION";
             let mut parser = Parser::new(input).unwrap();
-            let result = parser.expect(b"VERSION");
+            let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_ok());
             assert_eq!(parser.pos, 7);
             assert_eq!(parser.remaining(), b"");
@@ -503,9 +534,10 @@ mod tests {
 
         #[test]
         fn fails_with_different_input() {
+            use crate::VERSION;
             let input = b"TEST";
             let mut parser = Parser::new(input).unwrap();
-            let result = parser.expect(b"VERSION");
+            let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_err());
             match result.unwrap_err() {
                 ParseError::Expected(_) => {}
@@ -517,9 +549,10 @@ mod tests {
 
         #[test]
         fn fails_with_partial_match() {
+            use crate::VERSION;
             let input = b"VERSIO";
             let mut parser = Parser::new(input).unwrap();
-            let result = parser.expect(b"VERSION");
+            let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_err());
             match result.unwrap_err() {
                 ParseError::Expected(_) => {}
@@ -529,9 +562,10 @@ mod tests {
 
         #[test]
         fn fails_when_remaining_input_too_short() {
+            use crate::VERSION;
             let input = b"VER";
             let mut parser = Parser::new(input).unwrap();
-            let result = parser.expect(b"VERSION");
+            let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_err());
             match result.unwrap_err() {
                 ParseError::Expected(_) => {}
@@ -541,9 +575,10 @@ mod tests {
 
         #[test]
         fn succeeds_and_advances_position() {
+            use crate::VERSION;
             let input = b"VERSION test";
             let mut parser = Parser::new(input).unwrap();
-            let result = parser.expect(b"VERSION");
+            let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_ok());
             assert_eq!(parser.pos, 7);
             assert_eq!(parser.remaining(), b" test");
@@ -551,10 +586,11 @@ mod tests {
 
         #[test]
         fn fails_when_not_at_start() {
+            use crate::VERSION;
             let input = b" VERSION";
             let mut parser = Parser::new(input).unwrap();
             parser.pos = 1; // Skip the space
-            let result = parser.expect(b"VERSION");
+            let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_ok());
             assert_eq!(parser.pos, 8);
         }

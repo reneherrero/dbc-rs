@@ -5,9 +5,9 @@ use crate::{
 
 #[derive(Debug, Default)]
 pub struct DbcBuilder {
-    version: Option<Version>,
-    nodes: Option<Nodes>,
-    messages: Vec<Message>,
+    version: Option<Version<'static>>,
+    nodes: Option<Nodes<'static>>,
+    messages: Vec<Message<'static>>,
 }
 
 impl DbcBuilder {
@@ -16,31 +16,31 @@ impl DbcBuilder {
     }
 
     #[must_use]
-    pub fn version(mut self, version: Version) -> Self {
+    pub fn version(mut self, version: Version<'static>) -> Self {
         self.version = Some(version);
         self
     }
 
     #[must_use]
-    pub fn nodes(mut self, nodes: Nodes) -> Self {
+    pub fn nodes(mut self, nodes: Nodes<'static>) -> Self {
         self.nodes = Some(nodes);
         self
     }
 
     #[must_use]
-    pub fn add_message(mut self, message: Message) -> Self {
+    pub fn add_message(mut self, message: Message<'static>) -> Self {
         self.messages.push(message);
         self
     }
 
     #[must_use]
-    pub fn add_messages(mut self, messages: impl IntoIterator<Item = Message>) -> Self {
+    pub fn add_messages(mut self, messages: impl IntoIterator<Item = Message<'static>>) -> Self {
         self.messages.extend(messages);
         self
     }
 
     #[must_use]
-    pub fn messages(mut self, messages: Vec<Message>) -> Self {
+    pub fn messages(mut self, messages: Vec<Message<'static>>) -> Self {
         self.messages = messages;
         self
     }
@@ -51,7 +51,7 @@ impl DbcBuilder {
         self
     }
 
-    fn extract_fields(self) -> Result<(Version, Nodes, Vec<Message>)> {
+    fn extract_fields(self) -> Result<(Version<'static>, Nodes<'static>, Vec<Message<'static>>)> {
         let version = self
             .version
             .ok_or_else(|| Error::Dbc(messages::DBC_VERSION_REQUIRED.to_string()))?;
@@ -63,49 +63,81 @@ impl DbcBuilder {
     #[must_use = "validation result should be checked"]
     pub fn validate(self) -> Result<Self> {
         let (version, nodes, messages) = self.extract_fields()?;
-        Dbc::validate(Some(&version), &nodes, &messages).map_err(Error::from)?;
+        // Convert Vec to Option array for validation (all Some)
+        let messages_options: Vec<Option<Message<'static>>> =
+            messages.into_iter().map(Some).collect();
+        let messages_options_slice: &[Option<Message<'static>>] = &messages_options;
+        Dbc::validate(
+            Some(&version),
+            &nodes,
+            messages_options_slice,
+            messages_options_slice.len(),
+        )
+        .map_err(Error::from)?;
         Ok(Self {
             version: Some(version),
             nodes: Some(nodes),
-            messages,
+            messages: messages_options.into_iter().map(|opt| opt.unwrap()).collect(),
         })
     }
 
-    pub fn build(self) -> Result<Dbc> {
+    pub fn build(self) -> Result<Dbc<'static>> {
         let (version, nodes, messages) = self.extract_fields()?;
-        Dbc::new(Some(version), nodes, messages)
+        // Convert Vec to Option array for validation (all Some)
+        let messages_options: Vec<Option<Message<'static>>> =
+            messages.into_iter().map(Some).collect();
+        let messages_options_slice: &[Option<Message<'static>>] = &messages_options;
+        // Validate before construction
+        Dbc::validate(
+            Some(&version),
+            &nodes,
+            messages_options_slice,
+            messages_options_slice.len(),
+        )
+        .map_err(Error::from)?;
+        // Convert Option array back to Vec for slice creation
+        let messages: Vec<Message<'static>> =
+            messages_options.into_iter().map(|opt| opt.unwrap()).collect();
+        // Convert Vec to slice by leaking the boxed slice to get 'static lifetime
+        let messages_boxed: Box<[Message<'static>]> = messages.into_boxed_slice();
+        let messages_slice: &'static [Message<'static>] = Box::leak(messages_boxed);
+        Ok(Dbc::new(Some(version), nodes, messages_slice))
     }
 }
 
-#[cfg(all(feature = "std", test))]
+#[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::DbcBuilder;
-    use crate::{
-        ByteOrder, Error, Message, Parser, Receivers, Signal, Version, error::lang,
-        nodes::NodesBuilder,
-    };
+    use crate::{ByteOrder, Error, Parser, Version, error::lang, nodes::NodesBuilder};
+    use crate::{MessageBuilder, ReceiversBuilder, SignalBuilder};
 
     #[test]
     fn test_dbc_builder_valid() {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
-        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
+        let message = MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal)
+            .build()
+            .unwrap();
 
         let dbc = DbcBuilder::new()
             .version(version)
@@ -114,28 +146,34 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.messages().len(), 1);
-        assert_eq!(dbc.messages()[0].id(), 256);
+        assert_eq!(dbc.message_count(), 1);
+        assert_eq!(dbc.message_at(0).unwrap().id(), 256);
     }
 
     #[test]
     fn test_dbc_builder_missing_version() {
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
-        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
+        let message = MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal)
+            .build()
+            .unwrap();
 
         let result = DbcBuilder::new().nodes(nodes).add_message(message).build();
         assert!(result.is_err());
@@ -149,21 +187,27 @@ mod tests {
     fn test_dbc_builder_missing_nodes() {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
-        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
+        let message = MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal)
+            .build()
+            .unwrap();
 
         let result = DbcBuilder::new().version(version).add_message(message).build();
         assert!(result.is_err());
@@ -178,22 +222,35 @@ mod tests {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
-        let message1 = Message::new(256, "EngineData", 8, "ECM", vec![signal.clone()]).unwrap();
-        let message2 = Message::new(512, "BrakeData", 4, "ECM", vec![signal]).unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
+        let message1 = MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal.clone())
+            .build()
+            .unwrap();
+        let message2 = MessageBuilder::new()
+            .id(512)
+            .name("BrakeData")
+            .dlc(4)
+            .sender("ECM")
+            .add_signal(signal)
+            .build()
+            .unwrap();
 
         let dbc = DbcBuilder::new()
             .version(version)
@@ -202,7 +259,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.messages().len(), 2);
+        assert_eq!(dbc.message_count(), 2);
     }
 
     #[test]
@@ -210,22 +267,35 @@ mod tests {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
-        let message1 = Message::new(256, "EngineData", 8, "ECM", vec![signal.clone()]).unwrap();
-        let message2 = Message::new(512, "BrakeData", 4, "ECM", vec![signal]).unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
+        let message1 = MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal.clone())
+            .build()
+            .unwrap();
+        let message2 = MessageBuilder::new()
+            .id(512)
+            .name("BrakeData")
+            .dlc(4)
+            .sender("ECM")
+            .add_signal(signal)
+            .build()
+            .unwrap();
 
         let dbc = DbcBuilder::new()
             .version(version)
@@ -234,7 +304,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.messages().len(), 2);
+        assert_eq!(dbc.message_count(), 2);
     }
 
     #[test]
@@ -242,21 +312,27 @@ mod tests {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
-        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
+        let message = MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal)
+            .build()
+            .unwrap();
 
         let dbc = DbcBuilder::new()
             .version(version)
@@ -266,7 +342,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.messages().len(), 0);
+        assert_eq!(dbc.message_count(), 0);
     }
 
     #[test]
@@ -297,21 +373,27 @@ mod tests {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
-        let message = Message::new(256, "EngineData", 8, "ECM", vec![signal]).unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
+        let message = MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal)
+            .build()
+            .unwrap();
 
         let result =
             DbcBuilder::new().version(version).nodes(nodes).add_message(message).validate();
@@ -319,6 +401,6 @@ mod tests {
         // Verify we can continue building after validation
         let validated = result.unwrap();
         let dbc = validated.build().unwrap();
-        assert_eq!(dbc.messages().len(), 1);
+        assert_eq!(dbc.message_count(), 1);
     }
 }

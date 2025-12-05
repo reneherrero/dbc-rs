@@ -1,36 +1,15 @@
-#[cfg(feature = "std")]
-use crate::{Error, Result};
-#[cfg(feature = "std")]
 use crate::{
-    Parser,
-    error::{ParseError, ParseResult, messages},
+    ByteOrder, Parser, Receivers,
+    error::{ParseError, ParseResult},
 };
-use crate::{byte_order::ByteOrder, receivers::Receivers};
-use core::option::Option;
 
 #[cfg(feature = "std")]
 pub mod signal_builder;
 
 #[cfg(feature = "std")]
 pub use signal_builder::SignalBuilder;
-#[derive(Debug, Clone, PartialEq)]
-#[cfg(feature = "std")]
-pub struct Signal {
-    name: String,
-    start_bit: u16,
-    length: u16,
-    byte_order: ByteOrder,
-    unsigned: bool,
-    factor: f64,
-    offset: f64,
-    min: f64,
-    max: f64,
-    unit: Option<String>,
-    receivers: Receivers,
-}
 
 #[derive(Debug, Clone, PartialEq)]
-#[cfg(not(feature = "std"))]
 pub struct Signal<'a> {
     name: &'a str,
     start_bit: u16,
@@ -45,41 +24,48 @@ pub struct Signal<'a> {
     receivers: Receivers<'a>,
 }
 
-#[cfg(feature = "std")]
-impl Signal {
-    fn validate(_name: &str, _length: u16, _min: f64, _max: f64) -> ParseResult<()> {
-        // if name.trim().is_empty() {
-        //     return Err(ParseError::Version(messages::SIGNAL_NAME_EMPTY));
-        // }
+impl<'a> Signal<'a> {
+    fn validate(name: &str, length: u16, min: f64, max: f64) -> ParseResult<()> {
+        if name.trim().is_empty() {
+            return Err(ParseError::Version(crate::error::lang::SIGNAL_NAME_EMPTY));
+        }
 
-        // // Validate length: must be between 1 and 512 bits
-        // // - Classic CAN (2.0A/2.0B): DLC up to 8 bytes (64 bits)
-        // // - CAN FD: DLC up to 64 bytes (512 bits)
-        // // Signal length is validated against message DLC in Message::validate
-        // if length == 0 {
-        //     return Err(ParseError::Version(messages::SIGNAL_LENGTH_TOO_SMALL));
-        // }
-        // if length > 512 {
-        //     return Err(ParseError::Version(messages::SIGNAL_LENGTH_TOO_LARGE));
-        // }
+        // Validate length: must be between 1 and 512 bits
+        // - Classic CAN (2.0A/2.0B): DLC up to 8 bytes (64 bits)
+        // - CAN FD: DLC up to 64 bytes (512 bits)
+        // Signal length is validated against message DLC in Message::validate
+        if length == 0 {
+            return Err(ParseError::Version(
+                crate::error::lang::SIGNAL_LENGTH_TOO_SMALL,
+            ));
+        }
+        if length > 512 {
+            return Err(ParseError::Version(
+                crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
+            ));
+        }
 
-        // // Note: start_bit validation (boundary checks and overlap detection) is done in
-        // // Message::validate, not here, because:
-        // // 1. The actual message size depends on DLC (1-64 bytes for CAN FD)
-        // // 2. Overlap detection requires comparing multiple signals
-        // // 3. This allows signals to be created independently and validated when added to a message
+        // Note: start_bit validation (boundary checks and overlap detection) is done in
+        // Message::validate, not here, because:
+        // 1. The actual message size depends on DLC (1-64 bytes for CAN FD)
+        // 2. Overlap detection requires comparing multiple signals
+        // 3. This allows signals to be created independently and validated when added to a message
 
-        // // Validate min <= max
-        // if min > max {
-        //     return Err(ParseError::Version(messages::SIGNAL_NAME_EMPTY));
-        // }
+        // Validate min <= max
+        if min > max {
+            // In no_std, we can't format the error message, so use a generic error
+            return Err(ParseError::Version(
+                crate::error::lang::FORMAT_INVALID_RANGE,
+            ));
+        }
 
         Ok(())
     }
 
     #[allow(clippy::too_many_arguments)] // Internal method, builder pattern is the public API
-    pub(crate) fn new(
-        name: &str,
+    #[allow(dead_code)] // Used by SignalBuilder
+    fn new(
+        name: &'a str,
         start_bit: u16,
         length: u16,
         byte_order: ByteOrder,
@@ -88,15 +74,11 @@ impl Signal {
         offset: f64,
         min: f64,
         max: f64,
-        unit: Option<&str>,
-        receivers: Receivers,
-    ) -> Result<Self> {
-        Self::validate(name, length, min, max).map_err(Error::from)?;
-
-        Ok(Self {
-            #[cfg(feature = "std")]
-            name: name.to_string(),
-            #[cfg(not(feature = "std"))]
+        unit: Option<&'a str>,
+        receivers: Receivers<'a>,
+    ) -> Self {
+        // Validation should have been done prior (by builder or parse)
+        Self {
             name,
             start_bit,
             length,
@@ -106,12 +88,9 @@ impl Signal {
             offset,
             min,
             max,
-            #[cfg(feature = "std")]
-            unit: unit.map(|s| s.to_string()),
-            #[cfg(not(feature = "std"))]
             unit,
             receivers,
-        })
+        }
     }
 
     #[allow(dead_code)] // Used by Signal::parse, which is reserved for future message parsing
@@ -119,7 +98,7 @@ impl Signal {
         // Parse start_bit
         let start_bit = parser
             .parse_u32()
-            .map_err(|_| ParseError::Version(messages::SIGNAL_PARSE_INVALID_START_BIT))?
+            .map_err(|_| ParseError::Version(crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT))?
             as u16;
 
         // Expect pipe
@@ -128,21 +107,21 @@ impl Signal {
         // Parse length
         let length = parser
             .parse_u32()
-            .map_err(|_| ParseError::Version(messages::SIGNAL_PARSE_INVALID_LENGTH))?
+            .map_err(|_| ParseError::Version(crate::error::lang::SIGNAL_PARSE_INVALID_LENGTH))?
             as u16;
 
         // Expect @
         parser.expect(b"@").map_err(|_| ParseError::Expected("Expected @"))?;
 
         // Parse byte order (0 or 1)
-        let remaining = parser.remaining();
-        if remaining.is_empty() {
+        // Try to expect '0' or '1' directly
+        let bo_byte = if parser.expect(b"0").is_ok() {
+            b'0'
+        } else if parser.expect(b"1").is_ok() {
+            b'1'
+        } else {
             return Err(ParseError::Expected("Expected byte order"));
-        }
-        let bo_byte = remaining[0];
-        parser
-            .expect(&[bo_byte])
-            .map_err(|_| ParseError::Expected("Expected byte order digit"))?;
+        };
 
         let byte_order = match bo_byte {
             b'0' => ByteOrder::BigEndian,    // 0 = Motorola (big-endian)
@@ -151,14 +130,13 @@ impl Signal {
         };
 
         // Parse sign (+ or -)
-        let remaining = parser.remaining();
-        if remaining.is_empty() {
-            return Err(ParseError::Expected("Expected sign"));
-        }
-        let sign_byte = remaining[0];
-        parser
-            .expect(&[sign_byte])
-            .map_err(|_| ParseError::Expected("Expected sign (+ or -)"))?;
+        let sign_byte = if parser.expect(b"+").is_ok() {
+            b'+'
+        } else if parser.expect(b"-").is_ok() {
+            b'-'
+        } else {
+            return Err(ParseError::Expected("Expected sign (+ or -)"));
+        };
 
         let unsigned = match sign_byte {
             b'+' => true,
@@ -180,13 +158,22 @@ impl Signal {
         parser.skip_newlines_and_spaces();
 
         // Parse factor (may be empty, default to 0.0)
-        let factor = if parser.remaining().starts_with(b",") || parser.remaining().starts_with(b")")
-        {
-            0.0
-        } else {
-            parser
-                .parse_f64()
-                .map_err(|_| ParseError::Version(messages::SIGNAL_PARSE_INVALID_FACTOR))?
+        // parse_f64() stops at comma/paren without consuming them
+        // If parsing fails immediately (pos unchanged), we're at a delimiter (empty factor)
+        let pos_before = parser.pos();
+        let factor = match parser.parse_f64() {
+            Ok(val) => val,
+            Err(_) => {
+                // Check if position didn't change (we're at delimiter)
+                if parser.pos() == pos_before {
+                    0.0 // Empty factor
+                } else {
+                    // Position changed but parsing failed - invalid format
+                    return Err(ParseError::Version(
+                        crate::error::lang::SIGNAL_PARSE_INVALID_FACTOR,
+                    ));
+                }
+            }
         };
 
         // Expect comma
@@ -196,12 +183,19 @@ impl Signal {
         parser.skip_newlines_and_spaces();
 
         // Parse offset (may be empty, default to 0.0)
-        let offset = if parser.remaining().starts_with(b")") {
-            0.0
-        } else {
-            parser
-                .parse_f64()
-                .map_err(|_| ParseError::Version(messages::SIGNAL_PARSE_INVALID_OFFSET))?
+        let pos_before = parser.pos();
+        let offset = match parser.parse_f64() {
+            Ok(val) => val,
+            Err(_) => {
+                // Check if position didn't change (we're at closing paren)
+                if parser.pos() == pos_before {
+                    0.0 // Empty offset
+                } else {
+                    return Err(ParseError::Version(
+                        crate::error::lang::SIGNAL_PARSE_INVALID_OFFSET,
+                    ));
+                }
+            }
         };
 
         // Skip whitespace
@@ -226,12 +220,19 @@ impl Signal {
         parser.skip_newlines_and_spaces();
 
         // Parse min (may be empty, default to 0.0)
-        let min = if parser.remaining().starts_with(b"|") || parser.remaining().starts_with(b"]") {
-            0.0
-        } else {
-            parser
-                .parse_f64()
-                .map_err(|_| ParseError::Version(messages::SIGNAL_PARSE_INVALID_MIN))?
+        let pos_before = parser.pos();
+        let min = match parser.parse_f64() {
+            Ok(val) => val,
+            Err(_) => {
+                // Check if position didn't change (we're at pipe or closing bracket)
+                if parser.pos() == pos_before {
+                    0.0 // Empty min
+                } else {
+                    return Err(ParseError::Version(
+                        crate::error::lang::SIGNAL_PARSE_INVALID_MIN,
+                    ));
+                }
+            }
         };
 
         // Expect pipe
@@ -241,12 +242,19 @@ impl Signal {
         parser.skip_newlines_and_spaces();
 
         // Parse max (may be empty, default to 0.0)
-        let max = if parser.remaining().starts_with(b"]") {
-            0.0
-        } else {
-            parser
-                .parse_f64()
-                .map_err(|_| ParseError::Version(messages::SIGNAL_PARSE_INVALID_MAX))?
+        let pos_before = parser.pos();
+        let max = match parser.parse_f64() {
+            Ok(val) => val,
+            Err(_) => {
+                // Check if position didn't change (we're at closing bracket)
+                if parser.pos() == pos_before {
+                    0.0 // Empty max
+                } else {
+                    return Err(ParseError::Version(
+                        crate::error::lang::SIGNAL_PARSE_INVALID_MAX,
+                    ));
+                }
+            }
         };
 
         // Skip whitespace
@@ -261,7 +269,7 @@ impl Signal {
     }
 
     #[allow(dead_code)] // Used by Signal::parse, which is reserved for future message parsing
-    fn parse_unit<'b>(parser: &mut Parser<'b>) -> ParseResult<Option<String>> {
+    fn parse_unit<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Option<&'a str>> {
         const MAX_UNIT_LENGTH: u16 = 256;
 
         // Expect opening quote
@@ -272,7 +280,7 @@ impl Signal {
         // Use take_until_quote to read the unit (allow any printable characters)
         let unit_bytes = parser.take_until_quote(false, MAX_UNIT_LENGTH).map_err(|e| match e {
             ParseError::MaxStrLength(_) => {
-                ParseError::Version(messages::SIGNAL_PARSE_UNIT_TOO_LONG)
+                ParseError::Version(crate::error::lang::SIGNAL_PARSE_UNIT_TOO_LONG)
             }
             _ => ParseError::Expected("Expected closing quote"),
         })?;
@@ -281,13 +289,6 @@ impl Signal {
         let unit_str = core::str::from_utf8(unit_bytes)
             .map_err(|_| ParseError::Expected("Invalid UTF-8 in unit"))?;
 
-        #[cfg(feature = "std")]
-        let unit = if unit_str.is_empty() {
-            None
-        } else {
-            Some(unit_str.to_string())
-        };
-        #[cfg(not(feature = "std"))]
         let unit = if unit_str.is_empty() {
             None
         } else {
@@ -298,17 +299,12 @@ impl Signal {
     }
 
     #[allow(dead_code)] // Reserved for future message parsing implementation
-    pub(crate) fn parse<'b>(parser: &mut Parser<'b>) -> ParseResult<Self> {
+    pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
         // When called from Dbc::parse, find_next_keyword already consumed "SG_" and advanced past it
         // So the parser is now at the space after "SG_". We just need to skip that whitespace.
         // But if "SG_" wasn't consumed (standalone call), we need to expect it first.
-        // Check if we need to consume "SG_" by looking at the remaining input
-        let remaining = parser.remaining();
-        if remaining.starts_with(b"SG_") {
-            // "SG_" is still there, consume it
-            parser.expect(b"SG_").map_err(|_| ParseError::Expected("Expected SG_"))?;
-        }
-        // Otherwise, we're already past "SG_" from find_next_keyword
+        // Try to expect "SG_" - if it fails, we're already past it from find_next_keyword
+        let _ = parser.expect(crate::SG_.as_bytes()).ok(); // Ignore error if already past "SG_"
 
         // Skip whitespace after "SG_"
         parser.skip_newlines_and_spaces();
@@ -316,7 +312,7 @@ impl Signal {
         // Parse signal name (identifier)
         let name = parser
             .parse_identifier()
-            .map_err(|_| ParseError::Version(messages::SIGNAL_NAME_EMPTY))?;
+            .map_err(|_| ParseError::Version(crate::error::lang::SIGNAL_NAME_EMPTY))?;
 
         // Skip whitespace (optional before colon) - handle multiplexer indicator
         // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
@@ -324,14 +320,28 @@ impl Signal {
         parser.skip_newlines_and_spaces();
 
         // Skip potential multiplexer indicator (m followed by number, or M)
-        // For simplicity, skip any 'm' or 'M' followed by digits or space
-        let remaining = parser.remaining();
-        if !remaining.is_empty() && (remaining[0] == b'm' || remaining[0] == b'M') {
-            // Skip 'm' or 'M'
-            parser.expect(&[remaining[0]]).ok();
+        // For simplicity, skip any 'm' or 'M' followed by digits
+        if parser.expect(b"m").is_ok() || parser.expect(b"M").is_ok() {
             // Skip any digits that follow
-            while !parser.remaining().is_empty() && parser.remaining()[0].is_ascii_digit() {
-                parser.expect(&[parser.remaining()[0]]).ok();
+            loop {
+                let _pos_before = parser.pos();
+                // Try to consume a digit
+                if parser.expect(b"0").is_ok()
+                    || parser.expect(b"1").is_ok()
+                    || parser.expect(b"2").is_ok()
+                    || parser.expect(b"3").is_ok()
+                    || parser.expect(b"4").is_ok()
+                    || parser.expect(b"5").is_ok()
+                    || parser.expect(b"6").is_ok()
+                    || parser.expect(b"7").is_ok()
+                    || parser.expect(b"8").is_ok()
+                    || parser.expect(b"9").is_ok()
+                {
+                    // Consumed a digit, continue
+                } else {
+                    // Not a digit, stop
+                    break;
+                }
             }
             // Skip whitespace after multiplexer indicator
             parser.skip_newlines_and_spaces();
@@ -371,12 +381,11 @@ impl Signal {
         // Parse receivers (may be empty/None if at end of line)
         let receivers = Receivers::parse(parser)?;
 
-        // Validate the parsed signal using the same validation as new()
+        // Validate before construction
         Self::validate(name, length, min, max)?;
-
-        // Convert to owned Strings
-        Ok(Signal {
-            name: name.to_string(),
+        // Construct directly (validation already done)
+        Ok(Self {
+            name,
             start_bit,
             length,
             byte_order,
@@ -391,9 +400,9 @@ impl Signal {
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be checked"]
     pub fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
     #[inline]
@@ -446,13 +455,13 @@ impl Signal {
 
     #[inline]
     #[must_use]
-    pub fn unit(&self) -> Option<&str> {
-        self.unit.as_ref().map(AsRef::as_ref)
+    pub fn unit(&self) -> Option<&'a str> {
+        self.unit
     }
 
     #[inline]
     #[must_use]
-    pub fn receivers(&self) -> &Receivers {
+    pub fn receivers(&self) -> &Receivers<'a> {
         &self.receivers
     }
 
@@ -513,14 +522,14 @@ impl Signal {
                 result.push(' ');
                 result.push('*');
             }
-            Receivers::Nodes(nodes) => {
-                if !nodes.is_empty() {
+            Receivers::Nodes(_, count) => {
+                if *count > 0 {
                     result.push(' ');
-                    for (i, node) in nodes.iter().enumerate() {
+                    for (i, node) in self.receivers().iter_nodes().enumerate() {
                         if i > 0 {
                             result.push(' ');
                         }
-                        result.push_str(node.as_ref());
+                        result.push_str(node);
                     }
                 }
             }
@@ -533,7 +542,7 @@ impl Signal {
     }
 }
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
@@ -541,24 +550,26 @@ mod tests {
         Error, Parser,
         error::{ParseError, lang},
     };
-    extern crate std;
+    #[cfg(feature = "std")]
+    use crate::{MessageBuilder, ReceiversBuilder, SignalBuilder};
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_signal_new_valid() {
-        let signal = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            0.25,
-            0.0,
-            0.0,
-            8000.0,
-            Some("rpm" as &str),
-            Receivers::Broadcast,
-        )
-        .unwrap();
+        let signal = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(0.25)
+            .offset(0.0)
+            .min(0.0)
+            .max(8000.0)
+            .unit("rpm")
+            .receivers(ReceiversBuilder::new().broadcast().build().unwrap())
+            .build()
+            .unwrap();
         assert_eq!(signal.name(), "RPM");
         assert_eq!(signal.start_bit(), 0);
         assert_eq!(signal.length(), 16);
@@ -573,21 +584,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[cfg(feature = "std")]
     fn test_signal_new_empty_name() {
-        let result = Signal::new(
-            "",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        );
+        let result = SignalBuilder::new()
+            .name("")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_NAME_EMPTY)),
@@ -596,21 +606,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[cfg(feature = "std")]
     fn test_signal_new_zero_length() {
-        let result = Signal::new(
-            "Test",
-            0,
-            0,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        );
+        let result = SignalBuilder::new()
+            .name("Test")
+            .start_bit(0)
+            .length(0)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)),
@@ -619,22 +628,21 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[cfg(feature = "std")]
     fn test_signal_new_length_too_large() {
         // length > 512 should fail validation (CAN FD maximum is 512 bits)
-        let result = Signal::new(
-            "Test",
-            0,
-            513,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        );
+        let result = SignalBuilder::new()
+            .name("Test")
+            .start_bit(0)
+            .length(513)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)),
@@ -643,31 +651,33 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[cfg(feature = "std")]
     fn test_signal_new_overflow() {
-        use crate::message::Message;
-
         // Signal with start_bit + length > 64 should be created successfully
         // (validation against message DLC happens in Message::validate)
         // This signal would fit in a CAN FD message (64 bytes = 512 bits)
-        let signal = Signal::new(
-            "Test",
-            60,
-            10, // 60 + 10 = 70, fits in CAN FD (512 bits)
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        );
-        assert!(signal.is_ok());
-        let signal = signal.unwrap();
+        let signal = SignalBuilder::new()
+            .name("Test")
+            .start_bit(60)
+            .length(10) // 60 + 10 = 70, fits in CAN FD (512 bits)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
 
         // But it should fail when added to a message with DLC < 9 bytes
-        let result = Message::new(256, "TestMessage", 8, "ECM", vec![signal]);
+        let result = MessageBuilder::new()
+            .id(256)
+            .name("TestMessage")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal)
+            .build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Message(msg) => {
@@ -681,21 +691,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[cfg(feature = "std")]
     fn test_signal_new_invalid_range() {
-        let result = Signal::new(
-            "Test",
-            0,
-            8,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            100.0,
-            50.0,
-            None::<&str>,
-            Receivers::None,
-        );
+        let result = SignalBuilder::new()
+            .name("Test")
+            .start_bit(0)
+            .length(8)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(100.0)
+            .max(50.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => {
@@ -708,54 +717,52 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_signal_new_max_boundary() {
         // Test that 64 bits at position 0 is valid
-        let signal = Signal::new(
-            "FullMessage",
-            0,
-            64,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            100.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
+        let signal = SignalBuilder::new()
+            .name("FullMessage")
+            .start_bit(0)
+            .length(64)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
         assert_eq!(signal.length(), 64);
     }
 
     #[test]
+    #[cfg(feature = "std")]
     fn test_signal_new_with_receivers() {
-        let nodes = vec!["ECM".to_string(), "TCM".to_string()];
-        let unit: Option<&str> = Some("°C");
-        let signal = Signal::new(
-            "TestSignal",
-            8,
-            16,
-            ByteOrder::LittleEndian,
-            false,
-            0.1,
-            -40.0,
-            -40.0,
-            215.0,
-            unit,
-            Receivers::Nodes(nodes),
-        )
-        .unwrap();
+        let signal = SignalBuilder::new()
+            .name("TestSignal")
+            .start_bit(8)
+            .length(16)
+            .byte_order(ByteOrder::LittleEndian)
+            .unsigned(false)
+            .factor(0.1)
+            .offset(-40.0)
+            .min(-40.0)
+            .max(215.0)
+            .unit("°C")
+            .receivers(ReceiversBuilder::new().add_node("ECM").add_node("TCM").build().unwrap())
+            .build()
+            .unwrap();
         assert_eq!(signal.name(), "TestSignal");
         assert!(!signal.is_unsigned());
         assert_eq!(signal.unit(), Some("°C"));
         match signal.receivers() {
-            Receivers::Nodes(n) => assert_eq!(n.len(), 2),
+            Receivers::Nodes(_, count) => assert_eq!(*count, 2),
             _ => panic!("Expected Nodes variant"),
         }
     }
 
     #[test]
-    #[ignore]
     fn test_parse_valid_signal() {
         let line = r#"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
@@ -763,18 +770,20 @@ mod tests {
         assert_eq!(sig.name(), "RPM");
         assert_eq!(sig.start_bit(), 0);
         assert_eq!(sig.length(), 16);
-        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
         assert!(sig.is_unsigned());
         assert_eq!(sig.factor(), 0.25);
         assert_eq!(sig.offset(), 0.);
         assert_eq!(sig.min(), 0.);
         assert_eq!(sig.max(), 8000.);
         assert_eq!(sig.unit(), Some("rpm"));
-        assert_eq!(sig.receivers(), &Receivers::Nodes(vec!["TCM".to_string()]));
+        // Check receivers using iter_nodes
+        let nodes: Vec<&str> = sig.receivers().iter_nodes().collect();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0], "TCM");
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_with_empty_unit_and_broadcast() {
         let line = r#"SG_ ABSActive : 16|1@0+ (1,0) [0|1] "" *"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
@@ -782,7 +791,7 @@ mod tests {
         assert_eq!(sig.name(), "ABSActive");
         assert_eq!(sig.start_bit(), 16);
         assert_eq!(sig.length(), 1);
-        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
         assert!(sig.is_unsigned());
         assert_eq!(sig.factor(), 1.);
         assert_eq!(sig.offset(), 0.);
@@ -793,7 +802,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_with_negative_offset_and_min() {
         let line = r#"SG_ Temperature : 16|8@0- (1,-40) [-40|215] "°C" TCM BCM"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
@@ -801,24 +809,21 @@ mod tests {
         assert_eq!(sig.name(), "Temperature");
         assert_eq!(sig.start_bit(), 16);
         assert_eq!(sig.length(), 8);
-        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
         assert!(!sig.is_unsigned());
         assert_eq!(sig.factor(), 1.);
         assert_eq!(sig.offset(), -40.);
         assert_eq!(sig.min(), -40.);
         assert_eq!(sig.max(), 215.);
         assert_eq!(sig.unit(), Some("°C"));
-        #[cfg(feature = "std")]
-        assert_eq!(
-            sig.receivers(),
-            &Receivers::Nodes(vec!["TCM".to_string(), "BCM".to_string()])
-        );
-        #[cfg(not(feature = "std"))]
-        assert_eq!(sig.receivers(), &Receivers::Nodes(&["TCM", "BCM"]));
+        // Check receivers using iter_nodes
+        let nodes: Vec<&str> = sig.receivers().iter_nodes().collect();
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(nodes[0], "TCM");
+        assert_eq!(nodes[1], "BCM");
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_with_percent_unit() {
         let line = r#"SG_ ThrottlePosition : 24|8@0+ (0.392157,0) [0|100] "%" *"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
@@ -826,7 +831,7 @@ mod tests {
         assert_eq!(sig.name(), "ThrottlePosition");
         assert_eq!(sig.start_bit(), 24);
         assert_eq!(sig.length(), 8);
-        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
         assert!(sig.is_unsigned());
         assert_eq!(sig.factor(), 0.392_157);
         assert_eq!(sig.offset(), 0.);
@@ -837,7 +842,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_missing_factors_and_limits() {
         // Should use default values where missing
         let line = r#"SG_ Simple : 10|4@0+ ( , ) [ | ] "" *"#;
@@ -846,7 +850,7 @@ mod tests {
         assert_eq!(sig.name(), "Simple");
         assert_eq!(sig.start_bit(), 10);
         assert_eq!(sig.length(), 4);
-        assert_eq!(sig.byte_order(), ByteOrder::LittleEndian);
+        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
         assert!(sig.is_unsigned());
         assert_eq!(sig.factor(), 0.);
         assert_eq!(sig.offset(), 0.);
@@ -868,10 +872,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_invalid_range() {
         // min > max should fail validation
-        let line = r#" SG_ Test : 0|8@0+ (1,0) [100|50] "unit" *"#;
+        let line = r#"SG_ Test : 0|8@0+ (1,0) [100|50] "unit" *"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
@@ -880,26 +883,30 @@ mod tests {
                 let template_text = lang::FORMAT_INVALID_RANGE.split("{}").next().unwrap();
                 assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
             }
-            _ => panic!("Expected ParseError"),
+            e => panic!("Expected ParseError::Version, got: {:?}", e),
         }
     }
 
     #[test]
-    #[ignore]
+    #[cfg(feature = "std")]
     fn test_parse_signal_overflow() {
-        use crate::message::Message;
-
         // Signal with start_bit + length > 64 should parse successfully
         // (validation against message DLC happens in Message::validate)
         // This signal would fit in a CAN FD message (64 bytes = 512 bits)
-        let line = r#" SG_ Test : 60|10@0+ (1,0) [0|100] "unit" *"#;
+        let line = r#"SG_ Test : 60|10@0+ (1,0) [0|100] "unit" *"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let signal = Signal::parse(&mut parser).unwrap();
         assert_eq!(signal.start_bit(), 60);
         assert_eq!(signal.length(), 10);
 
         // But it should fail when added to a message with DLC < 9 bytes
-        let result = Message::new(256, "TestMessage", 8, "ECM", vec![signal]);
+        let result = MessageBuilder::new()
+            .id(256)
+            .name("TestMessage")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(signal)
+            .build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Message(msg) => {
@@ -913,40 +920,37 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_length_too_large() {
         // length > 512 should fail validation (CAN FD maximum is 512 bits)
-        let line = r#" SG_ Test : 0|513@0+ (1,0) [0|100] "unit" *"#;
+        let line = r#"SG_ Test : 0|513@0+ (1,0) [0|100] "unit" *"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
             ParseError::Version(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)),
-            _ => panic!("Expected ParseError"),
+            e => panic!("Expected ParseError::Version, got: {:?}", e),
         }
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_zero_length() {
         // length = 0 should fail validation
-        let line = r#" SG_ Test : 0|0@0+ (1,0) [0|100] "unit" *"#;
+        let line = r#"SG_ Test : 0|0@0+ (1,0) [0|100] "unit" *"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
             ParseError::Version(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)),
-            _ => panic!("Expected ParseError"),
+            e => panic!("Expected ParseError::Version, got: {:?}", e),
         }
     }
 
     #[test]
-    #[ignore]
     fn test_parse_signal_missing_length() {
-        let line = r#" SG_ RPM : 0|@0+ (0.25,0) [0|8000] "rpm" TCM"#;
+        let line = r#"SG_ RPM : 0|@0+ (0.25,0) [0|8000] "rpm" TCM"#;
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
             ParseError::Version(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_LENGTH)),
-            _ => panic!("Expected ParseError"),
+            e => panic!("Expected ParseError::Version, got: {:?}", e),
         }
     }
 
@@ -954,60 +958,59 @@ mod tests {
     #[cfg(feature = "std")]
     fn test_signal_to_dbc_string() {
         // Test with Broadcast receiver
-        let signal1 = Signal::new(
-            "RPM",
-            0,
-            16,
-            ByteOrder::BigEndian,
-            true,
-            0.25,
-            0.0,
-            0.0,
-            8000.0,
-            Some("rpm" as &str),
-            Receivers::Broadcast,
-        )
-        .unwrap();
+        let signal1 = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(0.25)
+            .offset(0.0)
+            .min(0.0)
+            .max(8000.0)
+            .unit("rpm")
+            .receivers(ReceiversBuilder::new().broadcast().build().unwrap())
+            .build()
+            .unwrap();
         assert_eq!(
             signal1.to_dbc_string(),
             " SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *"
         );
 
         // Test with Nodes receiver
-        let signal2 = Signal::new(
-            "Temperature",
-            16,
-            8,
-            ByteOrder::LittleEndian,
-            false,
-            1.0,
-            -40.0,
-            -40.0,
-            215.0,
-            Some("°C" as &str),
-            Receivers::Nodes(vec!["TCM".to_string(), "BCM".to_string()]),
-        )
-        .unwrap();
+        let signal2 = SignalBuilder::new()
+            .name("Temperature")
+            .start_bit(16)
+            .length(8)
+            .byte_order(ByteOrder::LittleEndian)
+            .unsigned(false)
+            .factor(1.0)
+            .offset(-40.0)
+            .min(-40.0)
+            .max(215.0)
+            .unit("°C")
+            .receivers(ReceiversBuilder::new().add_node("TCM").add_node("BCM").build().unwrap())
+            .build()
+            .unwrap();
         assert_eq!(
             signal2.to_dbc_string(),
             " SG_ Temperature : 16|8@1- (1,-40) [-40|215] \"°C\" TCM BCM"
         );
 
         // Test with None receiver and empty unit
-        let signal3 = Signal::new(
-            "Flag",
-            24,
-            1,
-            ByteOrder::BigEndian,
-            true,
-            1.0,
-            0.0,
-            0.0,
-            1.0,
-            None::<&str>,
-            Receivers::None,
-        )
-        .unwrap();
+        let signal3 = SignalBuilder::new()
+            .name("Flag")
+            .start_bit(24)
+            .length(1)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(1.0)
+            .receivers(ReceiversBuilder::new().none().build().unwrap())
+            .build()
+            .unwrap();
         assert_eq!(
             signal3.to_dbc_string(),
             " SG_ Flag : 24|1@0+ (1,0) [0|1] \"\""
