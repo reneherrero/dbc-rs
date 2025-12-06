@@ -1,0 +1,64 @@
+# Exclude from parent workspace
+[workspace]
+
+[package]
+name = "dbc-kernel-example"
+version = "0.1.0"
+edition = "2021"
+authors = ["dbc-rs contributors"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+dbc-rs = { path = "../dbc", default-features = false, features = ["kernel"] }
+
+# ============================================================================
+# TI Kernel Setup for Testing
+# ============================================================================
+#
+# To test against the TI kernel, follow these steps:
+#
+# 1. Set up TI kernel source (from repository root):
+#    ./setup-ti-kernel.sh
+#
+#    This will:
+#    - Clone TI kernel as a git submodule at ti-linux-kernel/
+#    - Checkout the appropriate branch (ti-linux-6.12.y by default)
+#    - Verify Rust support configuration
+#
+# 2. Configure kernel with Rust support:
+#    cd ti-linux-kernel
+#    make ARCH=arm64 defconfig
+#    # Edit .config and set: CONFIG_RUST=y
+#    # Or use menuconfig: make ARCH=arm64 menuconfig
+#
+# 3. Build kernel bindings (generates rust/ directory):
+#    make ARCH=arm64 rustavailable
+#    make ARCH=arm64 rustfmtcheck
+#
+# 4. The kernel dependency below should now work:
+#    - Path points to ../ti-linux-kernel/rust (relative to this directory)
+#    - Update the path if your kernel source is in a different location
+#
+# 5. Test compilation:
+#    cd kernel-driver-example
+#    cargo check
+#
+# Note: If you haven't set up the kernel source yet, comment out the
+# [dependencies.kernel] section below to use the mock for testing.
+#
+# ============================================================================
+
+[dependencies.kernel]
+path = "../ti-linux-kernel/rust" # Update this if kernel source is elsewhere
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true

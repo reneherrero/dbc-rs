@@ -305,9 +305,11 @@ impl DbcBuilder {
     }
 
     fn extract_fields(self) -> Result<(Version<'static>, Nodes<'static>, Vec<Message<'static>>)> {
-        let version = self
-            .version
-            .ok_or_else(|| Error::Dbc(messages::DBC_VERSION_REQUIRED.to_string()))?;
+        let version = self.version.ok_or_else(|| {
+            Error::Dbc(crate::error::str_to_error_string(
+                messages::DBC_VERSION_REQUIRED,
+            ))
+        })?;
         // Allow empty nodes (DBC spec allows empty BU_: line)
         let nodes = self.nodes.unwrap_or_default();
         Ok((version, nodes, self.messages))
@@ -343,7 +345,9 @@ impl DbcBuilder {
             messages_options_slice.len(),
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => Error::Dbc(String::from(msg)),
+            crate::error::ParseError::Version(msg) => {
+                Error::Dbc(crate::error::str_to_error_string(msg))
+            }
             _ => Error::from(e),
         })?;
         Ok(Self {
@@ -383,7 +387,9 @@ impl DbcBuilder {
             messages_options_slice.len(),
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => Error::Dbc(String::from(msg)),
+            crate::error::ParseError::Version(msg) => {
+                Error::Dbc(crate::error::str_to_error_string(msg))
+            }
             _ => Error::from(e),
         })?;
         // Convert Option array back to Vec for slice creation

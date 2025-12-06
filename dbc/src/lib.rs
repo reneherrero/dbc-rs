@@ -10,6 +10,17 @@
 //! - **Type-safe**: Strong typing for all DBC elements
 //! - **Internationalized errors**: Support for multiple languages
 //!
+//! ## Kernel Support (Experimental)
+//!
+//! ⚠️ **EXPERIMENTAL**: The `kernel` feature is experimental and subject to change.
+//! It provides compatibility with Linux kernel's `kernel::alloc` API for use in kernel modules.
+//! This feature is still under development and may have breaking changes.
+//!
+//! - The `kernel` feature is mutually exclusive with `alloc` and `std`
+//! - Uses a mock `kernel::alloc` implementation for testing (not the real kernel alloc API)
+//! - Real kernel usage requires integration with rust-for-linux
+//! - API may change without notice
+//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -27,10 +38,24 @@
 //! # Ok::<(), dbc_rs::Error>(())
 //! ```
 
-#![cfg_attr(not(feature = "alloc"), no_std)]
+#![cfg_attr(not(any(feature = "alloc", feature = "kernel")), no_std)]
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 extern crate alloc;
+
+// EXPERIMENTAL: Kernel feature support
+// This provides a mock kernel::alloc module for testing kernel compatibility
+// Note: This is experimental and subject to change
+// Real kernel usage requires integration with rust-for-linux and actual kernel::alloc
+#[cfg(feature = "kernel")]
+pub mod kernel_mock;
+
+#[cfg(feature = "kernel")]
+pub use kernel_mock as kernel;
+
+// Compatibility layer for alloc vs kernel::alloc
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+mod alloc_compat;
 
 mod byte_order;
 mod dbc;
@@ -53,17 +78,17 @@ pub use receivers::Receivers;
 pub use signal::Signal;
 pub use version::Version;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use dbc::DbcBuilder;
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use message::MessageBuilder;
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use nodes::NodesBuilder;
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use receivers::ReceiversBuilder;
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use signal::SignalBuilder;
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use version::VersionBuilder;
 
 pub(crate) use parser::Parser;

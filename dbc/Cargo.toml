@@ -21,6 +21,14 @@ features = ["alloc", "std"]
 default = ["std"]
 alloc = []
 std = ["alloc"]
+# EXPERIMENTAL: Kernel feature for Linux kernel module compatibility
+# This feature is experimental and subject to change. Mutually exclusive with alloc and std.
+kernel = []
+
+# Feature conflicts: kernel is mutually exclusive with alloc and std
+[package.metadata.cargo-features]
+# This is a workaround - Cargo doesn't support feature conflicts natively
+# We'll handle this in build.rs or via conditional compilation
 
 [[example]]
 name = "create_dbc"
@@ -40,6 +48,7 @@ required-features = []
 [dev-dependencies]
 proptest = { version = "1.5", default-features = false, features = ["std"] }
 criterion = { version = "0.5", default-features = false }
+mockalloc = "0.1.2"
 
 [[bench]]
 name = "parse_bench"

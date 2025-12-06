@@ -261,7 +261,7 @@ impl ReceiversBuilder {
             // Validate before construction
             const MAX_RECEIVER_NODES: usize = 64;
             if node_refs.len() > MAX_RECEIVER_NODES {
-                return Err(Error::Signal(String::from(
+                return Err(Error::Signal(crate::error::str_to_error_string(
                     crate::error::messages::SIGNAL_RECEIVERS_TOO_MANY,
                 )));
             }

@@ -39,18 +39,40 @@ if let Some(engine_msg) = dbc.messages().iter().find(|m| m.id() == 256) {
 
 ## Feature Flags
 
-The crate supports three levels of functionality through feature flags:
+The crate supports multiple levels of functionality through feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
 | *(none)* | ❌ | **`no_std`**: Bare bones parsing only. No dynamic memory allocation. Uses fixed-size arrays. |
 | `alloc` | ❌ | Adds dynamic memory allocation (`alloc` crate). Enables builders and string formatting methods. |
 | `std`   | ✅ | Adds standard library integration (I/O helpers, file operations). Requires `alloc`. |
+| `kernel` | ❌ | ⚠️ **EXPERIMENTAL**: Linux kernel compatibility using `kernel::alloc` API. Mutually exclusive with `alloc` and `std`. |
 
 **Feature Hierarchy:**
 - **`no_std`** (no features): Minimal parsing, fixed-size arrays
 - **`alloc`**: Adds dynamic allocation, builders, string formatting
 - **`std`**: Adds I/O helpers, file operations, additional conveniences
+- **`kernel`** ⚠️: Experimental kernel module support (see [Kernel Support](#kernel-support-experimental) below)
+
+### Kernel Support (Experimental)
+
+⚠️ **WARNING**: The `kernel` feature is **experimental** and subject to change without notice.
+
+The `kernel` feature enables compatibility with Linux kernel's `kernel::alloc` API for use in Rust kernel modules. This feature:
+
+- Is **mutually exclusive** with `alloc` and `std` features
+- Uses a mock `kernel::alloc` implementation for testing (not the real kernel alloc API)
+- Requires integration with [rust-for-linux](https://github.com/Rust-for-Linux/linux) for actual kernel usage
+- May have breaking changes in future releases
+- Is not recommended for production use at this time
+
+**Usage:**
+```toml
+[dependencies]
+dbc-rs = { version = "0.1.0-beta.1", default-features = false, features = ["kernel"] }
+```
+
+For more details, see [KERNEL_FEATURE_ANALYSIS.md](../KERNEL_FEATURE_ANALYSIS.md).
 
 **Examples:**
 
@@ -352,7 +374,7 @@ For security reasons (DoS protection), the library enforces the following limits
 
 Attempting to exceed these limits will result in a validation error. These limits accommodate typical DBC file sizes (typically < 1000 messages and < 10 nodes).
 
-For a comprehensive security audit, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
+For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
@@ -449,8 +471,8 @@ For most users, the open-source license (MIT OR Apache-2.0) is sufficient.
 
 ## References
 
-- [DBC Format Specification](DBC_SPECIFICATIONS.md) - Detailed format documentation
-- [Security Audit](SECURITY_AUDIT.md) - Comprehensive security review
+- [DBC Format Specification](SPECIFICATIONS.md) - Detailed format documentation
+- [Security Audit](SECURITY.md) - Comprehensive security review
 - Vector Informatik: "DBC File Format Documentation Version 01/2007"
 - CAN Specification (ISO 11898)
 

@@ -84,7 +84,7 @@ This checklist ensures all steps are completed before publishing a new release o
   - [ ] Examples in doc comments compile
   - [ ] Error conditions documented
 
-- [ ] **SECURITY_AUDIT.md reviewed**
+- [ ] **SECURITY.md reviewed**
   - [ ] All fixed issues marked as resolved
   - [ ] Date updated if audit was refreshed
 
@@ -123,17 +123,27 @@ This checklist ensures all steps are completed before publishing a new release o
 
 ### 6. File Synchronization
 
-- [ ] **SECURITY_AUDIT.md reviewed**
+- [ ] **SECURITY.md reviewed**
   - [ ] Version and date updated for release
   - [ ] All security issues documented
 
 ### 7. Final Verification
 
 - [ ] **All CI checks pass**
-  - [ ] GitHub Actions workflows successful
-  - [ ] All test jobs pass
-  - [ ] All lint jobs pass
-  - [ ] Coverage job passes
+  - [ ] **dbc-rs Library Workflow** (`.github/workflows/dbc-rs.yml`) successful
+    - [ ] `test-std` job passes (tests with std on latest stable)
+    - [ ] `test-no-std` job passes (tests no_std on latest stable)
+    - [ ] `test-std-msrv` job passes (tests with std on MSRV 1.85.0)
+    - [ ] `test-no-std-msrv` job passes (tests no_std on MSRV 1.85.0)
+    - [ ] `lint` job passes (clippy checks)
+    - [ ] `fmt` job passes (formatting check)
+    - [ ] `doc` job passes (documentation builds)
+    - [ ] `coverage` job passes (code coverage ≥80%)
+  - [ ] **dbc-cli Workflow** (`.github/workflows/dbc-cli.yml`) successful (if CLI changes were made)
+    - [ ] `test` job passes (tests on latest stable)
+    - [ ] `test-msrv` job passes (tests on MSRV 1.85.0)
+    - [ ] `lint` job passes (clippy checks)
+    - [ ] `fmt` job passes (formatting check)
 
 - [ ] **Pre-commit hook passes**
   ```bash
@@ -230,24 +240,31 @@ For pre-releases:
 ```bash
 # 1. Update version in Cargo.toml
 # 2. Update CHANGELOG.md
-# 3. Run all checks
+# 3. Run all checks locally (matches CI workflows)
 cargo test --workspace
 cargo clippy --all-targets --all-features -- -D warnings
 cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
+cargo clippy --all-targets -p dbc-cli -- -D warnings
 cargo fmt -- --check
+cargo llvm-cov --all-features --workspace --fail-under-lines 80
 cargo package --dry-run -p dbc-rs
 
-# 4. Commit and tag
+# 4. Push changes and wait for CI workflows to pass
 git add .
 git commit -m "Release vX.Y.Z"
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin main
+# Wait for GitHub Actions workflows to complete:
+# - dbc-rs Library Workflow (all jobs must pass)
+# - dbc-cli Workflow (if CLI changes were made)
+
+# 5. Create and push tag
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 
-# 5. Publish
+# 6. Publish to crates.io
 cargo publish -p dbc-rs
 
-# 6. Create GitHub release (via web UI)
+# 7. Create GitHub release (via web UI)
 ```
 
 ## Troubleshooting
@@ -273,6 +290,11 @@ cargo publish -p dbc-rs
 - **Never skip steps**: Each step ensures quality and prevents issues
 - **Test thoroughly**: Especially test `no_std` builds before releasing
 - **Document breaking changes**: Users need clear migration paths
-- **Keep SECURITY_AUDIT.md updated**: Review and update for each release
+- **Keep SECURITY.md updated**: Review and update for each release
 - **Verify CI passes**: Don't publish if CI is failing
+- **CI Workflows**: The project uses two separate workflows:
+  - `dbc-rs.yml`: Tests the library with multiple configurations (std/no_std, latest/MSRV)
+  - `dbc-cli.yml`: Tests the CLI application
+  - Both workflows run automatically on pushes and PRs to `main`
+  - Workflows use path-based triggers to only run when relevant files change
 

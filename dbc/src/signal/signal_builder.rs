@@ -129,15 +129,21 @@ impl SignalBuilder {
     }
 
     fn extract_fields(self) -> Result<SignalFields> {
-        let name = self
-            .name
-            .ok_or_else(|| Error::Signal(messages::SIGNAL_NAME_EMPTY.to_string()))?;
-        let start_bit = self
-            .start_bit
-            .ok_or_else(|| Error::Signal(messages::SIGNAL_START_BIT_REQUIRED.to_string()))?;
-        let length = self
-            .length
-            .ok_or_else(|| Error::Signal(messages::SIGNAL_LENGTH_REQUIRED.to_string()))?;
+        let name = self.name.ok_or_else(|| {
+            Error::Signal(crate::error::str_to_error_string(
+                messages::SIGNAL_NAME_EMPTY,
+            ))
+        })?;
+        let start_bit = self.start_bit.ok_or_else(|| {
+            Error::Signal(crate::error::str_to_error_string(
+                messages::SIGNAL_START_BIT_REQUIRED,
+            ))
+        })?;
+        let length = self.length.ok_or_else(|| {
+            Error::Signal(crate::error::str_to_error_string(
+                messages::SIGNAL_LENGTH_REQUIRED,
+            ))
+        })?;
         Ok((
             name,
             start_bit,
@@ -157,7 +163,7 @@ impl SignalBuilder {
     pub fn validate(self) -> Result<Self> {
         let (
             name,
-            _start_bit,
+            start_bit,
             length,
             byte_order,
             unsigned,
@@ -168,10 +174,31 @@ impl SignalBuilder {
             unit,
             receivers,
         ) = self.extract_fields()?;
+
+        // Validate start_bit: must be between 0 and 511 (CAN FD maximum is 512 bits)
+        if start_bit > 511 {
+            return Err(Error::Signal(crate::error::str_to_error_string(
+                &crate::error::messages::signal_start_bit_invalid(&name, start_bit),
+            )));
+        }
+
+        // Validate that start_bit + length doesn't exceed CAN FD maximum (512 bits)
+        // Note: This is a basic sanity check. Full validation (including message DLC bounds
+        // and overlap detection) happens when the signal is added to a message.
+        let end_bit = start_bit + length - 1; // -1 because length includes the start bit
+        if end_bit >= 512 {
+            return Err(Error::Signal(crate::error::str_to_error_string(
+                &crate::error::messages::signal_extends_beyond_message(
+                    &name, start_bit, length, end_bit, 512, // max_bits (CAN FD maximum)
+                    64,  // dlc in bytes (64 bytes = 512 bits)
+                ),
+            )));
+        }
+
         Signal::validate(&name, length, min, max).map_err(Error::from)?;
         Ok(Self {
             name: Some(name),
-            start_bit: Some(_start_bit),
+            start_bit: Some(start_bit),
             length: Some(length),
             byte_order,
             unsigned,
@@ -209,7 +236,9 @@ impl SignalBuilder {
         };
         // Validate before construction
         Signal::validate(name_static, length, min, max).map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => Error::Signal(String::from(msg)),
+            crate::error::ParseError::Version(msg) => {
+                Error::Signal(crate::error::str_to_error_string(msg))
+            }
             _ => Error::ParseError(e),
         })?;
         Ok(Signal::new(

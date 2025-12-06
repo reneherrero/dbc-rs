@@ -1,4 +1,29 @@
-use core::{convert::From, fmt, num::ParseIntError};
+use core::{convert::From, fmt};
+
+// ParseIntError is used in From<ParseIntError> implementations
+// The warning appears when default features (std/alloc) are enabled with kernel
+// because the kernel-specific implementation isn't compiled in that case
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+#[allow(unused_imports)]
+use core::num::ParseIntError;
+
+// Type alias for String based on feature flags
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+use crate::kernel::alloc::string::String as ErrorString;
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+use alloc::string::String as ErrorString;
+
+// Helper function to convert &str to ErrorString
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
+    ErrorString::try_from(s)
+        .unwrap_or_else(|_| ErrorString::try_from("").unwrap_or_else(|_| unreachable!()))
+}
+
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
+    ErrorString::from(s)
+}
 
 pub mod lang;
 pub(crate) mod messages;
@@ -10,28 +35,28 @@ pub(crate) mod messages;
 #[derive(Debug, PartialEq)]
 pub enum Error {
     /// Invalid data error (e.g., parse failures, invalid formats).
-    #[cfg(feature = "alloc")]
-    InvalidData(String),
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    InvalidData(ErrorString),
 
     /// Signal-related error (e.g., invalid signal definition).
-    #[cfg(feature = "alloc")]
-    Signal(String),
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    Signal(ErrorString),
 
     /// Message-related error (e.g., invalid message definition).
-    #[cfg(feature = "alloc")]
-    Message(String),
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    Message(ErrorString),
 
     /// DBC file-level error (e.g., missing required sections).
-    #[cfg(feature = "alloc")]
-    Dbc(String),
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    Dbc(ErrorString),
 
     /// Version parsing error.
-    #[cfg(feature = "alloc")]
-    Version(String),
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    Version(ErrorString),
 
     /// Node-related error (e.g., duplicate node names).
-    #[cfg(feature = "alloc")]
-    Nodes(String),
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    Nodes(ErrorString),
 
     /// Low-level parse error (available in `no_std` builds).
     ParseError(ParseError),
@@ -76,47 +101,79 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Result type alias for low-level parsing operations that can return a `ParseError`.
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
-#[cfg(feature = "alloc")]
+// Separate Display implementations for alloc and kernel (Strategy 4)
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::InvalidData(msg) => {
-                // Display the message with category prefix for better readability
-                write!(f, "{}", messages::format_invalid_data(msg))
-            }
-            Error::Signal(msg) => {
-                // Display the message with category prefix for better readability
-                write!(f, "{}", messages::format_signal_error(msg))
-            }
-            Error::Message(msg) => {
-                write!(f, "{}", messages::format_message_error(msg))
-            }
-            Error::Dbc(msg) => {
-                write!(f, "{}", messages::format_dbc_error(msg))
-            }
-            Error::Version(msg) => {
-                write!(f, "{}", messages::format_version_error(msg))
-            }
-            Error::Nodes(msg) => {
-                write!(f, "{}", messages::format_nodes_error(msg))
-            }
-            Error::ParseError(msg) => {
-                write!(f, "Parse Error: {}", msg)
-            }
+            Error::InvalidData(msg) => write!(f, "{}", messages::format_invalid_data(msg)),
+            Error::Signal(msg) => write!(f, "{}", messages::format_signal_error(msg)),
+            Error::Message(msg) => write!(f, "{}", messages::format_message_error(msg)),
+            Error::Dbc(msg) => write!(f, "{}", messages::format_dbc_error(msg)),
+            Error::Version(msg) => write!(f, "{}", messages::format_version_error(msg)),
+            Error::Nodes(msg) => write!(f, "{}", messages::format_nodes_error(msg)),
+            Error::ParseError(msg) => write!(f, "Parse Error: {}", msg),
         }
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::InvalidData(msg) => {
+                let formatted = messages::format_invalid_data(msg).map_err(|_| fmt::Error)?;
+                write!(f, "{}", formatted)
+            }
+            Error::Signal(msg) => {
+                let formatted = messages::format_signal_error(msg).map_err(|_| fmt::Error)?;
+                write!(f, "{}", formatted)
+            }
+            Error::Message(msg) => {
+                let formatted = messages::format_message_error(msg).map_err(|_| fmt::Error)?;
+                write!(f, "{}", formatted)
+            }
+            Error::Dbc(msg) => {
+                let formatted = messages::format_dbc_error(msg).map_err(|_| fmt::Error)?;
+                write!(f, "{}", formatted)
+            }
+            Error::Version(msg) => {
+                let formatted = messages::format_version_error(msg).map_err(|_| fmt::Error)?;
+                write!(f, "{}", formatted)
+            }
+            Error::Nodes(msg) => {
+                let formatted = messages::format_nodes_error(msg).map_err(|_| fmt::Error)?;
+                write!(f, "{}", formatted)
+            }
+            Error::ParseError(msg) => write!(f, "Parse Error: {}", msg),
+        }
+    }
+}
+
+// Separate From<ParseIntError> implementations for alloc vs kernel
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 impl From<ParseIntError> for Error {
     fn from(err: ParseIntError) -> Self {
         Error::InvalidData(messages::parse_number_failed(err))
     }
 }
 
-#[cfg(not(feature = "alloc"))]
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
 impl From<ParseIntError> for Error {
-    fn from(_err: ParseIntError) -> Self {
+    fn from(err: ParseIntError) -> Self {
+        // In kernel mode, parse_number_failed returns Result
+        Error::InvalidData(messages::parse_number_failed(err).unwrap_or_else(|_| {
+            ErrorString::try_from("Failed to parse number").unwrap_or_else(|_| {
+                // Fallback: create empty string if allocation fails
+                ErrorString::try_from("").unwrap_or_else(|_| unreachable!())
+            })
+        }))
+    }
+}
+
+#[cfg(not(any(feature = "alloc", feature = "kernel")))]
+impl From<core::num::ParseIntError> for Error {
+    fn from(_err: core::num::ParseIntError) -> Self {
         // In no_std, we can only return ParseError
         // ParseIntError conversion is not fully supported in no_std
         Error::ParseError(ParseError::Expected("Invalid number format"))
@@ -129,7 +186,9 @@ impl From<ParseError> for Error {
     }
 }
 
-#[cfg(feature = "std")]
+// std::error::Error is only available with std feature (which requires alloc)
+// Display is already implemented for alloc feature, so this should work
+#[cfg(all(feature = "std", feature = "alloc", not(feature = "kernel")))]
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None
@@ -140,72 +199,83 @@ impl std::error::Error for Error {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::Error;
-    use crate::error::lang;
-    use alloc::string::ToString;
 
-    #[test]
-    fn test_from_parse_int_error() {
-        // Create a ParseIntError by trying to parse an invalid string
-        let parse_error = "invalid".parse::<u32>().unwrap_err();
-        let error: Error = parse_error.into();
+    // Tests that require alloc feature (not kernel)
+    #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+    mod alloc_tests {
+        use super::*;
+        use crate::error::lang;
+        use alloc::string::ToString;
 
-        match error {
-            Error::InvalidData(msg) => {
-                assert!(msg.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()));
+        #[test]
+        fn test_from_parse_int_error() {
+            // Create a ParseIntError by trying to parse an invalid string
+            let parse_error = "invalid".parse::<u32>().unwrap_err();
+            let error: Error = parse_error.into();
+
+            match error {
+                Error::InvalidData(msg) => {
+                    assert!(
+                        msg.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap())
+                    );
+                }
+                _ => panic!("Expected InvalidData error"),
             }
-            _ => panic!("Expected InvalidData error"),
+        }
+
+        #[test]
+        fn test_display_invalid_data() {
+            let error = Error::InvalidData("Test error message".to_string());
+            let display = error.to_string();
+            assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
+            assert!(display.contains("Test error message"));
+        }
+
+        #[test]
+        fn test_display_signal_error() {
+            let error = Error::Signal("Test signal error".to_string());
+            let display = error.to_string();
+            assert!(display.starts_with(lang::SIGNAL_ERROR_CATEGORY));
+            assert!(display.contains("Test signal error"));
+        }
+
+        #[test]
+        fn test_display_formatting() {
+            // Test that Display properly formats complex error messages
+            let error = Error::InvalidData(
+                "Duplicate message ID: 256 (messages 'EngineData' and 'BrakeData')".to_string(),
+            );
+            let display = error.to_string();
+            assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
+            assert!(display.contains("256"));
+            assert!(display.contains("EngineData"));
+            assert!(display.contains("BrakeData"));
+        }
+
+        #[test]
+        fn test_display_parse_error() {
+            let parse_error = "not_a_number".parse::<u32>().unwrap_err();
+            let error: Error = parse_error.into();
+            let display = error.to_string();
+
+            assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
+            assert!(display.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()));
         }
     }
 
-    #[test]
-    fn test_display_invalid_data() {
-        let error = Error::InvalidData("Test error message".to_string());
-        let display = error.to_string();
-        assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
-        assert!(display.contains("Test error message"));
-    }
-
-    #[test]
-    fn test_display_signal_error() {
-        let error = Error::Signal(lang::SIGNAL_NAME_EMPTY.to_string());
-        let display = error.to_string();
-        assert!(display.starts_with(lang::SIGNAL_ERROR_CATEGORY));
-        assert!(display.contains(lang::SIGNAL_NAME_EMPTY));
-    }
-
-    #[test]
-    fn test_display_formatting() {
-        // Test that Display properly formats complex error messages
-        let error = Error::InvalidData(
-            "Duplicate message ID: 256 (messages 'EngineData' and 'BrakeData')".to_string(),
-        );
-        let display = error.to_string();
-        assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
-        assert!(display.contains("256"));
-        assert!(display.contains("EngineData"));
-        assert!(display.contains("BrakeData"));
-    }
-
-    #[test]
-    fn test_display_parse_error() {
-        let parse_error = "not_a_number".parse::<u32>().unwrap_err();
-        let error: Error = parse_error.into();
-        let display = error.to_string();
-
-        assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
-        assert!(display.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()));
-    }
-
-    #[cfg(feature = "std")]
-    #[test]
-    fn test_std_error_trait() {
+    #[cfg(all(feature = "std", feature = "alloc", not(feature = "kernel")))]
+    mod std_tests {
+        use super::*;
         use std::error::Error as StdError;
 
-        let error = Error::InvalidData("Test".to_string());
-        // Verify it implements std::error::Error
-        let _: &dyn StdError = &error;
+        #[test]
+        fn test_std_error_trait() {
+            let error = Error::InvalidData("Test".to_string());
+            // Verify it implements std::error::Error
+            let _: &dyn StdError = &error;
 
-        // Verify source() returns None (no underlying error)
-        assert!(error.source().is_none());
+            // Verify source() returns None (no underlying error)
+            assert!(error.source().is_none());
+        }
     }
 }

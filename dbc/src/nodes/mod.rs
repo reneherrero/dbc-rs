@@ -1,10 +1,10 @@
 #[path = "nodes.rs"]
 mod nodes_impl;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub mod nodes_builder;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use nodes_builder::NodesBuilder;
 
 pub use nodes_impl::Nodes;

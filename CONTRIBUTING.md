@@ -56,62 +56,34 @@ This installs a pre-commit hook that automatically runs clippy and formatting ch
 
 ## Development Workflow
 
-### Building
+### Basic Commands
 
 ```bash
-# Check that everything compiles with the Standard Library
+# Build
 cargo check --all-targets
-
-#Check that dbc-rs compiles with `no_std`
 cargo check --target thumbv7m-none-eabi --no-default-features --package dbc-rs
-```
 
-### Testing
-
-```bash
+# Test
 cargo test
-```
 
-### Code Quality
+# Format
+cargo fmt
 
-```bash
-# For default target (with std)
+# Lint
 cargo clippy --all-targets --all-features -- -D warnings
-
-# For no_std builds (must use --no-default-features)
 cargo clippy --no-default-features --target thumbv7m-none-eabi --package dbc-rs -- -D warnings
 ```
-**Note**: 
-- If you've installed the git hooks (step 5 in setup), clippy will run atomatically on commit.
-- When running clippy for `no_std` targets, you **must** use --no-default-features`, otherwise it will try to use `std` features hich aren't available on embedded targets.
 
-### Formatting Code:
+**Note**: The pre-commit hook automatically runs clippy and formatting checks.
 
-```bash
-cargo fmt
-```
-**Note**: The pre-commit hook also checks formatting automatically.
+### Testing and Quality Checks
 
-### Verifying the Documentation
+For comprehensive testing procedures, build verification, and code coverage requirements, see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) sections 1-2.
 
-```bash
-cargo doc --workspace --no-deps --document-private-items
-```
-
-### Code Coverage
-
-```bash
-# Generate coverage report
-cargo llvm-cov --all-features --workspace
-
-# Generate HTML report (opens in browser)
-cargo llvm-cov --all-features --workspace --html
-```
-
-**Note**: 
-- **Minimum threshold**: 80% code coverage
-- **Target**: Maintain or improve coverage with each change
-- **Focus**: Library code (tests and examples are excluded)
+**Quick reference:**
+- **Tests**: Must pass in both `std` and `no_std` modes
+- **Coverage**: Minimum 80% (see RELEASE_CHECKLIST.md for details)
+- **MSRV**: Must work with Rust 1.85.0
 
 ### Coding Standards
 
@@ -138,6 +110,7 @@ cargo llvm-cov --all-features --workspace --html
 - Include both positive and negative test cases
 - Test edge cases and error conditions
 - Ensure tests pass in both `std` and `no_std` modes
+- See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for comprehensive testing procedures
 
 #### Safety
 
@@ -171,28 +144,44 @@ Fixes #123
 #### PR Checklist
 
 - [ ] Code follows the project's guidelines
-- [ ] All tests pass (`cargo test`)
-- [ ] Clippy passes without warnings with std (`cargo clippy -- -D warnings`)
-- [ ] Clippy passes without warnings with no_std (`cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs - -D warnings`)
+- [ ] All tests pass (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for testing procedures)
+- [ ] Clippy passes without warnings (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) section 1)
 - [ ] Code is formatted (`cargo fmt`)
 - [ ] Documentation is updated
+
+### CI/CD Workflows
+
+The project uses GitHub Actions for continuous integration. Workflows automatically run on pushes and pull requests to the `main` branch.
+
+- **dbc-rs Library Workflow** (`.github/workflows/dbc-rs.yml`): Tests library with `std`/`no_std`, MSRV, linting, formatting, docs, and coverage
+- **dbc-cli Workflow** (`.github/workflows/dbc-cli.yml`): Tests CLI application
+
+For detailed workflow information and CI verification procedures, see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) section 7.
+
+**Best Practices:**
+- Wait for CI checks to pass before merging PRs
+- Fix CI failures locally before pushing
+- Workflows use path-based triggers to reduce unnecessary runs
 
 ## Project Structure
 
 ```
 dbc-rs/
-├── dbc/              # Main library crate
+├── dbc/                  # Main library crate
 │   ├── src/
-│   │   ├── dbc.rs     # DBC file structure
-│   │   ├── message.rs # CAN message definitions
-│   │   ├── signal.rs  # Signal definitions
-│   │   ├── nodes.rs   # Node/ECU management
-│   │   ├── version.rs # Version
-│   │   └── error/     # Error types and messages
-│   ├── tests/         # Integration tests
-│   └── examples/      # Example code
-├── dbc-cli/           # Command-line interface
-└── .github/workflows/ # CI/CD workflows
+│   │   ├── dbc/         # DBC file structure & builder
+│   │   ├── message/     # CAN message definitions & builder
+│   │   ├── signal/      # Signal definitions & builder
+│   │   ├── nodes/       # Node/ECU management & builder
+│   │   ├── receivers/   # Signal receivers & builder
+│   │   ├── version/     # Version information & builder
+│   │   └── error/       # Error types & i18n (en, de, es, fr, ja)
+│   ├── tests/           # Integration tests & test data
+│   ├── examples/        # Example code (std, no_std, builder)
+│   └── benches/         # Benchmark tests
+├── dbc-cli/             # Command-line interface
+├── kernel-driver-example/ # Linux kernel driver example (experimental)
+└── .github/workflows/   # CI/CD workflows
 ```
 
 ## Areas for Contribution

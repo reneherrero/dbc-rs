@@ -1,60 +1,106 @@
 use super::lang;
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+use crate::kernel::alloc::{string::String, vec::Vec};
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+use alloc::format;
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 use alloc::{format, string::String, vec::Vec};
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 use core::option::Option::Some;
 
 // Re-export constants from the selected language module
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub(crate) use lang::{
     DBC_VERSION_REQUIRED, MESSAGE_DLC_REQUIRED, MESSAGE_ID_REQUIRED, MESSAGE_NAME_EMPTY,
     MESSAGE_SENDER_EMPTY, NODES_TOO_MANY, SIGNAL_LENGTH_REQUIRED, SIGNAL_NAME_EMPTY,
     SIGNAL_RECEIVERS_TOO_MANY, SIGNAL_START_BIT_REQUIRED, VERSION_EMPTY,
 };
-#[cfg(not(feature = "alloc"))]
+#[cfg(not(any(feature = "alloc", feature = "kernel")))]
 pub(crate) use lang::{NODES_TOO_MANY, SIGNAL_RECEIVERS_TOO_MANY};
 
 // ============================================================================
-// Formatting functions
+// Formatting functions - Separate implementations for alloc vs kernel
 // ============================================================================
 
-#[cfg(feature = "alloc")]
+// Alloc implementations (infallible)
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub(crate) fn format_invalid_data(details: &str) -> String {
     format!("{}: {}", lang::INVALID_DATA_CATEGORY, details)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub(crate) fn format_signal_error(details: &str) -> String {
     format!("{}: {}", lang::SIGNAL_ERROR_CATEGORY, details)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub(crate) fn format_message_error(details: &str) -> String {
     format!("{}: {}", lang::MESSAGE_ERROR_CATEGORY, details)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub(crate) fn format_dbc_error(details: &str) -> String {
     format!("{}: {}", lang::DBC_ERROR_CATEGORY, details)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub(crate) fn format_version_error(details: &str) -> String {
     format!("{}: {}", lang::VERSION_ERROR_CATEGORY, details)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub(crate) fn format_nodes_error(details: &str) -> String {
     format!("{}: {}", lang::NODES_ERROR_CATEGORY, details)
+}
+
+// Kernel implementations (fallible - return Result)
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn format_invalid_data(details: &str) -> Result<String, ()> {
+    let formatted = alloc::format!("{}: {}", lang::INVALID_DATA_CATEGORY, details);
+    String::try_from(formatted.as_str())
+}
+
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn format_signal_error(details: &str) -> Result<String, ()> {
+    let formatted = alloc::format!("{}: {}", lang::SIGNAL_ERROR_CATEGORY, details);
+    String::try_from(formatted.as_str())
+}
+
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn format_message_error(details: &str) -> Result<String, ()> {
+    let formatted = alloc::format!("{}: {}", lang::MESSAGE_ERROR_CATEGORY, details);
+    String::try_from(formatted.as_str())
+}
+
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn format_dbc_error(details: &str) -> Result<String, ()> {
+    let formatted = alloc::format!("{}: {}", lang::DBC_ERROR_CATEGORY, details);
+    String::try_from(formatted.as_str())
+}
+
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn format_version_error(details: &str) -> Result<String, ()> {
+    let formatted = alloc::format!("{}: {}", lang::VERSION_ERROR_CATEGORY, details);
+    String::try_from(formatted.as_str())
+}
+
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn format_nodes_error(details: &str) -> Result<String, ()> {
+    let formatted = alloc::format!("{}: {}", lang::NODES_ERROR_CATEGORY, details);
+    String::try_from(formatted.as_str())
 }
 
 // ============================================================================
 // Helper functions for formatted messages
 // ============================================================================
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 fn replace_placeholders(fmt: &str, args: &[&dyn core::fmt::Display]) -> String {
+    #[cfg(all(feature = "alloc", not(feature = "kernel")))]
     let mut result = String::with_capacity(fmt.len() + args.len() * 10);
+    #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+    let mut result = String::try_from("").unwrap_or_else(|_| unreachable!());
+
     let mut arg_idx = 0;
     let mut chars = fmt.chars().peekable();
 
@@ -63,13 +109,28 @@ fn replace_placeholders(fmt: &str, args: &[&dyn core::fmt::Display]) -> String {
             chars.next(); // consume '}'
             if arg_idx < args.len() {
                 use alloc::string::ToString;
-                result.push_str(&args[arg_idx].to_string());
+                let arg_str = args[arg_idx].to_string();
+                #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+                result.push_str(&arg_str);
+                #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+                result.try_push_str(&arg_str).unwrap_or_else(|_| unreachable!());
                 arg_idx += 1;
             } else {
+                #[cfg(all(feature = "alloc", not(feature = "kernel")))]
                 result.push_str("{}");
+                #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+                result.try_push_str("{}").unwrap_or_else(|_| unreachable!());
             }
         } else {
+            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
             result.push(c);
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                // For single characters, convert to string and push
+                let mut char_str = [0u8; 4];
+                let char_str = c.encode_utf8(&mut char_str);
+                result.try_push_str(char_str).unwrap_or_else(|_| unreachable!());
+            }
         }
     }
     result
@@ -94,7 +155,7 @@ pub(crate) fn sender_not_in_nodes(msg_name: &str, sender: &str) -> String {
     replace_placeholders(lang::FORMAT_SENDER_NOT_IN_NODES, &args)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub(crate) fn signal_extends_beyond_message(
     signal_name: &str,
     start_bit: u16,
@@ -120,7 +181,15 @@ pub(crate) fn signal_extends_beyond_message(
         )
     } else {
         // Signal exceeds even CAN FD maximum (64 bytes = 512 bits)
-        "Signal exceeds CAN FD maximum (64 bytes = 512 bits)".to_string()
+        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+        {
+            "Signal exceeds CAN FD maximum (64 bytes = 512 bits)".to_string()
+        }
+        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+        {
+            String::try_from("Signal exceeds CAN FD maximum (64 bytes = 512 bits)")
+                .unwrap_or_else(|_| String::try_from("").unwrap_or_else(|_| unreachable!()))
+        }
     };
 
     let args: [&dyn core::fmt::Display; 7] = [
@@ -135,10 +204,21 @@ pub(crate) fn signal_extends_beyond_message(
     replace_placeholders(lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE, &args)
 }
 
-#[cfg(feature = "alloc")]
+// Alloc implementation
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub(crate) fn parse_number_failed(err: impl core::fmt::Display) -> String {
     let args: [&dyn core::fmt::Display; 1] = [&err];
     replace_placeholders(lang::FORMAT_PARSE_NUMBER_FAILED, &args)
+}
+
+// Kernel implementation (returns Result)
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn parse_number_failed(err: impl core::fmt::Display) -> Result<String, ()> {
+    // In kernel mode, we need to format using alloc temporarily, then convert
+    let formatted = alloc::format!("{}", err);
+    // Format the error message using the language template
+    let result = alloc::format!("{}: {}", lang::FORMAT_PARSE_NUMBER_FAILED, formatted);
+    String::try_from(result.as_str())
 }
 
 #[cfg(feature = "alloc")]
@@ -224,7 +304,7 @@ pub(crate) fn signal_length_too_large(signal_name: &str, length: u16) -> String 
     replace_placeholders(lang::FORMAT_SIGNAL_LENGTH_TOO_LARGE, &args)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub(crate) fn signal_start_bit_invalid(signal_name: &str, start_bit: u16) -> String {
     let args: [&dyn core::fmt::Display; 2] = [&signal_name as &dyn core::fmt::Display, &start_bit];
     replace_placeholders(lang::FORMAT_SIGNAL_PARSE_INVALID_START_BIT, &args)

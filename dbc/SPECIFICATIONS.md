@@ -84,6 +84,7 @@ VECTOR__INDEPENDENT_SIG_MSG, VECTOR__XXX
 - **DBC identifiers:** Maximum 32 characters
 - **Other strings:** Arbitrary length (parser-dependent limits may apply)
 - **Security:** Modern parsers limit string lengths to prevent buffer overflow attacks
+- **dbc-rs note:** For security reasons, dbc-rs limits string lengths depending on the object type
 
 ---
 
