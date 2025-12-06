@@ -3,39 +3,58 @@ use core::{convert::From, fmt, num::ParseIntError};
 pub mod lang;
 pub(crate) mod messages;
 
+/// Error type for DBC parsing and validation operations.
+///
+/// This enum represents all possible errors that can occur when working with DBC files.
+/// Most variants require the `alloc` feature to be enabled.
 #[derive(Debug, PartialEq)]
 pub enum Error {
+    /// Invalid data error (e.g., parse failures, invalid formats).
     #[cfg(feature = "alloc")]
     InvalidData(String),
 
+    /// Signal-related error (e.g., invalid signal definition).
     #[cfg(feature = "alloc")]
     Signal(String),
 
+    /// Message-related error (e.g., invalid message definition).
     #[cfg(feature = "alloc")]
     Message(String),
 
+    /// DBC file-level error (e.g., missing required sections).
     #[cfg(feature = "alloc")]
     Dbc(String),
 
+    /// Version parsing error.
     #[cfg(feature = "alloc")]
     Version(String),
 
+    /// Node-related error (e.g., duplicate node names).
     #[cfg(feature = "alloc")]
     Nodes(String),
 
+    /// Low-level parse error (available in `no_std` builds).
     ParseError(ParseError),
 }
 
+/// Low-level parsing error that can occur during DBC file parsing.
+///
+/// This error type is available in both `std` and `no_std` builds.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ParseError {
+    /// Unexpected end of input encountered.
     UnexpectedEof,
 
+    /// Expected a specific token or value.
     Expected(&'static str),
 
+    /// Invalid character encountered.
     InvalidChar(char),
 
+    /// String length exceeds the maximum allowed length.
     MaxStrLength(u16),
 
+    /// Version-related parse error.
     Version(&'static str),
 }
 
@@ -51,8 +70,10 @@ impl fmt::Display for ParseError {
     }
 }
 
+/// Result type alias for operations that can return an `Error`.
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Result type alias for low-level parsing operations that can return a `ParseError`.
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
 #[cfg(feature = "alloc")]

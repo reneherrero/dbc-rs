@@ -8,6 +8,30 @@ use crate::{
 #[cfg(feature = "alloc")]
 use alloc::string::String;
 
+/// Represents a complete DBC (CAN database) file.
+///
+/// A `Dbc` contains:
+/// - An optional version string
+/// - A list of nodes (ECUs)
+/// - A collection of messages with their signals
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc_content = r#"VERSION "1.0"
+///
+/// BU_: ECM TCM
+///
+/// BO_ 256 EngineData : 8 ECM
+///  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM
+/// "#;
+///
+/// let dbc = Dbc::parse(dbc_content)?;
+/// println!("Parsed {} messages", dbc.messages().len());
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
 #[derive(Debug)]
 pub struct Dbc<'a> {
     version: Option<Version<'a>>,

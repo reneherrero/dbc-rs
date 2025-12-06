@@ -5,6 +5,33 @@ use crate::{
 
 use super::Signals;
 
+/// Represents a CAN message in a DBC file.
+///
+/// A `Message` contains:
+/// - A unique ID (CAN identifier)
+/// - A name
+/// - A DLC (Data Length Code) specifying the message size in bytes
+/// - A sender node (ECU that transmits this message)
+/// - A collection of signals
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc_content = r#"VERSION "1.0"
+///
+/// BU_: ECM
+///
+/// BO_ 256 EngineData : 8 ECM
+///  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *
+/// "#;
+///
+/// let dbc = Dbc::parse(dbc_content)?;
+/// let message = dbc.messages().at(0).unwrap();
+/// println!("Message: {} (ID: {})", message.name(), message.id());
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Message<'a> {
     id: u32,
@@ -350,18 +377,57 @@ impl<'a> Message<'a> {
         ))
     }
 
+    /// Returns the CAN message ID.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"\n\nBU_: ECM\n\nBO_ 256 EngineData : 8 ECM"#)?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// assert_eq!(message.id(), 256);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn id(&self) -> u32 {
         self.id
     }
 
+    /// Returns the message name.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"\n\nBU_: ECM\n\nBO_ 256 EngineData : 8 ECM"#)?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// assert_eq!(message.name(), "EngineData");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn name(&self) -> &'a str {
         self.name
     }
 
+    /// Returns the Data Length Code (DLC) in bytes.
+    ///
+    /// DLC specifies the size of the message payload. For classic CAN, this is 1-8 bytes.
+    /// For CAN FD, this can be up to 64 bytes.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"\n\nBU_: ECM\n\nBO_ 256 EngineData : 8 ECM"#)?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// assert_eq!(message.dlc(), 8);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn dlc(&self) -> u8 {

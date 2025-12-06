@@ -3,6 +3,42 @@ use crate::{
     error::{Error, Result, messages},
 };
 
+/// Builder for constructing `Dbc` instances programmatically.
+///
+/// This builder allows you to create DBC files without parsing from a string.
+/// It requires the `alloc` feature to be enabled.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::{DbcBuilder, NodesBuilder, MessageBuilder, SignalBuilder, VersionBuilder};
+///
+/// let nodes = NodesBuilder::new()
+///     .add_node("ECM")
+///     .add_node("TCM")
+///     .build()?;
+///
+/// let signal = SignalBuilder::new()
+///     .name("RPM")
+///     .start_bit(0)
+///     .length(16)
+///     .build()?;
+///
+/// let message = MessageBuilder::new()
+///     .id(256)
+///     .name("EngineData")
+///     .dlc(8)
+///     .sender("ECM")
+///     .add_signal(signal)
+///     .build()?;
+///
+/// let dbc = DbcBuilder::new()
+///     .version(VersionBuilder::new().version("1.0").build()?)
+///     .nodes(nodes)
+///     .add_message(message)
+///     .build()?;
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
 #[derive(Debug, Default)]
 pub struct DbcBuilder {
     version: Option<Version<'static>>,
@@ -11,40 +47,130 @@ pub struct DbcBuilder {
 }
 
 impl DbcBuilder {
+    /// Creates a new `DbcBuilder` with default values.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DbcBuilder;
+    ///
+    /// let builder = DbcBuilder::new();
+    /// ```
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets the version for the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, VersionBuilder};
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .version(VersionBuilder::new().version("1.0").build()?);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use]
     pub fn version(mut self, version: Version<'static>) -> Self {
         self.version = Some(version);
         self
     }
 
+    /// Sets the nodes (ECUs) for the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, NodesBuilder};
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .nodes(NodesBuilder::new().add_node("ECM").build()?);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use]
     pub fn nodes(mut self, nodes: Nodes<'static>) -> Self {
         self.nodes = Some(nodes);
         self
     }
 
+    /// Adds a message to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, MessageBuilder};
+    ///
+    /// let message = MessageBuilder::new()
+    ///     .id(256)
+    ///     .name("EngineData")
+    ///     .dlc(8)
+    ///     .sender("ECM")
+    ///     .build()?;
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .add_message(message);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use]
     pub fn add_message(mut self, message: Message<'static>) -> Self {
         self.messages.push(message);
         self
     }
 
+    /// Adds multiple messages to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, MessageBuilder};
+    ///
+    /// let messages = vec![
+    ///     MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?,
+    ///     MessageBuilder::new().id(512).name("Msg2").dlc(4).sender("TCM").build()?,
+    /// ];
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .add_messages(messages);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use]
     pub fn add_messages(mut self, messages: impl IntoIterator<Item = Message<'static>>) -> Self {
         self.messages.extend(messages);
         self
     }
 
+    /// Sets all messages for the DBC file, replacing any existing messages.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, MessageBuilder};
+    ///
+    /// let messages = vec![
+    ///     MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?,
+    /// ];
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .messages(messages);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use]
     pub fn messages(mut self, messages: Vec<Message<'static>>) -> Self {
         self.messages = messages;
         self
     }
 
+    /// Clears all messages from the builder.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DbcBuilder;
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .clear_messages();
+    /// ```
     #[must_use]
     pub fn clear_messages(mut self) -> Self {
         self.messages.clear();
@@ -60,6 +186,22 @@ impl DbcBuilder {
         Ok((version, nodes, self.messages))
     }
 
+    /// Validates the builder without constructing the `Dbc`.
+    ///
+    /// This method performs all validation checks but returns the builder
+    /// instead of constructing the `Dbc`. Useful for checking if the builder
+    /// is valid before calling `build()`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DbcBuilder;
+    ///
+    /// let builder = DbcBuilder::new();
+    /// if builder.validate().is_err() {
+    ///     // Handle validation error
+    /// }
+    /// ```
     #[must_use = "validation result should be checked"]
     pub fn validate(self) -> Result<Self> {
         let (version, nodes, messages) = self.extract_fields()?;
@@ -84,6 +226,22 @@ impl DbcBuilder {
         })
     }
 
+    /// Builds the `Dbc` from the builder.
+    ///
+    /// This method validates all fields and constructs the `Dbc` instance.
+    /// Returns an error if validation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, VersionBuilder, NodesBuilder};
+    ///
+    /// let dbc = DbcBuilder::new()
+    ///     .version(VersionBuilder::new().version("1.0").build()?)
+    ///     .nodes(NodesBuilder::new().add_node("ECM").build()?)
+    ///     .build()?;
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     pub fn build(self) -> Result<Dbc<'static>> {
         let (version, nodes, messages) = self.extract_fields()?;
         // Convert Vec to Option array for validation (all Some)
