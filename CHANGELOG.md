@@ -10,6 +10,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Future changes will be listed here)
 
+## [0.1.0-beta.1] - 2024-12-XX
+
+**Note**: This is the first beta release. The API is now stable and ready for wider testing.
+
+### Added
+
+- **Configurable Parsing Options**: `ParseOptions` struct for customizing parsing behavior
+  - `ParseOptions::strict()` - Strict boundary validation (default)
+  - `ParseOptions::lenient()` - Allow signals that extend beyond message boundaries
+  - `Dbc::parse_with_options()` - Parse with custom options
+  - Useful for parsing real-world DBC files with technically invalid but commonly used signal definitions
+
+- **Property-Based Testing**: Comprehensive property-based tests using `proptest`
+  - Tests parsing round-trips with randomly generated DBC content
+  - Validates parser robustness against edge cases
+
+- **Benchmark Suite**: Performance benchmarks using `criterion`
+  - Parsing performance benchmarks
+  - String conversion benchmarks
+  - Available with `alloc` feature
+
+- **Enhanced Error Messages**: Improved error context and recovery suggestions
+  - Signal overlap errors now mention multiplexing as a potential solution
+  - DLC errors include message name, ID, and valid range suggestions
+  - Signal length errors include signal name and valid range
+  - Start bit errors include signal name and valid range
+  - All error messages provide actionable recovery suggestions
+
+### Changed
+
+- **Relaxed Node Validation**: Empty node lists are now allowed (DBC spec compliant)
+  - Removed requirement for at least one node in `BU_` line
+  - `Dbc::nodes()` may return an empty collection
+  - `DbcBuilder` no longer requires nodes
+
+- **Improved Error Context**: Error messages now include relevant values
+  - Message errors include message name and ID
+  - Signal errors include signal name
+  - DLC errors show actual DLC value and valid range
+  - Signal length errors show actual length and valid range
+
+### Fixed
+
+- **Documentation Warnings**: Fixed unclosed HTML tags in documentation comments
+- **Clippy Warnings**: Resolved all Clippy linter warnings
+- **Build Issues**: Worked around rustc/LLVM bug for `thumbv7m-none-eabi` debug builds
+  - CI now uses `cargo check` and `cargo build --release` for this target
+- **Test Coverage**: Increased test coverage for edge cases
+  - Tests for empty nodes
+  - Tests for Unicode in names
+  - Tests for boundary validation with strict/lenient modes
+
+### Documentation
+
+- **Release Checklist**: Added comprehensive `RELEASE_CHECKLIST.md` for release procedures
+- **API Documentation**: All public APIs fully documented with examples
+- **Code Examples**: Updated examples to include `ParseOptions` usage
+
 ## [0.1.0-alpha] - 2024-11-25
 
 **Note**: This is an alpha release. The API may change before the stable 1.0.0 release.
@@ -148,7 +206,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- **0.1.0-alpha** (2024-12-XX): Initial alpha release
+- **0.1.0-beta.1** (2024-12-XX): First beta release - API stable, ready for wider testing
+- **0.1.0-alpha** (2024-11-25): Initial alpha release
 
 ---
 
@@ -161,5 +220,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed** for any bug fixes
 - **Security** for vulnerability fixes
 
+[0.1.0-beta.1]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-beta.1
 [0.1.0-alpha]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-alpha
 
