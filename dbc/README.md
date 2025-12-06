@@ -471,7 +471,7 @@ For most users, the open-source license (MIT OR Apache-2.0) is sufficient.
 
 ## References
 
-- [DBC Format Specification](DBC_SPECIFICATIONS.md) - Detailed format documentation
+- [DBC Format Specification](SPECIFICATIONS.md) - Detailed format documentation
 - [Security Audit](SECURITY.md) - Comprehensive security review
 - Vector Informatik: "DBC File Format Documentation Version 01/2007"
 - CAN Specification (ISO 11898)

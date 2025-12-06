@@ -1,0 +1,4 @@
+[submodule "ti-linux-kernel"]
+	path = ti-linux-kernel
+	url = https://git.ti.com/git/ti-linux-kernel/ti-linux-kernel.git
+	branch = ti-linux-6.12.y
