@@ -67,6 +67,9 @@ pub use version::VersionBuilder;
 
 pub(crate) use parser::Parser;
 
+/// The version of this crate as specified in `Cargo.toml`.
+///
+/// This constant is only available when the `std` feature is enabled.
 #[cfg(feature = "std")]
 pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
