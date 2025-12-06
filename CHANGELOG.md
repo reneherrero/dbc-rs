@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Future changes will be listed here)
 
-## [0.1.0-beta.1] - 2024-12-XX
+## [0.1.0-beta.1] - 2024-12-06
 
 **Note**: This is the first beta release. The API is now stable and ready for wider testing.
 
@@ -206,7 +206,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
-- **0.1.0-beta.1** (2024-12-XX): First beta release - API stable, ready for wider testing
+- **0.1.0-beta.1** (2024-12-06): First beta release - API stable, ready for wider testing
 - **0.1.0-alpha** (2024-11-25): Initial alpha release
 
 ---
