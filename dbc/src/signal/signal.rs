@@ -531,6 +531,34 @@ impl<'a> Signal<'a> {
     }
 }
 
+// Custom Eq implementation that handles f64 (treats NaN as equal to NaN)
+impl<'a> Eq for Signal<'a> {}
+
+// Custom Hash implementation that handles f64 (treats NaN consistently)
+impl<'a> core::hash::Hash for Signal<'a> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.start_bit.hash(state);
+        self.length.hash(state);
+        self.byte_order.hash(state);
+        self.unsigned.hash(state);
+        // Handle f64: convert to bits for hashing (NaN will have consistent representation)
+        self.factor.to_bits().hash(state);
+        self.offset.to_bits().hash(state);
+        self.min.to_bits().hash(state);
+        self.max.to_bits().hash(state);
+        self.unit.hash(state);
+        self.receivers.hash(state);
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a> core::fmt::Display for Signal<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.to_dbc_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]

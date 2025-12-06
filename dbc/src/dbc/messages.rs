@@ -40,7 +40,7 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 /// Storage strategy:
 /// - `no_std`: Uses fixed-size array `[Option<Message>; MAX_MESSAGES]`
 /// - `alloc`: Uses heap-allocated `Box<[Option<Message>]>` for dynamic sizing
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Messages<'a> {
     #[cfg(not(feature = "alloc"))]
     messages: [Option<Message<'a>>; MAX_MESSAGES],
@@ -197,6 +197,18 @@ impl<'a> Messages<'a> {
     }
 
     /// Find a message by name, or None if not found
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// if let Some(message) = dbc.messages().find("Engine") {
+    ///     println!("Found message: {} (ID: {})", message.name(), message.id());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use]
     pub fn find(&self, name: &str) -> Option<&Message<'a>> {
         self.iter().find(|m| m.name() == name)

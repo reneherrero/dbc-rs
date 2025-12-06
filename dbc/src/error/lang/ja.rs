@@ -108,5 +108,6 @@ pub const FORMAT_PARSE_NUMBER_FAILED: &str = "数値の解析に失敗しまし�
 pub const FORMAT_INVALID_UTF8: &str = "無効なUTF-8: {}";
 pub const FORMAT_READ_FAILED: &str = "読み取りに失敗しました: {}";
 pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "メッセージID {} ({} 進数) が有効範囲外です（標準11ビット: 0x000-0x7FF (0-2,047 進数)、拡張29ビット: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 進数)）";
-pub const FORMAT_SIGNAL_OVERLAP: &str = "信号 '{}' と '{}' がメッセージ '{}' で重複しています";
+pub const FORMAT_SIGNAL_OVERLAP: &str = "信号 '{}' と '{}' がメッセージ '{}' で重複しています。 {}";
+pub const SUGGEST_MULTIPLEXING: &str = "注: これらの信号が多重化されている場合（異なる時間にアクティブ）、信号多重化サポートが必要です（まだ実装されていません）";
 pub const FORMAT_LINE_NUMBER: &str = "{} (行 {})";

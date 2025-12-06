@@ -40,7 +40,7 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 /// Storage strategy:
 /// - `no_std`: Uses fixed-size array `[Option<Signal>; MAX_SIGNALS_PER_MESSAGE]`
 /// - `alloc`: Uses heap-allocated `Box<[Option<Signal>]>` for dynamic sizing
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Signals<'a> {
     #[cfg(not(feature = "alloc"))]
     signals: [Option<Signal<'a>>; MAX_SIGNALS_PER_MESSAGE],
@@ -114,6 +114,19 @@ impl<'a> Signals<'a> {
     }
 
     /// Get an iterator over the signals
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// for signal in message.signals().iter() {
+    ///     println!("Signal: {} (start: {}, length: {})", signal.name(), signal.start_bit(), signal.length());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &Signal<'a>> + '_ {
@@ -126,6 +139,17 @@ impl<'a> Signals<'a> {
     }
 
     /// Get the number of signals
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// assert_eq!(message.signals().len(), 1);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
@@ -133,6 +157,17 @@ impl<'a> Signals<'a> {
     }
 
     /// Returns `true` if there are no signals
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// assert!(message.signals().is_empty());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -140,6 +175,19 @@ impl<'a> Signals<'a> {
     }
 
     /// Get a signal by index, or None if index is out of bounds
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// if let Some(signal) = message.signals().at(0) {
+    ///     println!("First signal: {}", signal.name());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn at(&self, index: usize) -> Option<&Signal<'a>> {
@@ -150,6 +198,19 @@ impl<'a> Signals<'a> {
     }
 
     /// Find a signal by name, or None if not found
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// if let Some(signal) = message.signals().find("RPM") {
+    ///     println!("Found RPM signal with factor: {}", signal.factor());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use]
     pub fn find(&self, name: &str) -> Option<&Signal<'a>> {
         self.iter().find(|s| s.name() == name)

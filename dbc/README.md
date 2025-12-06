@@ -127,8 +127,13 @@ BO_ 512 BrakeData : 4 TCM
 use dbc_rs::Dbc;
 
 let dbc = Dbc::parse(&content)?;
-println!("Version: {}", dbc.version().to_string());
-println!("Nodes: {}", dbc.nodes().to_string());
+
+// Note: to_string() requires alloc feature
+#[cfg(feature = "alloc")]
+{
+    println!("Version: {}", dbc.version().map(|v| v.to_string()).unwrap_or_default());
+    println!("Nodes: {}", dbc.nodes().to_string());
+}
 println!("Messages: {}", dbc.messages().len());
 ```
 
@@ -189,6 +194,18 @@ let dbc = Dbc::builder()
 let dbc_string = dbc.to_dbc_string();
 ```
 
+### Parsing with Options
+
+```rust
+use dbc_rs::{Dbc, ParseOptions};
+
+// Use lenient mode to allow signals that extend beyond message boundaries
+// This is useful for parsing real-world DBC files that may have technically
+// invalid but commonly used signal definitions
+let options = ParseOptions::lenient();
+let dbc = Dbc::parse_with_options(&content, options)?;
+```
+
 ### Modifying Existing DBC
 
 ```rust
@@ -233,7 +250,7 @@ let modified_dbc = Dbc::builder()
     .build()?;
 ```
 
-### no_std Usage
+### no_std Usage (Parsing Only)
 
 ```rust
 use dbc_rs::Dbc;
@@ -242,12 +259,65 @@ use dbc_rs::Dbc;
 let dbc_bytes = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"";
 let dbc = Dbc::parse_bytes(dbc_bytes)?;
 
-// Access data
+// Access data (read-only)
 let version = dbc.version();
 let messages = dbc.messages();
 
-// Save to string
-let saved = dbc.to_dbc_string();
+// Note: to_dbc_string() requires alloc feature
+// #[cfg(feature = "alloc")]
+// let saved = dbc.to_dbc_string();
+```
+
+### alloc Usage (With Builders)
+
+```rust
+use dbc_rs::{Dbc, MessageBuilder, SignalBuilder, ByteOrder, Receivers};
+
+// Parse existing DBC
+let dbc = Dbc::parse(&content)?;
+
+// Create new message with builder
+let signal = SignalBuilder::new()
+    .name("RPM")
+    .start_bit(0)
+    .length(16)
+    .byte_order(ByteOrder::BigEndian)
+    .unsigned(true)
+    .factor(0.25)
+    .offset(0.0)
+    .min(0.0)
+    .max(8000.0)
+    .unit("rpm")
+    .receivers(Receivers::Broadcast)
+    .build()?;
+
+let message = MessageBuilder::new()
+    .id(256)
+    .name("EngineData")
+    .dlc(8)
+    .sender("ECM")
+    .add_signal(signal)
+    .build()?;
+
+// Format to string
+let dbc_string = dbc.to_dbc_string();
+```
+
+### std Usage (With File I/O)
+
+```rust
+use dbc_rs::Dbc;
+
+// Read from file
+let dbc = Dbc::from_file("example.dbc")?;
+
+// Or read from any std::io::Read source
+let file = std::fs::File::open("example.dbc")?;
+let dbc = Dbc::from_reader(file)?;
+
+// All alloc features available
+let dbc_string = dbc.to_dbc_string();
+std::fs::write("output.dbc", dbc_string)?;
 ```
 
 ### Error Handling
@@ -282,6 +352,9 @@ For a comprehensive security audit, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 1. **Extended Features**: Many advanced DBC features (attributes, value tables, structured comments, etc.) are not yet supported. Files containing these features will parse successfully but the extended data will be lost on save.
 2. **Comments**: Single-line `//` comments are parsed but not preserved when saving.
 3. **Signal Multiplexing**: Multiplexed signals are not yet supported.
+4. **Feature Restrictions**: 
+   - Without `alloc`: Cannot create/modify DBC files (builders unavailable)
+   - Without `std`: Cannot read from filesystem (use `parse()` or `parse_bytes()` instead)
 
 ## Troubleshooting
 
@@ -309,20 +382,22 @@ For a comprehensive security audit, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 
 1. **Immutability**: All data structures are immutable after creation
 2. **Validation**: Input validation occurs at construction time
-3. **no_std First**: Designed to work in `no_std` environments with `alloc`
+3. **no_std First**: Designed for `no_std` environments, with optional `alloc` and `std` features
 4. **Zero Dependencies**: No external dependencies
-5. **Memory Efficiency**: Uses `Box<str>` and pre-allocated vectors
+5. **Memory Efficiency**: Uses fixed arrays in `no_std`, `Box<[T]>` with `alloc`
 
 ### Error Handling
 
 - **Result-based**: All fallible operations return `Result<T>`
 - **Categorized errors**: `Error::Signal`, `Error::Message`, `Error::Dbc`, `Error::Version`, `Error::Nodes`, `Error::InvalidData`
 - **Internationalized**: Error messages can be localized at build time
-- **Descriptive**: Error messages include context about what failed
+- **Feature-dependent**: With `alloc`, errors include detailed `String` messages; without it, static `&'static str` messages
 
 ## Performance Notes
 
-- **Memory Usage**: Uses `Box<str>` for strings, pre-allocated vectors
+- **Memory Usage**: 
+  - `no_std`: Fixed-size arrays (stack-allocated)
+  - `alloc`: `Box<[T]>` (heap-allocated, dynamic sizing)
 - **Parsing**: O(n) complexity, entire file parsed into memory
 - **Recommendations**: For very large DBC files (>10MB), consider splitting into multiple files
 
