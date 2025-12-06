@@ -16,7 +16,7 @@ This checklist ensures all steps are completed before publishing a new release o
   # Default target (with std)
   cargo clippy --all-targets --all-features -- -D warnings
   
-  # no_std target
+  # no_std target (clippy only checks, doesn't build, so debug build issues don't apply)
   cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
   
   # dbc-cli
@@ -56,11 +56,6 @@ This checklist ensures all steps are completed before publishing a new release o
   rustup toolchain install 1.85.0
   rustup run 1.85.0 cargo build --release -p dbc-rs
   rustup run 1.85.0 cargo test -p dbc-rs
-  ```
-
-- [ ] **Package can be created**
-  ```bash
-  cargo package --dry-run -p dbc-rs
   ```
 
 ### 3. Documentation Updates
@@ -103,7 +98,7 @@ This checklist ensures all steps are completed before publishing a new release o
   ```
 
 - [ ] **Version strings in code updated** (if any)
-  - [ ] Check `dbc/src/lib.rs` for `VERSION` constant (uses `env!` macro, auto-updates)
+  - [ ] Check `dbc/src/lib.rs` for `PKG_VERSION` constant (uses `env!` macro, auto-updates; only available with `std` feature)
 
 - [ ] **Git tag prepared**
   - [ ] Tag name follows format: `vX.Y.Z` (e.g., `v0.1.0`)
@@ -217,16 +212,6 @@ This checklist ensures all steps are completed before publishing a new release o
   - [ ] Description: Copy from CHANGELOG.md
   - [ ] Mark as "Latest release" if this is the newest
   - [ ] Attach any release artifacts if needed
-
-- [ ] **Documentation published**
-  - [ ] docs.rs should auto-publish within ~10 minutes
-  - [ ] Verify at https://docs.rs/dbc-rs
-  - [ ] Check that all features are documented correctly
-
-- [ ] **Announcements** (optional)
-  - [ ] Update project website/blog
-  - [ ] Post on relevant forums/communities
-  - [ ] Update any dependent projects
 
 - [ ] **Update workspace root README** (if needed)
   - [ ] Update version badges if applicable
