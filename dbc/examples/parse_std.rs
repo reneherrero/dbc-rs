@@ -25,25 +25,25 @@ BO_ 512 Brake : 4 TCM
     println!("1. Parsing from &[u8]:");
     let bytes = dbc_content.as_bytes();
     let dbc1 = Dbc::parse_bytes(bytes)?;
-    println!("   Parsed {} messages", dbc1.message_count());
+    println!("   Parsed {} messages", dbc1.messages().len());
 
     // Method 2: Parse from String
     println!("2. Parsing from String:");
     let string = String::from(dbc_content);
     let dbc2 = Dbc::parse(&string)?;
-    println!("   Parsed {} messages", dbc2.message_count());
+    println!("   Parsed {} messages", dbc2.messages().len());
 
     // Method 3: Parse from std::io::Read (Cursor)
     println!("3. Parsing from std::io::Read (Cursor):");
     let cursor = Cursor::new(dbc_content.as_bytes());
     let dbc3 = Dbc::from_reader(cursor)?;
-    println!("   Parsed {} messages", dbc3.message_count());
+    println!("   Parsed {} messages", dbc3.messages().len());
 
     // Method 4: Parse from File
     println!("4. Parsing from File:");
     if let Ok(file) = std::fs::File::open("tests/data/simple.dbc") {
         let dbc4 = Dbc::from_reader(file)?;
-        println!("   Parsed {} messages from file", dbc4.message_count());
+        println!("   Parsed {} messages from file", dbc4.messages().len());
     } else {
         println!("   File not found (this is OK for the example)");
     }

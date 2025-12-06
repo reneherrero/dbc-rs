@@ -301,7 +301,7 @@ let new_message = Message::builder()
 // 2. Create new Dbc with modified data
 let version = dbc.version();
 let nodes = dbc.nodes();
-let mut messages: Vec<Message> = dbc.messages().to_vec();
+let mut messages: Vec<Message> = dbc.messages().iter().cloned().collect();
 messages.push(new_message);
 
 let modified_dbc = Dbc::builder()
@@ -311,7 +311,7 @@ let modified_dbc = Dbc::builder()
     .build()?;
 
 // Save back to DBC format
-let saved_content = modified_dbc.save();
+let saved_content = modified_dbc.to_dbc_string();
 std::fs::write("modified.dbc", saved_content)?;
 ```
 
@@ -327,7 +327,7 @@ let engine_msg = dbc.messages().iter().find(|m| m.id() == 256);
 
 // Find signal by name in a specific message
 if let Some(msg) = engine_msg {
-    let rpm_signal = msg.find_signal("RPM");
+    let rpm_signal = msg.signals().find("RPM");
     if let Some(sig) = rpm_signal {
         println!("RPM: factor={}, offset={}", sig.factor(), sig.offset());
     }
@@ -336,7 +336,7 @@ if let Some(msg) = engine_msg {
 // Iterate all messages and signals
 for message in dbc.messages() {
     println!("Message {} (ID: {})", message.name(), message.id());
-    for signal in message.signals() {
+    for signal in message.signals().iter() {
         println!("  Signal: {} ({} bits)", signal.name(), signal.length());
     }
 }
@@ -397,7 +397,7 @@ let version = dbc.version();
 let messages = dbc.messages();
 
 // Save to string (can be written to storage later)
-let saved = dbc.save();
+let saved = dbc.to_dbc_string();
 ```
 
 ### Working with Different Input Sources
@@ -474,7 +474,7 @@ for message in dbc.messages() {
              message.name(), message.id(), message.dlc());
     
     // Iterate signals in message
-    for signal in message.signals() {
+    for signal in message.signals().iter() {
         println!("  Signal: {} ({} bits, factor: {}, offset: {})",
                  signal.name(), signal.length(), signal.factor(), signal.offset());
     }
@@ -493,7 +493,7 @@ let engine_msg = dbc.messages().iter().find(|m| m.id() == 256);
 
 // Find signal by name
 if let Some(msg) = engine_msg {
-    if let Some(rpm) = msg.find_signal("RPM") {
+    if let Some(rpm) = msg.signals().find("RPM") {
         // Calculate physical value from raw CAN data
         let raw_value: u16 = 4000; // Example raw CAN value
         let physical_value = (raw_value as f64 * rpm.factor()) + rpm.offset();
@@ -543,7 +543,7 @@ let dbc = Dbc::builder()
     .build()?;
 
 // Save to string
-let dbc_string = dbc.save();
+let dbc_string = dbc.to_dbc_string();
 ```
 
 #### Modify Existing DBC
@@ -556,7 +556,7 @@ let dbc = Dbc::parse(&content)?;
 // Extract current data
 let version = dbc.version();
 let nodes = dbc.nodes();
-let mut messages: Vec<Message> = dbc.messages().to_vec();
+let mut messages: Vec<Message> = dbc.messages().iter().cloned().collect();
 
 // Add new message using builder
 let new_signal = Signal::builder()
@@ -587,7 +587,7 @@ let modified_dbc = Dbc::builder()
     .nodes(nodes.clone())
     .messages(messages)
     .build()?;
-let saved = modified_dbc.save();
+let saved = modified_dbc.to_dbc_string();
 ```
 
 ### Best Practices
@@ -873,7 +873,7 @@ dbc/src/
    - Builders use internal `new()` methods which perform validation
    - Public API uses builders, not direct `new()` methods
 3. **Access**: Getter methods provide read-only access to internal data
-4. **Serialization**: `save()` / `to_dbc_string()` → convert structures back to DBC format
+4. **Serialization**: `to_dbc_string()` → convert structures back to DBC format
 
 ### Validation Strategy
 
