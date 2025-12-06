@@ -111,18 +111,23 @@ impl<'a> Signal<'a> {
         #[cfg_attr(not(feature = "alloc"), allow(unused_variables))] signal_name: &str,
     ) -> ParseResult<(u16, u16, ByteOrder, bool)> {
         // Parse start_bit
-        let start_bit = parser.parse_u32().map_err(|_| {
-            #[cfg(feature = "alloc")]
-            {
-                use crate::error::messages;
-                let msg = messages::signal_start_bit_invalid(signal_name, 0);
-                ParseError::Version(Box::leak(msg.into_boxed_str()))
+        let start_bit = match parser.parse_u32() {
+            Ok(v) => v as u16,
+            Err(_) => {
+                #[cfg(feature = "alloc")]
+                {
+                    use crate::error::messages;
+                    let msg = messages::signal_start_bit_invalid(signal_name, 0);
+                    return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                }
+                #[cfg(not(feature = "alloc"))]
+                {
+                    return Err(ParseError::Version(
+                        crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT,
+                    ));
+                }
             }
-            #[cfg(not(feature = "alloc"))]
-            {
-                ParseError::Version(crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT)
-            }
-        })? as u16;
+        };
 
         // Validate start_bit range
         if start_bit > 511 {
