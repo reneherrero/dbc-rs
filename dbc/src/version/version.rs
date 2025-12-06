@@ -61,7 +61,7 @@ impl<'a> Version<'a> {
     }
 
     #[must_use]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     pub fn to_dbc_string(&self) -> String {
         use crate::VERSION;
         if self.version.is_empty() {
@@ -90,11 +90,11 @@ mod tests {
         let line = b"VERSION \"1.0\"";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap();
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         assert_eq!(version.to_string(), "1.0");
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         assert_eq!(version.as_str(), "1.0");
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         assert_eq!(version.as_str(), "1.0");
     }
 
@@ -160,9 +160,9 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_ok());
         let version = result.unwrap();
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         assert_eq!(version.to_string(), "1");
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         assert_eq!(version.as_str(), "1");
     }
 
@@ -175,7 +175,7 @@ mod tests {
         let version = result.unwrap();
         #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1.2.3");
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         assert_eq!(version.as_str(), "1.2.3");
     }
 
@@ -188,7 +188,7 @@ mod tests {
         let version = result.unwrap();
         #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1.0");
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         assert_eq!(version.as_str(), "1.0");
     }
 
@@ -199,7 +199,7 @@ mod tests {
         let version = Version::parse(&mut parser).unwrap();
         #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "");
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         assert_eq!(version.as_str(), "");
     }
 
@@ -232,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_version_to_dbc_string() {
         let line1 = b"VERSION \"1\"";
         let mut parser1 = Parser::new(line1).unwrap();
@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_version_empty_round_trip() {
         let line = b"VERSION \"\"";
         let mut parser = Parser::new(line).unwrap();
@@ -266,7 +266,7 @@ mod tests {
         let version = Version::parse(&mut parser).unwrap();
         #[cfg(feature = "std")]
         assert_eq!(version.to_string(), "1.0-beta");
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         assert_eq!(version.as_str(), "1.0-beta");
     }
 }

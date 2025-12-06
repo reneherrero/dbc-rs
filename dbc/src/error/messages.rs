@@ -3,45 +3,45 @@ use alloc::{format, string::String, vec::Vec};
 use core::option::Option::Some;
 
 // Re-export constants from the selected language module
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 pub(crate) use lang::{
     DBC_NODES_REQUIRED, DBC_VERSION_REQUIRED, MESSAGE_DLC_REQUIRED, MESSAGE_ID_REQUIRED,
     MESSAGE_NAME_EMPTY, MESSAGE_SENDER_EMPTY, NODES_TOO_MANY, SIGNAL_LENGTH_REQUIRED,
     SIGNAL_NAME_EMPTY, SIGNAL_RECEIVERS_TOO_MANY, SIGNAL_START_BIT_REQUIRED, VERSION_EMPTY,
 };
-#[cfg(not(feature = "std"))]
+#[cfg(not(feature = "alloc"))]
 pub(crate) use lang::{NODES_TOO_MANY, SIGNAL_RECEIVERS_TOO_MANY};
 
 // ============================================================================
 // Formatting functions
 // ============================================================================
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn format_invalid_data(details: &str) -> String {
     format!("{}: {}", lang::INVALID_DATA_CATEGORY, details)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn format_signal_error(details: &str) -> String {
     format!("{}: {}", lang::SIGNAL_ERROR_CATEGORY, details)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn format_message_error(details: &str) -> String {
     format!("{}: {}", lang::MESSAGE_ERROR_CATEGORY, details)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn format_dbc_error(details: &str) -> String {
     format!("{}: {}", lang::DBC_ERROR_CATEGORY, details)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn format_version_error(details: &str) -> String {
     format!("{}: {}", lang::VERSION_ERROR_CATEGORY, details)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn format_nodes_error(details: &str) -> String {
     format!("{}: {}", lang::NODES_ERROR_CATEGORY, details)
 }
@@ -50,6 +50,7 @@ pub(crate) fn format_nodes_error(details: &str) -> String {
 // Helper functions for formatted messages
 // ============================================================================
 
+#[cfg(feature = "alloc")]
 fn replace_placeholders(fmt: &str, args: &[&dyn core::fmt::Display]) -> String {
     let mut result = String::with_capacity(fmt.len() + args.len() * 10);
     let mut arg_idx = 0;
@@ -72,6 +73,7 @@ fn replace_placeholders(fmt: &str, args: &[&dyn core::fmt::Display]) -> String {
     result
 }
 
+#[cfg(feature = "alloc")]
 pub(crate) fn duplicate_message_id(id: u32, msg1: &str, msg2: &str) -> String {
     let args: [&dyn core::fmt::Display; 3] = [
         &id,
@@ -81,6 +83,7 @@ pub(crate) fn duplicate_message_id(id: u32, msg1: &str, msg2: &str) -> String {
     replace_placeholders(lang::FORMAT_DUPLICATE_MESSAGE_ID, &args)
 }
 
+#[cfg(feature = "alloc")]
 pub(crate) fn sender_not_in_nodes(msg_name: &str, sender: &str) -> String {
     let args: [&dyn core::fmt::Display; 2] = [
         &msg_name as &dyn core::fmt::Display,
@@ -89,7 +92,7 @@ pub(crate) fn sender_not_in_nodes(msg_name: &str, sender: &str) -> String {
     replace_placeholders(lang::FORMAT_SENDER_NOT_IN_NODES, &args)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn signal_extends_beyond_message(
     signal_name: &str,
     start_bit: u16,
@@ -109,13 +112,13 @@ pub(crate) fn signal_extends_beyond_message(
     replace_placeholders(lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE, &args)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn parse_number_failed(err: impl core::fmt::Display) -> String {
     let args: [&dyn core::fmt::Display; 1] = [&err];
     replace_placeholders(lang::FORMAT_PARSE_NUMBER_FAILED, &args)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn invalid_utf8(err: impl core::fmt::Display) -> String {
     let args: [&dyn core::fmt::Display; 1] = [&err];
     replace_placeholders(lang::FORMAT_INVALID_UTF8, &args)
@@ -127,7 +130,7 @@ pub(crate) fn read_failed(err: impl core::fmt::Display) -> String {
     replace_placeholders(lang::FORMAT_READ_FAILED, &args)
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn message_id_out_of_range(id: u32) -> String {
     // Format ID in hex with underscores for readability (e.g., 0x1234_5678)
     let hex_str = format!("{id:08X}");
@@ -145,7 +148,7 @@ pub(crate) fn message_id_out_of_range(id: u32) -> String {
     replace_placeholders(lang::FORMAT_MESSAGE_ID_OUT_OF_RANGE, &args)
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "alloc")]
 fn format_number_with_commas(s: &str) -> String {
     let mut result = String::with_capacity(s.len() + s.len() / 3);
     let chars: Vec<char> = s.chars().collect();
@@ -162,7 +165,7 @@ fn format_number_with_commas(s: &str) -> String {
     result
 }
 
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
+#[cfg(feature = "alloc")]
 pub(crate) fn signal_overlap(signal1: &str, signal2: &str, message: &str) -> String {
     let args: [&dyn core::fmt::Display; 3] = [
         &signal1 as &dyn core::fmt::Display,

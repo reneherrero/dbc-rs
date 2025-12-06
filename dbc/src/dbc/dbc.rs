@@ -1,11 +1,12 @@
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 use crate::{Error, Result, error::messages as error_messages};
 use crate::{
-    Message, Nodes, Parser, Signal, Signals, Version,
+    Message, Messages, Nodes, Parser, Signal, Signals, Version,
     error::{ParseError, ParseResult},
 };
 
-use super::messages::Messages;
+#[cfg(feature = "alloc")]
+use alloc::string::String;
 
 #[derive(Debug)]
 pub struct Dbc<'a> {
@@ -86,12 +87,38 @@ impl<'a> Dbc<'a> {
         }
     }
 
+    /// Get the version of the DBC file
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// if let Some(version) = dbc.version() {
+    ///     println!("Version: {}", version.to_string());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn version(&self) -> Option<&Version<'a>> {
         self.version.as_ref()
     }
 
+    /// Get a reference to the nodes collection
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// let nodes = dbc.nodes();
+    /// println!("Nodes: {}", nodes.to_string());
+    /// println!("Node count: {}", nodes.len());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn nodes(&self) -> &Nodes<'a> {
@@ -99,12 +126,44 @@ impl<'a> Dbc<'a> {
     }
 
     /// Get a reference to the messages collection
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// let messages = dbc.messages();
+    /// println!("Message count: {}", messages.len());
+    /// for message in messages.iter() {
+    ///     println!("Message: {} (ID: {})", message.name(), message.id());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn messages(&self) -> &Messages<'a> {
         &self.messages
     }
 
+    /// Parse a DBC file from a string slice
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc_content = r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 EngineData : 8 ECM
+    ///  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm""#;
+    ///
+    /// let dbc = Dbc::parse(dbc_content)?;
+    /// println!("Parsed {} messages", dbc.messages().len());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     pub fn parse(data: &'a str) -> ParseResult<Self> {
         // FIRST PASS: Count messages (two-pass parsing to allocate correct sizes)
         let mut parser1 = Parser::new(data.as_bytes())?;
@@ -116,10 +175,10 @@ impl<'a> Dbc<'a> {
         // Allocate messages buffer - Messages will handle the size internally
         // We use a temporary buffer that Messages can work with (no alloc in no_std)
         // Messages handles capacity internally, we just need a buffer
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         let mut messages_buffer = Messages::new_parse_buffer();
 
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         let mut messages_buffer: alloc::vec::Vec<Option<Message<'a>>> =
             alloc::vec::Vec::with_capacity(Messages::max_capacity());
 
@@ -222,10 +281,10 @@ impl<'a> Dbc<'a> {
                     parser2.skip_to_end_of_line();
 
                     // Parse signals into fixed array
-                    #[cfg(not(feature = "std"))]
+                    #[cfg(not(feature = "alloc"))]
                     let mut signals_array = Signals::new_parse_buffer();
 
-                    #[cfg(feature = "std")]
+                    #[cfg(feature = "alloc")]
                     let mut signals_array: alloc::vec::Vec<Option<Signal<'a>>> =
                         alloc::vec::Vec::with_capacity(Signals::max_capacity());
 
@@ -247,11 +306,11 @@ impl<'a> Dbc<'a> {
                                         _ => e,
                                     })?;
                                     let signal = Signal::parse(&mut parser2)?;
-                                    #[cfg(not(feature = "std"))]
+                                    #[cfg(not(feature = "alloc"))]
                                     {
                                         signals_array[signal_count] = Some(signal);
                                     }
-                                    #[cfg(feature = "std")]
+                                    #[cfg(feature = "alloc")]
                                     {
                                         signals_array.push(Some(signal));
                                     }
@@ -271,22 +330,22 @@ impl<'a> Dbc<'a> {
 
                     // Use Message::parse which will parse the header and use our signals
                     let signals_slice: &[Option<Signal<'a>>] = {
-                        #[cfg(not(feature = "std"))]
+                        #[cfg(not(feature = "alloc"))]
                         {
                             &signals_array[..signal_count]
                         }
-                        #[cfg(feature = "std")]
+                        #[cfg(feature = "alloc")]
                         {
                             &signals_array[..]
                         }
                     };
                     let message = Message::parse(&mut message_parser, signals_slice, signal_count)?;
 
-                    #[cfg(not(feature = "std"))]
+                    #[cfg(not(feature = "alloc"))]
                     {
                         messages_buffer[message_count_actual] = Some(message);
                     }
-                    #[cfg(feature = "std")]
+                    #[cfg(feature = "alloc")]
                     {
                         messages_buffer.push(Some(message));
                     }
@@ -316,11 +375,11 @@ impl<'a> Dbc<'a> {
 
         // Convert messages buffer to slice for validation and construction
         let messages_slice: &[Option<Message<'a>>] = {
-            #[cfg(not(feature = "std"))]
+            #[cfg(not(feature = "alloc"))]
             {
                 &messages_buffer[..message_count_actual]
             }
-            #[cfg(feature = "std")]
+            #[cfg(feature = "alloc")]
             {
                 &messages_buffer[..]
             }
@@ -343,12 +402,23 @@ impl<'a> Dbc<'a> {
         ))
     }
 
-    #[cfg(feature = "std")]
+    /// Parse a DBC file from a byte slice
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc_bytes = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM";
+    /// let dbc = Dbc::parse_bytes(dbc_bytes)?;
+    /// println!("Parsed {} messages", dbc.messages().len());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "alloc")]
     pub fn parse_bytes(data: &[u8]) -> Result<Dbc<'static>> {
         let content =
             core::str::from_utf8(data).map_err(|e| Error::Dbc(error_messages::invalid_utf8(e)))?;
         // Convert to owned string, box it, and leak to get 'static lifetime
-        use alloc::string::String;
         let owned = String::from(content);
         let boxed = owned.into_boxed_str();
         let content_ref: &'static str = Box::leak(boxed);
@@ -364,8 +434,6 @@ impl<'a> Dbc<'a> {
 
     #[cfg(feature = "std")]
     pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Dbc<'static>> {
-        use alloc::string::String;
-
         let mut buffer = String::new();
         std::io::Read::read_to_string(&mut reader, &mut buffer)
             .map_err(|e| Error::Dbc(error_messages::read_failed(e)))?;
@@ -377,7 +445,31 @@ impl<'a> Dbc<'a> {
     }
 
     /// Serialize this DBC to a DBC format string
-    #[cfg(feature = "std")]
+    /// Convert the DBC structure back to DBC file format string
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// let dbc_string = dbc.to_dbc_string();
+    /// std::fs::write("output.dbc", dbc_string)?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    /// Convert the DBC structure back to DBC file format string
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// let dbc_string = dbc.to_dbc_string();
+    /// std::fs::write("output.dbc", dbc_string)?;
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
         // Pre-allocate with estimated capacity
@@ -705,7 +797,7 @@ BO_ 256 Engine : 8 ECM
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_parse_from_string() {
         let data = String::from(
             r#"VERSION "1.0"
@@ -742,7 +834,7 @@ BO_ 256 Engine : 8 ECM
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_save_basic() {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
@@ -833,7 +925,7 @@ BO_ 512 BrakeData : 4 TCM
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_save_multiple_messages() {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
@@ -903,7 +995,7 @@ BO_ 512 BrakeData : 4 TCM
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_dbc_too_many_messages() {
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
@@ -944,7 +1036,7 @@ BO_ 512 BrakeData : 4 TCM
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_dbc_at_message_limit() {
         use crate::nodes::NodesBuilder;
 

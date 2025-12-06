@@ -1,10 +1,10 @@
 #[path = "receivers.rs"]
 mod receivers_impl;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 mod receivers_builder;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 pub use receivers_builder::ReceiversBuilder;
 
 pub use receivers_impl::Receivers;

@@ -454,7 +454,7 @@ impl<'a> Signal<'a> {
         &self.receivers
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
         let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
@@ -539,11 +539,11 @@ mod tests {
         Error, Parser,
         error::{ParseError, lang},
     };
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     use crate::{MessageBuilder, ReceiversBuilder, SignalBuilder};
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_valid() {
         let signal = SignalBuilder::new()
             .name("RPM")
@@ -573,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_empty_name() {
         let result = SignalBuilder::new()
             .name("")
@@ -595,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_zero_length() {
         let result = SignalBuilder::new()
             .name("Test")
@@ -617,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_length_too_large() {
         // length > 512 should fail validation (CAN FD maximum is 512 bits)
         let result = SignalBuilder::new()
@@ -640,7 +640,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_overflow() {
         // Signal with start_bit + length > 64 should be created successfully
         // (validation against message DLC happens in Message::validate)
@@ -680,7 +680,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_invalid_range() {
         let result = SignalBuilder::new()
             .name("Test")
@@ -706,7 +706,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_max_boundary() {
         // Test that 64 bits at position 0 is valid
         let signal = SignalBuilder::new()
@@ -726,7 +726,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_new_with_receivers() {
         let signal = SignalBuilder::new()
             .name("TestSignal")
@@ -877,7 +877,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_parse_signal_overflow() {
         // Signal with start_bit + length > 64 should parse successfully
         // (validation against message DLC happens in Message::validate)
@@ -944,7 +944,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_signal_to_dbc_string() {
         // Test with Broadcast receiver
         let signal1 = SignalBuilder::new()

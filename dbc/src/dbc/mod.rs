@@ -2,10 +2,10 @@
 mod dbc_impl;
 mod messages;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 mod dbc_builder;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 pub use dbc_builder::DbcBuilder;
 
 pub use dbc_impl::Dbc;

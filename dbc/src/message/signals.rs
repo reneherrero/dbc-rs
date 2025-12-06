@@ -39,12 +39,12 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 ///
 /// Storage strategy:
 /// - `no_std`: Uses fixed-size array `[Option<Signal>; MAX_SIGNALS_PER_MESSAGE]`
-/// - `std`: Uses heap-allocated `Box<[Option<Signal>]>` for dynamic sizing
+/// - `alloc`: Uses heap-allocated `Box<[Option<Signal>]>` for dynamic sizing
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signals<'a> {
-    #[cfg(not(feature = "std"))]
+    #[cfg(not(feature = "alloc"))]
     signals: [Option<Signal<'a>>; MAX_SIGNALS_PER_MESSAGE],
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     signals: alloc::boxed::Box<[Option<Signal<'a>>]>,
     signal_count: usize,
 }
@@ -55,7 +55,7 @@ impl<'a> Signals<'a> {
     pub(crate) fn from_signals_slice(signals: &[Signal<'a>]) -> Self {
         let count = signals.len().min(MAX_SIGNALS_PER_MESSAGE);
 
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         {
             let mut signals_array: [Option<Signal<'a>>; MAX_SIGNALS_PER_MESSAGE] =
                 [const { None }; MAX_SIGNALS_PER_MESSAGE];
@@ -68,7 +68,7 @@ impl<'a> Signals<'a> {
             }
         }
 
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         {
             use alloc::vec::Vec;
             let mut signals_vec = Vec::with_capacity(count);
@@ -86,7 +86,7 @@ impl<'a> Signals<'a> {
     pub(crate) fn from_options_slice(signals: &[Option<Signal<'a>>], signal_count: usize) -> Self {
         let count = signal_count.min(MAX_SIGNALS_PER_MESSAGE).min(signals.len());
 
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         {
             let mut signals_array: [Option<Signal<'a>>; MAX_SIGNALS_PER_MESSAGE] =
                 [const { None }; MAX_SIGNALS_PER_MESSAGE];
@@ -99,7 +99,7 @@ impl<'a> Signals<'a> {
             }
         }
 
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         {
             use alloc::vec::Vec;
             let mut signals_vec = Vec::with_capacity(count);
@@ -117,9 +117,6 @@ impl<'a> Signals<'a> {
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &Signal<'a>> + '_ {
-        #[cfg(not(feature = "std"))]
-        let signals_slice: &[Option<Signal<'a>>] = &self.signals;
-        #[cfg(feature = "std")]
         let signals_slice: &[Option<Signal<'a>>] = &self.signals;
         SignalsIter {
             signals: signals_slice,
@@ -165,7 +162,7 @@ impl<'a> Signals<'a> {
 
     /// Create a temporary buffer for parsing (no alloc in no_std)
     /// Returns a buffer that can hold up to MAX_SIGNALS_PER_MESSAGE signals
-    #[cfg(not(feature = "std"))]
+    #[cfg(not(feature = "alloc"))]
     pub(crate) fn new_parse_buffer<'b>() -> [Option<Signal<'b>>; MAX_SIGNALS_PER_MESSAGE] {
         [const { None }; MAX_SIGNALS_PER_MESSAGE]
     }
