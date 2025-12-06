@@ -15,7 +15,7 @@ homepage.workspace = true
 rust-version.workspace = true
 
 [package.metadata.docs.rs]
-features = ["std"]
+features = ["alloc", "std"]
 
 [features]
 default = ["std"]

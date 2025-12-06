@@ -45,9 +45,16 @@ pub const MESSAGE_DLC_REQUIRED: &str = "dlc is required";
 pub const MESSAGE_SENDER_EMPTY: &str = "Message sender cannot be empty";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "Message DLC must be at least 1 byte";
 pub const MESSAGE_DLC_TOO_LARGE: &str = "Message DLC cannot exceed 64 bytes (CAN FD maximum)";
+pub const FORMAT_MESSAGE_DLC_TOO_SMALL: &str =
+    "Message '{}' (ID {}) has DLC {}, must be at least 1 byte. Use DLC between 1 and 64 bytes";
+pub const FORMAT_MESSAGE_DLC_TOO_LARGE: &str = "Message '{}' (ID {}) has DLC {}, cannot exceed 64 bytes (CAN FD maximum). Use DLC between 1 and 64 bytes";
 pub const MESSAGE_INVALID_FORMAT: &str = "Invalid message format";
 pub const MESSAGE_INVALID_ID: &str = "Invalid message ID";
 pub const MESSAGE_INVALID_DLC: &str = "Invalid DLC";
+pub const FORMAT_MESSAGE_INVALID_ID: &str =
+    "Invalid message ID '{}'. Expected a valid number (0-536,870,911 for extended IDs)";
+pub const FORMAT_MESSAGE_INVALID_DLC: &str =
+    "Invalid DLC '{}' for message '{}' (ID {}). Expected a number between 1 and 64";
 pub const MESSAGE_ID_OUT_OF_RANGE: &str = "Message ID out of valid range";
 
 // ============================================================================
@@ -59,6 +66,9 @@ pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bit is required";
 pub const SIGNAL_LENGTH_REQUIRED: &str = "length is required";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signal length must be at least 1 bit";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "Signal length cannot exceed 512 bits (CAN FD maximum)";
+pub const FORMAT_SIGNAL_LENGTH_TOO_SMALL: &str =
+    "Signal '{}' has length {} bits, must be at least 1 bit. Use length between 1 and 512 bits";
+pub const FORMAT_SIGNAL_LENGTH_TOO_LARGE: &str = "Signal '{}' has length {} bits, cannot exceed 512 bits (CAN FD maximum). Use length between 1 and 512 bits";
 pub const SIGNAL_OVERLAP: &str = "Signals overlap within message";
 
 // ============================================================================
@@ -73,6 +83,10 @@ pub const SIGNAL_PARSE_EXPECTED_AT: &str = "Expected '@' in startbit|length@..."
 pub const SIGNAL_PARSE_EXPECTED_PIPE: &str = "Expected '|' in startbit|length";
 pub const SIGNAL_PARSE_INVALID_START_BIT: &str = "Invalid start_bit";
 pub const SIGNAL_PARSE_INVALID_LENGTH: &str = "Invalid length";
+pub const FORMAT_SIGNAL_PARSE_INVALID_START_BIT: &str =
+    "Signal '{}' has start_bit {}, must be between 0 and 511. Use start_bit between 0 and 511";
+pub const FORMAT_SIGNAL_PARSE_INVALID_LENGTH: &str =
+    "Invalid length '{}' for signal '{}'. Expected a number between 1 and 512";
 pub const SIGNAL_PARSE_MISSING_BYTE_ORDER: &str = "Missing byte order";
 pub const SIGNAL_PARSE_MISSING_SIGN: &str = "Missing sign";
 pub const SIGNAL_PARSE_MISSING_CLOSING_PAREN: &str = "Missing closing ')' for factor,offset";

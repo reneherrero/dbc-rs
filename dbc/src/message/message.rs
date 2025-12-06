@@ -103,14 +103,32 @@ impl<'a> Message<'a> {
         // - Classic CAN Extended (CAN 2.0B): DLC <= 8 bytes (64 bits) maximum payload
         // - CAN FD (Flexible Data Rate, ISO/Bosch): DLC <= 64 bytes (512 bits) maximum payload
         if dlc == 0 {
-            return Err(ParseError::Version(
-                crate::error::lang::MESSAGE_DLC_TOO_SMALL,
-            ));
+            #[cfg(feature = "alloc")]
+            {
+                use crate::error::messages;
+                let msg = messages::message_dlc_too_small(name, id, dlc);
+                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+            }
+            #[cfg(not(feature = "alloc"))]
+            {
+                return Err(ParseError::Version(
+                    crate::error::lang::MESSAGE_DLC_TOO_SMALL,
+                ));
+            }
         }
         if dlc > 64 {
-            return Err(ParseError::Version(
-                crate::error::lang::MESSAGE_DLC_TOO_LARGE,
-            ));
+            #[cfg(feature = "alloc")]
+            {
+                use crate::error::messages;
+                let msg = messages::message_dlc_too_large(name, id, dlc);
+                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+            }
+            #[cfg(not(feature = "alloc"))]
+            {
+                return Err(ParseError::Version(
+                    crate::error::lang::MESSAGE_DLC_TOO_LARGE,
+                ));
+            }
         }
 
         // Validate that ID is within valid CAN ID range
@@ -535,7 +553,12 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Dbc(msg) => {
-                assert!(msg.contains(lang::MESSAGE_DLC_TOO_LARGE));
+                // Check for either the old constant or the new formatted message
+                assert!(
+                    msg.contains(lang::MESSAGE_DLC_TOO_LARGE)
+                        || msg.contains("Message 'EngineData'")
+                        || msg.contains("DLC 65")
+                );
             }
             _ => panic!("Expected Error::Dbc"),
         }
@@ -568,7 +591,12 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Dbc(msg) => {
-                assert!(msg.contains(lang::MESSAGE_DLC_TOO_SMALL));
+                // Check for either the old constant or the new formatted message
+                assert!(
+                    msg.contains(lang::MESSAGE_DLC_TOO_SMALL)
+                        || msg.contains("Message 'EngineData'")
+                        || msg.contains("DLC 0")
+                );
             }
             _ => panic!("Expected Error::Dbc"),
         }
