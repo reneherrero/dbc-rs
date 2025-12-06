@@ -1,4 +1,4 @@
-# dbc
+# dbc-rs
 
 A clean, zero-dependency DBC (CAN Database) file parser and editor for Rust.
 
@@ -39,14 +39,31 @@ if let Some(engine_msg) = dbc.messages().iter().find(|m| m.id() == 256) {
 
 ## Feature Flags
 
-The crate is `#![no_std]` + `alloc` friendly. The following features are available:
+The crate supports three levels of functionality through feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `std`   | ✅       | Enables standard library integration (I/O helpers, tests). Disable it for pure `no_std` builds. |
+| *(none)* | ❌ | **`no_std`**: Bare bones parsing only. No dynamic memory allocation. Uses fixed-size arrays. |
+| `alloc` | ❌ | Adds dynamic memory allocation (`alloc` crate). Enables builders and string formatting methods. |
+| `std`   | ✅ | Adds standard library integration (I/O helpers, file operations). Requires `alloc`. |
 
-**Example (no_std build):**
+**Feature Hierarchy:**
+- **`no_std`** (no features): Minimal parsing, fixed-size arrays
+- **`alloc`**: Adds dynamic allocation, builders, string formatting
+- **`std`**: Adds I/O helpers, file operations, additional conveniences
+
+**Examples:**
+
 ```toml
+# Default: std enabled (includes alloc)
+[dependencies]
+dbc-rs = "1"
+
+# alloc only (no std)
+[dependencies]
+dbc-rs = { version = "1", default-features = false, features = ["alloc"] }
+
+# Pure no_std (no alloc, no std)
 [dependencies]
 dbc-rs = { version = "1", default-features = false }
 ```
@@ -209,44 +226,34 @@ let dbc = Dbc::parse_with_options(&content, options)?;
 ### Modifying Existing DBC
 
 ```rust
-use dbc_rs::{Dbc, Message, Signal, ByteOrder, Receivers};
+use dbc_rs::{Dbc, DbcBuilder, MessageBuilder, SignalBuilder, ByteOrder, Receivers};
 
 let dbc = Dbc::parse(&content)?;
 
-// Extract current data
-let version = dbc.version();
-let nodes = dbc.nodes();
-let mut messages: Vec<Message> = dbc.messages().iter().cloned().collect();
-
-// Add new message
-let new_signal = Signal::builder()
-    .name("NewSignal")
-    .start_bit(0)
-    .length(8)
-    .byte_order(ByteOrder::BigEndian)
-    .unsigned(true)
-    .factor(1.0)
-    .offset(0.0)
-    .min(0.0)
-    .max(255.0)
-    .receivers(Receivers::Broadcast)
-    .build()?;
-
-let new_message = Message::builder()
-    .id(1024)
-    .name("NewMessage")
-    .dlc(8)
-    .sender("ECM")
-    .add_signal(new_signal)
-    .build()?;
-
-messages.push(new_message);
-
-// Create modified DBC
-let modified_dbc = Dbc::builder()
-    .version(version.clone())
-    .nodes(nodes.clone())
-    .messages(messages)
+// Create builder from existing DBC (preserves version, nodes, and messages)
+let modified_dbc = DbcBuilder::new(Some(&dbc))
+    .add_message(
+        MessageBuilder::new()
+            .id(1024)
+            .name("NewMessage")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(
+                SignalBuilder::new()
+                    .name("NewSignal")
+                    .start_bit(0)
+                    .length(8)
+                    .byte_order(ByteOrder::BigEndian)
+                    .unsigned(true)
+                    .factor(1.0)
+                    .offset(0.0)
+                    .min(0.0)
+                    .max(255.0)
+                    .receivers(Receivers::Broadcast)
+                    .build()?,
+            )
+            .build()?,
+    )
     .build()?;
 ```
 

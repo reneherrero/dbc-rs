@@ -78,7 +78,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .build()?;
 
     // Create DBC with all components using the builder pattern
-    let dbc = DbcBuilder::new()
+    let dbc = DbcBuilder::new(None)
         .version(version)
         .nodes(nodes)
         .add_message(engine_message)
