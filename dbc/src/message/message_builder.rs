@@ -3,7 +3,7 @@ use crate::{
     {Error, Message, ParseOptions, Result, Signal},
 };
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 #[derive(Debug, Clone, Default)]
 pub struct MessageBuilder {
     id: Option<u32>,
@@ -13,7 +13,7 @@ pub struct MessageBuilder {
     signals: Vec<Signal<'static>>,
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 impl MessageBuilder {
     pub fn new() -> Self {
         Self::default()
@@ -68,18 +68,26 @@ impl MessageBuilder {
     }
 
     fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<Signal<'static>>)> {
-        let id = self
-            .id
-            .ok_or_else(|| Error::Message(messages::MESSAGE_ID_REQUIRED.to_string()))?;
-        let name = self
-            .name
-            .ok_or_else(|| Error::Message(messages::MESSAGE_NAME_EMPTY.to_string()))?;
-        let dlc = self
-            .dlc
-            .ok_or_else(|| Error::Message(messages::MESSAGE_DLC_REQUIRED.to_string()))?;
-        let sender = self
-            .sender
-            .ok_or_else(|| Error::Message(messages::MESSAGE_SENDER_EMPTY.to_string()))?;
+        let id = self.id.ok_or_else(|| {
+            Error::Message(crate::error::str_to_error_string(
+                messages::MESSAGE_ID_REQUIRED,
+            ))
+        })?;
+        let name = self.name.ok_or_else(|| {
+            Error::Message(crate::error::str_to_error_string(
+                messages::MESSAGE_NAME_EMPTY,
+            ))
+        })?;
+        let dlc = self.dlc.ok_or_else(|| {
+            Error::Message(crate::error::str_to_error_string(
+                messages::MESSAGE_DLC_REQUIRED,
+            ))
+        })?;
+        let sender = self.sender.ok_or_else(|| {
+            Error::Message(crate::error::str_to_error_string(
+                messages::MESSAGE_SENDER_EMPTY,
+            ))
+        })?;
         Ok((id, name, dlc, sender, self.signals))
     }
 
@@ -126,7 +134,9 @@ impl MessageBuilder {
             ParseOptions::new(), // Builder always uses strict mode
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => Error::Dbc(String::from(msg)),
+            crate::error::ParseError::Version(msg) => {
+                Error::Dbc(crate::error::str_to_error_string(msg))
+            }
             _ => Error::ParseError(e),
         })?;
         // Convert owned strings to static references by leaking Box<str>

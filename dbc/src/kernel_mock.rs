@@ -16,6 +16,7 @@ pub mod alloc {
     pub mod string {
         use core::fmt;
 
+        #[derive(Debug, PartialEq, Eq)]
         pub struct String {
             inner: crate::alloc::string::String,
         }

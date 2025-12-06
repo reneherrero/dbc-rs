@@ -2,10 +2,10 @@
 mod message_impl;
 mod signals;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 mod message_builder;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use message_builder::MessageBuilder;
 
 pub use message_impl::Message;

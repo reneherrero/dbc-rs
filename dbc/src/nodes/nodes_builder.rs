@@ -139,7 +139,9 @@ impl NodesBuilder {
         let node_strs: Vec<String> = self.nodes.into_iter().map(|s| s.to_string()).collect();
         let node_refs: Vec<&str> = node_strs.iter().map(|s| s.as_str()).collect();
         super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => Error::Nodes(String::from(msg)),
+            crate::error::ParseError::Version(msg) => {
+                Error::Nodes(crate::error::str_to_error_string(msg))
+            }
             _ => Error::from(e),
         })?;
         Ok(node_strs)
@@ -238,7 +240,9 @@ impl NodesBuilder {
         }
         // Validate before construction
         super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => Error::Nodes(String::from(msg)),
+            crate::error::ParseError::Version(msg) => {
+                Error::Nodes(crate::error::str_to_error_string(msg))
+            }
             _ => Error::from(e),
         })?;
         Ok(Nodes::new(&node_refs))

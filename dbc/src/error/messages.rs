@@ -94,9 +94,12 @@ pub(crate) fn format_nodes_error(details: &str) -> Result<String, ()> {
 // Helper functions for formatted messages
 // ============================================================================
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 fn replace_placeholders(fmt: &str, args: &[&dyn core::fmt::Display]) -> String {
+    #[cfg(all(feature = "alloc", not(feature = "kernel")))]
     let mut result = String::with_capacity(fmt.len() + args.len() * 10);
+    #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+    let mut result = String::try_from("").unwrap_or_else(|_| unreachable!());
     let mut arg_idx = 0;
     let mut chars = fmt.chars().peekable();
 
@@ -136,7 +139,7 @@ pub(crate) fn sender_not_in_nodes(msg_name: &str, sender: &str) -> String {
     replace_placeholders(lang::FORMAT_SENDER_NOT_IN_NODES, &args)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub(crate) fn signal_extends_beyond_message(
     signal_name: &str,
     start_bit: u16,
@@ -162,7 +165,15 @@ pub(crate) fn signal_extends_beyond_message(
         )
     } else {
         // Signal exceeds even CAN FD maximum (64 bytes = 512 bits)
-        "Signal exceeds CAN FD maximum (64 bytes = 512 bits)".to_string()
+        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+        {
+            "Signal exceeds CAN FD maximum (64 bytes = 512 bits)".to_string()
+        }
+        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+        {
+            String::try_from("Signal exceeds CAN FD maximum (64 bytes = 512 bits)")
+                .unwrap_or_else(|_| String::try_from("").unwrap_or_else(|_| unreachable!()))
+        }
     };
 
     let args: [&dyn core::fmt::Display; 7] = [
@@ -277,7 +288,7 @@ pub(crate) fn signal_length_too_large(signal_name: &str, length: u16) -> String 
     replace_placeholders(lang::FORMAT_SIGNAL_LENGTH_TOO_LARGE, &args)
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub(crate) fn signal_start_bit_invalid(signal_name: &str, start_bit: u16) -> String {
     let args: [&dyn core::fmt::Display; 2] = [&signal_name as &dyn core::fmt::Display, &start_bit];
     replace_placeholders(lang::FORMAT_SIGNAL_PARSE_INVALID_START_BIT, &args)

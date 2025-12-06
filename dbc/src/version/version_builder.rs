@@ -242,9 +242,9 @@ impl VersionBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<Version<'static>> {
-        let version = self
-            .version
-            .ok_or_else(|| Error::Version(messages::VERSION_EMPTY.to_string()))?;
+        let version = self.version.ok_or_else(|| {
+            Error::Version(crate::error::str_to_error_string(messages::VERSION_EMPTY))
+        })?;
 
         // Convert owned String to static reference by leaking Box<str>
         let boxed: Box<str> = version.into_boxed_str();

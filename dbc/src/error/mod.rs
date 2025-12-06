@@ -7,6 +7,24 @@ use core::{convert::From, fmt};
 #[allow(unused_imports)]
 use core::num::ParseIntError;
 
+// Type alias for String based on feature flags
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+use crate::kernel::alloc::string::String as ErrorString;
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+use alloc::string::String as ErrorString;
+
+// Helper function to convert &str to ErrorString
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
+    ErrorString::try_from(s)
+        .unwrap_or_else(|_| ErrorString::try_from("").unwrap_or_else(|_| unreachable!()))
+}
+
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
+    ErrorString::from(s)
+}
+
 pub mod lang;
 pub(crate) mod messages;
 
@@ -18,27 +36,27 @@ pub(crate) mod messages;
 pub enum Error {
     /// Invalid data error (e.g., parse failures, invalid formats).
     #[cfg(any(feature = "alloc", feature = "kernel"))]
-    InvalidData(String),
+    InvalidData(ErrorString),
 
     /// Signal-related error (e.g., invalid signal definition).
     #[cfg(any(feature = "alloc", feature = "kernel"))]
-    Signal(String),
+    Signal(ErrorString),
 
     /// Message-related error (e.g., invalid message definition).
     #[cfg(any(feature = "alloc", feature = "kernel"))]
-    Message(String),
+    Message(ErrorString),
 
     /// DBC file-level error (e.g., missing required sections).
     #[cfg(any(feature = "alloc", feature = "kernel"))]
-    Dbc(String),
+    Dbc(ErrorString),
 
     /// Version parsing error.
     #[cfg(any(feature = "alloc", feature = "kernel"))]
-    Version(String),
+    Version(ErrorString),
 
     /// Node-related error (e.g., duplicate node names).
     #[cfg(any(feature = "alloc", feature = "kernel"))]
-    Nodes(String),
+    Nodes(ErrorString),
 
     /// Low-level parse error (available in `no_std` builds).
     ParseError(ParseError),
@@ -144,10 +162,12 @@ impl From<ParseIntError> for Error {
 impl From<ParseIntError> for Error {
     fn from(err: ParseIntError) -> Self {
         // In kernel mode, parse_number_failed returns Result
-        Error::InvalidData(
-            messages::parse_number_failed(err)
-                .unwrap_or_else(|_| alloc::string::String::from("Failed to parse number")),
-        )
+        Error::InvalidData(messages::parse_number_failed(err).unwrap_or_else(|_| {
+            ErrorString::try_from("Failed to parse number").unwrap_or_else(|_| {
+                // Fallback: create empty string if allocation fails
+                ErrorString::try_from("").unwrap_or_else(|_| unreachable!())
+            })
+        }))
     }
 }
 
