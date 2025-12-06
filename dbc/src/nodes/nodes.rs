@@ -197,7 +197,7 @@ impl<'a> Nodes<'a> {
     }
 
     #[allow(clippy::inherent_to_string)]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_string(&self) -> String {
         if self.count == 0 {
@@ -215,7 +215,7 @@ impl<'a> Nodes<'a> {
         result
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
         let mut result = String::from(crate::BU_);
@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_new() {
         use crate::nodes::NodesBuilder;
         let nodes = NodesBuilder::new()
@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_new_from_vec() {
         use crate::nodes::NodesBuilder;
         let nodes = NodesBuilder::new()
@@ -305,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_new_from_slice() {
         use crate::nodes::NodesBuilder;
         let nodes = NodesBuilder::new().add_node("A").add_node("B").add_node("C").build().unwrap();
@@ -314,30 +314,22 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_new_duplicate() {
         use crate::nodes::NodesBuilder;
         let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
-        #[cfg(feature = "std")]
-        {
-            use crate::Error;
-            match result.unwrap_err() {
-                Error::Nodes(msg) => {
-                    assert!(msg.contains(lang::NODES_DUPLICATE_NAME))
-                }
-                _ => panic!("Expected Error::Nodes with NODES_DUPLICATE_NAME"),
+        use crate::Error;
+        match result.unwrap_err() {
+            Error::Nodes(msg) => {
+                assert!(msg.contains(lang::NODES_DUPLICATE_NAME))
             }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let _ = result;
-            panic!("Test requires std feature");
+            _ => panic!("Expected Error::Nodes with NODES_DUPLICATE_NAME"),
         }
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_to_string_single() {
         use crate::nodes::NodesBuilder;
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
@@ -345,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_to_string_multiple() {
         use crate::nodes::NodesBuilder;
         let nodes = NodesBuilder::new()
@@ -358,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_to_dbc_string() {
         use crate::nodes::NodesBuilder;
         let nodes_single = NodesBuilder::new().add_node("ECM").build().unwrap();
@@ -386,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_too_many() {
         use crate::nodes::NodesBuilder;
         // Create a builder with 257 nodes (exceeds limit of 256)
@@ -396,20 +388,17 @@ mod tests {
         }
         let result = builder.build();
         assert!(result.is_err());
-        #[cfg(feature = "std")]
-        {
-            use crate::Error;
-            match result.unwrap_err() {
-                Error::Nodes(msg) => {
-                    assert!(msg.contains(lang::NODES_TOO_MANY));
-                }
-                _ => panic!("Expected Error::Nodes"),
+        use crate::Error;
+        match result.unwrap_err() {
+            Error::Nodes(msg) => {
+                assert!(msg.contains(lang::NODES_TOO_MANY));
             }
+            _ => panic!("Expected Error::Nodes"),
         }
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_nodes_at_limit() {
         use crate::nodes::NodesBuilder;
         // Create a builder with exactly 256 nodes (at the limit)

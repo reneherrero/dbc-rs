@@ -116,13 +116,13 @@ impl<'a> Message<'a> {
         // Extended CAN IDs can be 0x00000000 to 0x1FFFFFFF (0 to 536870911)
         // IDs exceeding 0x1FFFFFFF are invalid
         if id > MAX_EXTENDED_ID {
-            #[cfg(feature = "std")]
+            #[cfg(feature = "alloc")]
             {
                 use crate::error::messages;
                 let msg = messages::message_id_out_of_range(id);
                 return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
             }
-            #[cfg(not(feature = "std"))]
+            #[cfg(not(feature = "alloc"))]
             {
                 return Err(ParseError::Version(
                     crate::error::lang::MESSAGE_ID_OUT_OF_RANGE,
@@ -144,7 +144,7 @@ impl<'a> Message<'a> {
             // The signal's highest bit position must be less than max_bits
             let signal_max_bit = lsb.max(msb);
             if signal_max_bit >= max_bits {
-                #[cfg(feature = "std")]
+                #[cfg(feature = "alloc")]
                 {
                     use crate::error::messages;
                     let msg = messages::signal_extends_beyond_message(
@@ -157,7 +157,7 @@ impl<'a> Message<'a> {
                     );
                     return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
                 }
-                #[cfg(not(feature = "std"))]
+                #[cfg(not(feature = "alloc"))]
                 {
                     return Err(ParseError::Version(
                         crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
@@ -192,13 +192,13 @@ impl<'a> Message<'a> {
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
                 // lsb1 <= msb2 && lsb2 <= msb1
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
-                    #[cfg(feature = "std")]
+                    #[cfg(feature = "alloc")]
                     {
                         use crate::error::messages;
                         let msg = messages::signal_overlap(sig1.name(), sig2.name(), name);
                         return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
                     }
-                    #[cfg(not(feature = "std"))]
+                    #[cfg(not(feature = "alloc"))]
                     {
                         return Err(ParseError::Version(crate::error::lang::SIGNAL_OVERLAP));
                     }
@@ -356,7 +356,7 @@ impl<'a> Message<'a> {
         &self.signals
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
         format!(
@@ -368,7 +368,7 @@ impl<'a> Message<'a> {
         )
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_dbc_string_with_signals(&self) -> String {
         let mut result = String::with_capacity(200 + (self.signals.len() * 100));
@@ -392,11 +392,11 @@ mod tests {
         ByteOrder, Error, Parser, Receivers,
         error::{ParseError, lang},
     };
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     use crate::{MessageBuilder, SignalBuilder};
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_valid() {
         let signal = SignalBuilder::new()
             .name("RPM")
@@ -429,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_empty_name() {
         let signal = SignalBuilder::new()
             .name("RPM")
@@ -462,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_empty_sender() {
         let signal = SignalBuilder::new()
             .name("RPM")
@@ -495,7 +495,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_dlc_too_large() {
         let signal = SignalBuilder::new()
             .name("RPM")
@@ -528,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_dlc_zero() {
         let signal = SignalBuilder::new()
             .name("RPM")
@@ -561,7 +561,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_id_out_of_range() {
         let signal = SignalBuilder::new()
             .name("RPM")
@@ -598,7 +598,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_signal_overlap() {
         let signal1 = SignalBuilder::new()
             .name("Signal1")
@@ -648,7 +648,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_signal_extends_beyond_message() {
         let signal = SignalBuilder::new()
             .name("Signal1")
@@ -684,7 +684,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_new_too_many_signals() {
         let mut builder = MessageBuilder::new().id(256).name("EngineData").dlc(8).sender("ECM");
 
@@ -927,7 +927,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_to_dbc_string() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
@@ -939,7 +939,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_to_dbc_string_with_signals() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
@@ -1091,7 +1091,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_signal_overlap_big_endian() {
         // Test signal overlap detection with big-endian signals
         let signal1 = SignalBuilder::new()
@@ -1142,7 +1142,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_message_signal_extends_beyond_message_big_endian() {
         // Test that big-endian signals extending beyond message boundary are detected
         let signal = SignalBuilder::new()

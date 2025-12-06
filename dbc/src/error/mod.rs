@@ -1,28 +1,26 @@
-#[cfg(feature = "std")]
-use core::fmt;
-use core::{convert::From, num::ParseIntError};
+use core::{convert::From, fmt, num::ParseIntError};
 
 pub mod lang;
 pub(crate) mod messages;
 
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     InvalidData(String),
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     Signal(String),
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     Message(String),
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     Dbc(String),
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     Version(String),
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     Nodes(String),
 
     ParseError(ParseError),
@@ -41,7 +39,6 @@ pub enum ParseError {
     Version(&'static str),
 }
 
-#[cfg(feature = "std")]
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -58,7 +55,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -89,14 +86,14 @@ impl fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 impl From<ParseIntError> for Error {
     fn from(err: ParseIntError) -> Self {
         Error::InvalidData(messages::parse_number_failed(err))
     }
 }
 
-#[cfg(not(feature = "std"))]
+#[cfg(not(feature = "alloc"))]
 impl From<ParseIntError> for Error {
     fn from(_err: ParseIntError) -> Self {
         // In no_std, we can only return ParseError

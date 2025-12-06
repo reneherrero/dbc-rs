@@ -1,10 +1,10 @@
 #[path = "signal.rs"]
 mod signal_impl;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 pub mod signal_builder;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 pub use signal_builder::SignalBuilder;
 
 pub use signal_impl::Signal;

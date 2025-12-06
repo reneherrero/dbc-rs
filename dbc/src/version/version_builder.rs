@@ -56,7 +56,7 @@ impl VersionBuilder {
     }
 }
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(all(test, feature = "alloc"))]
 mod tests {
     use super::VersionBuilder;
     use crate::error::lang;
@@ -86,7 +86,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     fn test_version_builder_missing_version() {
         use crate::Error;
 

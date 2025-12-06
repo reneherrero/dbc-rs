@@ -1,4 +1,4 @@
-#![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "alloc"), no_std)]
 
 extern crate alloc;
 
@@ -13,35 +13,28 @@ mod signal;
 mod version;
 
 pub use byte_order::ByteOrder;
-
-pub use dbc::Dbc;
-#[cfg(feature = "std")]
-pub use dbc::DbcBuilder;
-pub use dbc::Messages;
-
+pub use dbc::{Dbc, Messages};
 pub use error::{Error, Result};
-
-#[cfg(feature = "std")]
-pub use message::MessageBuilder;
 pub use message::{Message, Signals};
-
 pub use nodes::Nodes;
-#[cfg(feature = "std")]
+pub use receivers::Receivers;
+pub use signal::Signal;
+pub use version::Version;
+
+#[cfg(feature = "alloc")]
+pub use dbc::DbcBuilder;
+#[cfg(feature = "alloc")]
+pub use message::MessageBuilder;
+#[cfg(feature = "alloc")]
 pub use nodes::NodesBuilder;
+#[cfg(feature = "alloc")]
+pub use receivers::ReceiversBuilder;
+#[cfg(feature = "alloc")]
+pub use signal::SignalBuilder;
+#[cfg(feature = "alloc")]
+pub use version::VersionBuilder;
 
 pub(crate) use parser::Parser;
-
-pub use receivers::Receivers;
-#[cfg(feature = "std")]
-pub use receivers::ReceiversBuilder;
-
-pub use signal::Signal;
-#[cfg(feature = "std")]
-pub use signal::SignalBuilder;
-
-pub use version::Version;
-#[cfg(feature = "std")]
-pub use version::VersionBuilder;
 
 #[cfg(feature = "std")]
 pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");

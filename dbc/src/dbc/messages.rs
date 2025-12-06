@@ -39,12 +39,12 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 ///
 /// Storage strategy:
 /// - `no_std`: Uses fixed-size array `[Option<Message>; MAX_MESSAGES]`
-/// - `std`: Uses heap-allocated `Box<[Option<Message>]>` for dynamic sizing
+/// - `alloc`: Uses heap-allocated `Box<[Option<Message>]>` for dynamic sizing
 #[derive(Debug, Clone, PartialEq)]
 pub struct Messages<'a> {
-    #[cfg(not(feature = "std"))]
+    #[cfg(not(feature = "alloc"))]
     messages: [Option<Message<'a>>; MAX_MESSAGES],
-    #[cfg(feature = "std")]
+    #[cfg(feature = "alloc")]
     messages: alloc::boxed::Box<[Option<Message<'a>>]>,
     message_count: usize,
 }
@@ -55,7 +55,7 @@ impl<'a> Messages<'a> {
     pub(crate) fn from_messages_slice(messages: &[Message<'a>]) -> Self {
         let count = messages.len().min(MAX_MESSAGES);
 
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         {
             let mut messages_array: [Option<Message<'a>>; MAX_MESSAGES] =
                 [const { None }; MAX_MESSAGES];
@@ -68,7 +68,7 @@ impl<'a> Messages<'a> {
             }
         }
 
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         {
             use alloc::vec::Vec;
             let mut messages_vec = Vec::with_capacity(count);
@@ -89,7 +89,7 @@ impl<'a> Messages<'a> {
     ) -> Self {
         let count = message_count.min(MAX_MESSAGES).min(messages.len());
 
-        #[cfg(not(feature = "std"))]
+        #[cfg(not(feature = "alloc"))]
         {
             let mut messages_array: [Option<Message<'a>>; MAX_MESSAGES] =
                 [const { None }; MAX_MESSAGES];
@@ -102,7 +102,7 @@ impl<'a> Messages<'a> {
             }
         }
 
-        #[cfg(feature = "std")]
+        #[cfg(feature = "alloc")]
         {
             use alloc::vec::Vec;
             let mut messages_vec = Vec::with_capacity(count);
@@ -117,12 +117,21 @@ impl<'a> Messages<'a> {
     }
 
     /// Get an iterator over the messages
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// for message in dbc.messages().iter() {
+    ///     println!("Message: {} (ID: {})", message.name(), message.id());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &Message<'a>> + '_ {
-        #[cfg(not(feature = "std"))]
-        let messages_slice: &[Option<Message<'a>>] = &self.messages;
-        #[cfg(feature = "std")]
         let messages_slice: &[Option<Message<'a>>] = &self.messages;
         MessagesIter {
             messages: messages_slice,
@@ -132,6 +141,16 @@ impl<'a> Messages<'a> {
     }
 
     /// Get the number of messages
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// assert_eq!(dbc.messages().len(), 1);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
@@ -139,6 +158,16 @@ impl<'a> Messages<'a> {
     }
 
     /// Returns `true` if there are no messages
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM")?;
+    /// assert!(dbc.messages().is_empty());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -146,6 +175,18 @@ impl<'a> Messages<'a> {
     }
 
     /// Get a message by index, or None if index is out of bounds
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// if let Some(message) = dbc.messages().at(0) {
+    ///     println!("First message: {}", message.name());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn at(&self, index: usize) -> Option<&Message<'a>> {
@@ -168,7 +209,7 @@ impl<'a> Messages<'a> {
 
     /// Create a temporary buffer for parsing (no alloc in no_std)
     /// Returns a buffer that can hold up to MAX_MESSAGES messages
-    #[cfg(not(feature = "std"))]
+    #[cfg(not(feature = "alloc"))]
     pub(crate) fn new_parse_buffer<'b>() -> [Option<Message<'b>>; MAX_MESSAGES] {
         [const { None }; MAX_MESSAGES]
     }

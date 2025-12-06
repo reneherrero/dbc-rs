@@ -19,7 +19,8 @@ features = ["std"]
 
 [features]
 default = ["std"]
-std = []
+alloc = []
+std = ["alloc"]
 
 [[example]]
 name = "create_dbc"

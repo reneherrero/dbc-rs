@@ -4,7 +4,7 @@ use crate::{
     signal::Signal,
 };
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 #[derive(Debug, Clone, Default)]
 pub struct MessageBuilder {
     id: Option<u32>,
@@ -14,7 +14,7 @@ pub struct MessageBuilder {
     signals: Vec<Signal<'static>>,
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 impl MessageBuilder {
     pub fn new() -> Self {
         Self::default()
