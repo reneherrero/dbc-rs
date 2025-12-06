@@ -82,7 +82,7 @@ impl<'a> Signals<'a> {
         }
     }
 
-    /// Create Signals from a slice of Option<Signal> and count
+    /// Create Signals from a slice of `Option<Signal>` and count
     pub(crate) fn from_options_slice(signals: &[Option<Signal<'a>>], signal_count: usize) -> Self {
         let count = signal_count.min(MAX_SIGNALS_PER_MESSAGE).min(signals.len());
 

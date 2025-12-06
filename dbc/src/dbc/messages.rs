@@ -82,7 +82,7 @@ impl<'a> Messages<'a> {
         }
     }
 
-    /// Create Messages from a slice of Option<Message> and count
+    /// Create Messages from a slice of `Option<Message>` and count
     pub(crate) fn from_options_slice(
         messages: &[Option<Message<'a>>],
         message_count: usize,
