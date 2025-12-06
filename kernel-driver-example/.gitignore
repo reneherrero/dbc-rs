@@ -1,0 +1,24 @@
+# Build artifacts
+target/
+*.o
+*.ko
+*.mod.c
+*.mod
+*.symvers
+*.order
+*.cmd
+.tmp_versions/
+Module.symvers
+modules.order
+
+# Kernel build
+.rustfmt.toml
+rustfmt.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+

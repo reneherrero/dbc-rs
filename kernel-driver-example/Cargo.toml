@@ -1,0 +1,50 @@
+# Exclude from parent workspace
+[workspace]
+
+[package]
+name = "dbc-kernel-example"
+version = "0.1.0"
+edition = "2021"
+authors = ["dbc-rs contributors"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+dbc-rs = { path = "../dbc", default-features = false, features = ["kernel"] }
+
+# Kernel bindings are provided by the kernel build system during compilation
+# The actual kernel crate comes from KDIR/rust/bindings/lib.rs
+# This dependency is resolved at build time by the kernel Makefile
+#
+# For TI kernel (ti-linux-kernel):
+# 1. Clone: git clone https://git.ti.com/git/ti-linux-kernel/ti-linux-kernel.git
+# 2. Checkout branch: git checkout ti-linux-6.12.y (or appropriate version)
+# 3. Configure with CONFIG_RUST=y (if Rust support is available)
+# 4. Point KDIR to the cloned TI kernel source
+#
+# For local development/testing with actual kernel crate:
+# Uncomment one of the options below and adjust paths as needed:
+#
+# Option 1: Use local kernel source (path to kernel's rust directory):
+# [dependencies.kernel]
+# path = "/path/to/kernel-source/rust"
+#
+# Option 2: Use rust-for-linux upstream (if your kernel doesn't have Rust support):
+[dependencies.kernel]
+git = "https://github.com/Rust-for-Linux/linux.git"
+package = "kernel"
+branch = "rust"
+#
+# Note: The kernel crate is typically provided by the kernel build system during
+# module compilation. These options are for standalone testing/development.
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true

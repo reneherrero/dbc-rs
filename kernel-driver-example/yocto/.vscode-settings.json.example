@@ -1,0 +1,46 @@
+{
+  // BitBake extension configuration for VSCode
+  // Copy this to your workspace .vscode/settings.json or merge with existing settings
+  
+  // Path to BitBake folder (adjust to your Yocto installation)
+  "bitbake.pathToBitbakeFolder": "${env:HOME}/Source/Yocto/Scarthgap/poky/bitbake/",
+  
+  // Optional: Path to build folder (for language server)
+  "bitbake.pathToBuildFolder": "${env:HOME}/Source/Yocto/Scarthgap/build/",
+  
+  // File associations for BitBake files
+  "files.associations": {
+    "*.bb": "bitbake",
+    "*.bbappend": "bitbake",
+    "*.conf": "bitbake",
+    "*.inc": "bitbake",
+    "*.bbclass": "bitbake"
+  },
+  
+  // BitBake language server settings
+  "bitbake.languageServer.enable": true,
+  "bitbake.languageServer.path": "bitbake-language-server",
+  
+  // Editor settings for BitBake files
+  "[bitbake]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.formatOnSave": false,
+    "editor.rulers": [80, 120]
+  },
+  
+  // Python paths for BitBake Python modules (for autocomplete)
+  "python.autoComplete.extraPaths": [
+    "${env:HOME}/Source/Yocto/Scarthgap/poky/bitbake/lib",
+    "${env:HOME}/Source/Yocto/Scarthgap/poky/meta/lib"
+  ],
+  
+  // Optional: Exclude build directories from file watcher
+  "files.watcherExclude": {
+    "**/tmp/**": true,
+    "**/build/**": true,
+    "**/sstate-cache/**": true,
+    "**/downloads/**": true
+  }
+}
+
