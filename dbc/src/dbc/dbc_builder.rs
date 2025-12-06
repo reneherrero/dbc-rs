@@ -73,7 +73,10 @@ impl DbcBuilder {
             messages_options_slice,
             messages_options_slice.len(),
         )
-        .map_err(Error::from)?;
+        .map_err(|e| match e {
+            crate::error::ParseError::Version(msg) => Error::Dbc(String::from(msg)),
+            _ => Error::from(e),
+        })?;
         Ok(Self {
             version: Some(version),
             nodes: Some(nodes),
@@ -94,7 +97,10 @@ impl DbcBuilder {
             messages_options_slice,
             messages_options_slice.len(),
         )
-        .map_err(Error::from)?;
+        .map_err(|e| match e {
+            crate::error::ParseError::Version(msg) => Error::Dbc(String::from(msg)),
+            _ => Error::from(e),
+        })?;
         // Convert Option array back to Vec for slice creation
         let messages: Vec<Message<'static>> =
             messages_options.into_iter().map(|opt| opt.unwrap()).collect();
@@ -146,8 +152,8 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.message_count(), 1);
-        assert_eq!(dbc.message_at(0).unwrap().id(), 256);
+        assert_eq!(dbc.messages().len(), 1);
+        assert_eq!(dbc.messages().at(0).unwrap().id(), 256);
     }
 
     #[test]
@@ -259,7 +265,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.message_count(), 2);
+        assert_eq!(dbc.messages().len(), 2);
     }
 
     #[test]
@@ -304,7 +310,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.message_count(), 2);
+        assert_eq!(dbc.messages().len(), 2);
     }
 
     #[test]
@@ -342,7 +348,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(dbc.message_count(), 0);
+        assert_eq!(dbc.messages().len(), 0);
     }
 
     #[test]
@@ -401,6 +407,6 @@ mod tests {
         // Verify we can continue building after validation
         let validated = result.unwrap();
         let dbc = validated.build().unwrap();
-        assert_eq!(dbc.message_count(), 1);
+        assert_eq!(dbc.messages().len(), 1);
     }
 }

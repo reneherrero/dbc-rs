@@ -32,17 +32,14 @@ BO_ 512 Brake : 4 TCM
         let _version_str = dbc.version().map(|v| v.as_str()).unwrap_or("");
 
         // Access nodes using iterator (no alloc required)
-        // Note: iter_nodes() is only available in no_std builds
-        // In std builds, use nodes() method instead
-        #[cfg(not(feature = "std"))]
-        let _node_count = dbc.nodes().iter_nodes().count();
-        #[cfg(feature = "std")]
-        let _node_count = dbc.nodes().nodes().map(|n| n.len()).unwrap_or(0);
+        // Note: nodes() returns an iterator (available in both std and no_std)
+        // Use len() to get the count (available in both std and no_std)
+        let _node_count = dbc.nodes().len();
 
         // In a real embedded system, you would use these values here
         // For this example, we just verify parsing succeeded
         // Messages are empty in no_std mode (require alloc)
-        let _messages_count = dbc.message_count(); // Will be 0 in no_std
+        let _messages_count = dbc.messages().len(); // Will be 0 in no_std
 
     // In embedded: set success flag, update status register, etc.
     } else {

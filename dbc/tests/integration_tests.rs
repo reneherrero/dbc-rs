@@ -22,23 +22,23 @@ mod std {
         assert!(dbc.nodes().contains("ECU2"));
 
         // Verify messages
-        assert_eq!(dbc.message_count(), 2);
+        assert_eq!(dbc.messages().len(), 2);
 
         // Verify EngineStatus message
-        let engine_msg = dbc.messages().find(|m| m.id() == 100).unwrap();
+        let engine_msg = dbc.messages().iter().find(|m| m.id() == 100).unwrap();
         assert_eq!(engine_msg.name(), "EngineStatus");
         assert_eq!(engine_msg.sender(), "ECU1");
         assert_eq!(engine_msg.dlc(), 8);
-        assert_eq!(engine_msg.signal_count(), 2);
+        assert_eq!(engine_msg.signals().len(), 2);
 
-        let speed = engine_msg.find_signal("EngineSpeed").unwrap();
+        let speed = engine_msg.signals().find("EngineSpeed").unwrap();
         assert_eq!(speed.start_bit(), 0);
         assert_eq!(speed.length(), 16);
         assert_eq!(speed.factor(), 0.25);
         assert_eq!(speed.unit(), Some("rpm"));
 
         // Verify VehicleSpeed message
-        let speed_msg = dbc.messages().find(|m| m.id() == 200).unwrap();
+        let speed_msg = dbc.messages().iter().find(|m| m.id() == 200).unwrap();
         assert_eq!(speed_msg.name(), "VehicleSpeed");
         assert_eq!(speed_msg.sender(), "ECU2");
         assert_eq!(speed_msg.dlc(), 4);
@@ -62,25 +62,25 @@ mod std {
         assert!(dbc.nodes().contains("ACTUATOR"));
 
         // Verify messages
-        assert_eq!(dbc.message_count(), 2);
+        assert_eq!(dbc.messages().len(), 2);
 
         // Verify SensorData message
-        let sensor_msg = dbc.messages().find(|m| m.id() == 300).unwrap();
+        let sensor_msg = dbc.messages().iter().find(|m| m.id() == 300).unwrap();
         assert_eq!(sensor_msg.name(), "SensorData");
-        assert_eq!(sensor_msg.signal_count(), 4);
+        assert_eq!(sensor_msg.signals().len(), 4);
 
-        let temp = sensor_msg.find_signal("Temperature").unwrap();
+        let temp = sensor_msg.signals().find("Temperature").unwrap();
         assert_eq!(temp.start_bit(), 8);
         assert_eq!(temp.offset(), -50.0);
         assert_eq!(temp.unit(), Some("°C"));
 
         // Verify ActuatorControl message
-        let actuator_msg = dbc.messages().find(|m| m.id() == 400).unwrap();
+        let actuator_msg = dbc.messages().iter().find(|m| m.id() == 400).unwrap();
         assert_eq!(actuator_msg.name(), "ActuatorControl");
         assert_eq!(actuator_msg.dlc(), 6);
-        assert_eq!(actuator_msg.signal_count(), 3);
+        assert_eq!(actuator_msg.signals().len(), 3);
 
-        let force = actuator_msg.find_signal("Force").unwrap();
+        let force = actuator_msg.signals().find("Force").unwrap();
         assert!(!force.is_unsigned()); // Should be signed
         assert_eq!(force.unit(), Some("N"));
     }
@@ -96,18 +96,18 @@ mod std {
 
         // Verify single node
         assert!(dbc.nodes().contains("NODE1"));
-        assert_eq!(dbc.nodes().nodes().unwrap().len(), 1);
+        assert_eq!(dbc.nodes().len(), 1);
 
         // Verify single message
-        assert_eq!(dbc.message_count(), 1);
+        assert_eq!(dbc.messages().len(), 1);
 
-        let msg = dbc.message_at(0).unwrap();
+        let msg = dbc.messages().at(0).unwrap();
         assert_eq!(msg.id(), 256);
         assert_eq!(msg.name(), "TestMessage");
         assert_eq!(msg.dlc(), 1); // Minimal DLC
-        assert_eq!(msg.signal_count(), 1);
+        assert_eq!(msg.signals().len(), 1);
 
-        let sig = msg.signal_at(0).unwrap();
+        let sig = msg.signals().at(0).unwrap();
         assert_eq!(sig.name(), "TestSignal");
         assert_eq!(sig.length(), 8);
     }
@@ -125,22 +125,22 @@ mod std {
         );
 
         // Verify messages with hex IDs
-        assert_eq!(dbc.message_count(), 2);
+        assert_eq!(dbc.messages().len(), 2);
 
-        let engine_msg = dbc.messages().find(|m| m.id() == 416).unwrap();
+        let engine_msg = dbc.messages().iter().find(|m| m.id() == 416).unwrap();
         assert_eq!(engine_msg.name(), "EngineData");
-        assert_eq!(engine_msg.signal_count(), 2);
+        assert_eq!(engine_msg.signals().len(), 2);
 
-        let trans_msg = dbc.messages().find(|m| m.id() == 688).unwrap();
+        let trans_msg = dbc.messages().iter().find(|m| m.id() == 688).unwrap();
         assert_eq!(trans_msg.name(), "TransmissionData");
-        assert_eq!(trans_msg.signal_count(), 2);
+        assert_eq!(trans_msg.signals().len(), 2);
 
         // Verify small signals (4-bit gear, 1-bit clutch)
-        let gear = trans_msg.find_signal("Gear").unwrap();
+        let gear = trans_msg.signals().find("Gear").unwrap();
         assert_eq!(gear.length(), 4);
         assert_eq!(gear.start_bit(), 0);
 
-        let clutch = trans_msg.find_signal("Clutch").unwrap();
+        let clutch = trans_msg.signals().find("Clutch").unwrap();
         assert_eq!(clutch.length(), 1);
         assert_eq!(clutch.start_bit(), 4);
     }
@@ -157,33 +157,33 @@ mod std {
         assert!(dbc.nodes().contains("RECEIVER2"));
 
         // Verify message
-        assert_eq!(dbc.message_count(), 1);
+        assert_eq!(dbc.messages().len(), 1);
 
-        let msg = dbc.messages().find(|m| m.id() == 500).unwrap();
+        let msg = dbc.messages().iter().find(|m| m.id() == 500).unwrap();
         assert_eq!(msg.name(), "BroadcastMessage");
-        assert_eq!(msg.signal_count(), 3);
+        assert_eq!(msg.signals().len(), 3);
 
         // Verify broadcast signal (receivers = *)
-        let status = msg.find_signal("Status").unwrap();
+        let status = msg.signals().find("Status").unwrap();
         assert_eq!(status.receivers(), &dbc_rs::Receivers::Broadcast);
 
         // Verify signals with specific receivers
-        let data1 = msg.find_signal("Data1").unwrap();
+        let data1 = msg.signals().find("Data1").unwrap();
         match data1.receivers() {
             dbc_rs::Receivers::Nodes(_, count) => {
                 assert_eq!(*count, 2);
-                let nodes: Vec<&str> = data1.receivers().iter_nodes().collect();
+                let nodes: Vec<&str> = data1.receivers().iter().collect();
                 assert!(nodes.contains(&"RECEIVER1"));
                 assert!(nodes.contains(&"RECEIVER2"));
             }
             _ => panic!("Data1 should have specific receivers"),
         }
 
-        let data2 = msg.find_signal("Data2").unwrap();
+        let data2 = msg.signals().find("Data2").unwrap();
         match data2.receivers() {
             dbc_rs::Receivers::Nodes(_, count) => {
                 assert_eq!(*count, 1);
-                let nodes: Vec<&str> = data2.receivers().iter_nodes().collect();
+                let nodes: Vec<&str> = data2.receivers().iter().collect();
                 assert_eq!(nodes[0], "RECEIVER1");
             }
             _ => panic!("Data2 should have specific receivers"),
@@ -213,24 +213,27 @@ mod std {
         assert!(nodes.contains("SENSOR"));
 
         // Verify messages
-        assert_eq!(dbc.message_count(), 4);
+        assert_eq!(dbc.messages().len(), 4);
 
         // Verify first message (EngineData)
-        let engine_msg =
-            dbc.messages().find(|m| m.id() == 256).expect("EngineData message not found");
+        let engine_msg = dbc
+            .messages()
+            .iter()
+            .find(|m| m.id() == 256)
+            .expect("EngineData message not found");
         assert_eq!(engine_msg.name(), "EngineData");
         assert_eq!(engine_msg.dlc(), 8);
         assert_eq!(engine_msg.sender(), "ECM");
-        assert_eq!(engine_msg.signal_count(), 4);
+        assert_eq!(engine_msg.signals().len(), 4);
 
         // Verify signals in EngineData
-        let rpm = engine_msg.find_signal("RPM").expect("RPM signal not found");
+        let rpm = engine_msg.signals().find("RPM").expect("RPM signal not found");
         assert_eq!(rpm.start_bit(), 0);
         assert_eq!(rpm.length(), 16);
         assert_eq!(rpm.factor(), 0.25);
         assert_eq!(rpm.unit(), Some("rpm"));
 
-        let temp = engine_msg.find_signal("Temperature").expect("Temperature signal not found");
+        let temp = engine_msg.signals().find("Temperature").expect("Temperature signal not found");
         assert_eq!(temp.start_bit(), 16);
         assert_eq!(temp.length(), 8);
         assert_eq!(temp.unit(), Some("°C"));
@@ -238,39 +241,45 @@ mod std {
         // Verify second message (TransmissionData)
         let trans_msg = dbc
             .messages()
+            .iter()
             .find(|m| m.id() == 512)
             .expect("TransmissionData message not found");
         assert_eq!(trans_msg.name(), "TransmissionData");
         assert_eq!(trans_msg.sender(), "TCM");
-        assert_eq!(trans_msg.signal_count(), 4);
+        assert_eq!(trans_msg.signals().len(), 4);
 
         // Verify third message (BrakeData) - now with DLC 6
-        let brake_msg =
-            dbc.messages().find(|m| m.id() == 768).expect("BrakeData message not found");
+        let brake_msg = dbc
+            .messages()
+            .iter()
+            .find(|m| m.id() == 768)
+            .expect("BrakeData message not found");
         assert_eq!(brake_msg.name(), "BrakeData");
         assert_eq!(brake_msg.sender(), "ABS");
         assert_eq!(brake_msg.dlc(), 6); // Updated from 4 to 6
-        assert_eq!(brake_msg.signal_count(), 4);
+        assert_eq!(brake_msg.signals().len(), 4);
 
         // Verify signals in BrakeData
-        let brake_pressure =
-            brake_msg.find_signal("BrakePressure").expect("BrakePressure signal not found");
+        let brake_pressure = brake_msg
+            .signals()
+            .find("BrakePressure")
+            .expect("BrakePressure signal not found");
         assert_eq!(brake_pressure.start_bit(), 0);
         assert_eq!(brake_pressure.length(), 16);
         assert_eq!(brake_pressure.unit(), Some("bar"));
 
-        let abs_active = brake_msg.find_signal("ABSActive").expect("ABSActive signal not found");
+        let abs_active = brake_msg.signals().find("ABSActive").expect("ABSActive signal not found");
         assert_eq!(abs_active.start_bit(), 16);
         assert_eq!(abs_active.length(), 1);
 
         let wheel_speed_front_left =
-            brake_msg.find_signal("WheelSpeedFL").expect("WheelSpeedFL signal not found");
+            brake_msg.signals().find("WheelSpeedFL").expect("WheelSpeedFL signal not found");
         assert_eq!(wheel_speed_front_left.start_bit(), 17);
         assert_eq!(wheel_speed_front_left.length(), 15);
         assert_eq!(wheel_speed_front_left.unit(), Some("km/h"));
 
         let wheel_speed_front_right =
-            brake_msg.find_signal("WheelSpeedFR").expect("WheelSpeedFR signal not found");
+            brake_msg.signals().find("WheelSpeedFR").expect("WheelSpeedFR signal not found");
         assert_eq!(wheel_speed_front_right.start_bit(), 32);
         assert_eq!(wheel_speed_front_right.length(), 15);
         assert_eq!(wheel_speed_front_right.unit(), Some("km/h"));
@@ -281,11 +290,14 @@ mod std {
         );
 
         // Verify fourth message (SensorData)
-        let sensor_msg =
-            dbc.messages().find(|m| m.id() == 1024).expect("SensorData message not found");
+        let sensor_msg = dbc
+            .messages()
+            .iter()
+            .find(|m| m.id() == 1024)
+            .expect("SensorData message not found");
         assert_eq!(sensor_msg.name(), "SensorData");
         assert_eq!(sensor_msg.sender(), "SENSOR");
         assert_eq!(sensor_msg.dlc(), 6);
-        assert_eq!(sensor_msg.signal_count(), 3);
+        assert_eq!(sensor_msg.signals().len(), 3);
     }
 }

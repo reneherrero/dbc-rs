@@ -15,7 +15,6 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    #[allow(dead_code)] // Used in Dbc::parse
     pub fn new(input: &'a [u8]) -> ParseResult<Self> {
         if input.is_empty() {
             return Err(ParseError::UnexpectedEof);
@@ -25,7 +24,6 @@ impl<'a> Parser<'a> {
 
     #[inline]
     #[must_use]
-    #[allow(dead_code)]
     pub fn pos(&self) -> usize {
         self.pos
     }
@@ -62,7 +60,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[allow(dead_code)] // Used in Dbc::parse
     pub fn find_next_keyword(&mut self) -> ParseResult<&'a str> {
         // Skip newlines and spaces to find the next keyword
         self.skip_newlines_and_spaces();
@@ -208,7 +205,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[allow(dead_code)] // Used in Dbc::parse
     pub(crate) fn skip_to_end_of_line(&mut self) {
         while self.pos < self.input.len() {
             let byte = self.input[self.pos];
@@ -227,7 +223,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn parse_u32(&mut self) -> ParseResult<u32> {
         let start_pos = self.pos;
         // Read until whitespace, colon, pipe, @, or end of input
@@ -252,7 +247,6 @@ impl<'a> Parser<'a> {
         num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
     }
 
-    #[allow(dead_code)]
     pub(crate) fn parse_u8(&mut self) -> ParseResult<u8> {
         let start_pos = self.pos;
         // Read until whitespace, colon, or end of input
@@ -277,7 +271,6 @@ impl<'a> Parser<'a> {
         num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
     }
 
-    #[allow(dead_code)]
     pub(crate) fn parse_f64(&mut self) -> ParseResult<f64> {
         let start_pos = self.pos;
         let mut has_dot = false;

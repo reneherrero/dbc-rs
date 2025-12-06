@@ -125,7 +125,7 @@ impl MessageBuilder {
             signals_options_slice.len(),
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => Error::Message(String::from(msg)),
+            crate::error::ParseError::Version(msg) => Error::Dbc(String::from(msg)),
             _ => Error::ParseError(e),
         })?;
         // Convert owned strings to static references by leaking Box<str>

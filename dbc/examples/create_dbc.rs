@@ -91,9 +91,9 @@ fn main() -> Result<(), dbc_rs::Error> {
         dbc.version().map(|v| v.to_string()).unwrap_or_default()
     );
     println!("Nodes: {}", dbc.nodes().to_string());
-    println!("Messages: {}", dbc.message_count());
+    println!("Messages: {}", dbc.messages().len());
 
-    for msg in dbc.messages() {
+    for msg in dbc.messages().iter() {
         println!(
             "  Message {} (ID: {}, DLC: {}, Sender: {})",
             msg.name(),
@@ -101,7 +101,7 @@ fn main() -> Result<(), dbc_rs::Error> {
             msg.dlc(),
             msg.sender()
         );
-        for sig in msg.signals() {
+        for sig in msg.signals().iter() {
             println!(
                 "    Signal {}: {}|{}@{} (factor: {}, offset: {}) [{:.1}|{:.1}] \"{}\"",
                 sig.name(),

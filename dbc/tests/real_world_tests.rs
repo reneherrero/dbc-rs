@@ -246,11 +246,11 @@ fn test_parse_file(path: &Path, stats: &mut TestStats) {
     match Dbc::from_file(path) {
         Ok(dbc) => {
             stats.parsed_successfully += 1;
-            stats.total_messages += dbc.message_count();
-            stats.total_signals += dbc.messages().map(|m| m.signal_count()).sum::<usize>();
+            stats.total_messages += dbc.messages().len();
+            stats.total_signals += dbc.messages().iter().map(|m| m.signals().len()).sum::<usize>();
 
             // Test round-trip: parse -> save -> parse again
-            let saved = dbc.save();
+            let saved = dbc.to_dbc_string();
             match Dbc::parse(&saved) {
                 Ok(_) => {
                     stats.round_trip_successful += 1;
