@@ -37,6 +37,7 @@
 //! For CSS Electronics files, you can set the `CSS_DBC_PATH` environment variable
 //! to point to a directory containing their DBC files.
 
+#[cfg(feature = "std")]
 use dbc_rs::Dbc;
 use std::collections::BTreeMap;
 use std::fs;
@@ -230,6 +231,7 @@ fn find_dbc_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 /// Test parsing a single DBC file.
+#[cfg(feature = "std")]
 fn test_parse_file(path: &Path, stats: &mut TestStats) {
     stats.total_files += 1;
 
@@ -240,28 +242,15 @@ fn test_parse_file(path: &Path, stats: &mut TestStats) {
         .unwrap_or_else(|| ".".to_string());
     let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
 
-    let content = match fs::read_to_string(path) {
-        Ok(content) => content,
-        Err(e) => {
-            stats.parse_failed += 1;
-            stats
-                .parse_errors
-                .entry(folder_path)
-                .or_default()
-                .push((filename, format!("Failed to read file: {}", e)));
-            return;
-        }
-    };
-
-    // Try to parse
-    match Dbc::parse(&content) {
+    // Try to parse directly from file
+    match Dbc::from_file(path) {
         Ok(dbc) => {
             stats.parsed_successfully += 1;
             stats.total_messages += dbc.messages().len();
             stats.total_signals += dbc.messages().iter().map(|m| m.signals().len()).sum::<usize>();
 
             // Test round-trip: parse -> save -> parse again
-            let saved = dbc.save();
+            let saved = dbc.to_dbc_string();
             match Dbc::parse(&saved) {
                 Ok(_) => {
                     stats.round_trip_successful += 1;
@@ -358,7 +347,10 @@ fn download_wuracing() -> Result<PathBuf, String> {
 /// Test DBC files from a specific source.
 /// Returns statistics for the source.
 fn test_dbc_source(_name: &str, path: PathBuf) -> TestStats {
+    #[cfg(feature = "std")]
     let mut stats = TestStats::default();
+    #[cfg(not(feature = "std"))]
+    let stats = TestStats::default();
 
     // Find all DBC files
     let dbc_files = find_dbc_files(&path);
@@ -368,8 +360,11 @@ fn test_dbc_source(_name: &str, path: PathBuf) -> TestStats {
     }
 
     // Test each file
-    for file_path in &dbc_files {
-        test_parse_file(file_path, &mut stats);
+    #[cfg(feature = "std")]
+    {
+        for file_path in &dbc_files {
+            test_parse_file(file_path, &mut stats);
+        }
     }
 
     stats

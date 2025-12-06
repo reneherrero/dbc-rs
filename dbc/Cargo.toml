@@ -1,5 +1,11 @@
 [package]
 name = "dbc-rs"
+readme = "README.md"
+description = "Database CAN (DBC) parsing and editing library"
+documentation = "https://docs.rs/dbc-rs"
+keywords = ["can", "dbc", "automotive", "no_std"]
+categories = ["parsing", "embedded"]
+exclude = [".github/", "examples/", "tests/"]
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,16 +13,35 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
-readme = "README.md"
-description = "Database CAN (DBC) parsing and editing library"
-documentation = "https://docs.rs/dbc-rs"
-keywords = ["can", "dbc", "automotive", "no_std"]
-categories = ["parsing", "embedded"]
-exclude = [".github/", "examples/", "tests/"]
 
 [package.metadata.docs.rs]
-features = ["std"]
+features = ["alloc", "std"]
 
 [features]
 default = ["std"]
-std = []
+alloc = []
+std = ["alloc"]
+
+[[example]]
+name = "create_dbc"
+path = "examples/create_dbc.rs"
+required-features = ["std"]
+
+[[example]]
+name = "parse_std"
+path = "examples/parse_std.rs"
+required-features = ["std"]
+
+[[example]]
+name = "parse_no_std"
+path = "examples/parse_no_std.rs"
+required-features = []
+
+[dev-dependencies]
+proptest = { version = "1.5", default-features = false, features = ["std"] }
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "parse_bench"
+harness = false
+required-features = ["alloc"]

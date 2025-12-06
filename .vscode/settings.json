@@ -1,0 +1,16 @@
+{
+  // Optional: explicitly list only the features you want (e.g. for kernel)
+  // "rust-analyzer.cargo.features": ["my_kernel_feature"],
+  // Make rust-analyzer always use --no-default-features
+  //"rust-analyzer.cargo.noDefaultFeatures": true,
+  // Force target for AM6254 kernel (optional but recommended)
+  //"rust-analyzer.cargo.target": "aarch64-unknown-none",
+  // Extra args passed to every cargo check (useful for kernel)
+  // "rust-analyzer.cargo.extraArgs": [
+  //   "--config",
+  //   "build.rustflags=\"-C link-arg=--script=kernel.ld -Z emit-future-incompat\""
+  // ],
+  // If you are inside the Linux tree with rust-for-linux
+  // "rust-analyzer.cargo.loadOutDirsFromCheck": true,
+  // "rust-analyzer.cargo.runBuildScripts": true
+}

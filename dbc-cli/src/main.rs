@@ -25,7 +25,7 @@ fn main() {
     match cli.command {
         Some(Commands::Version) | None => {
             println!("dbc-cli version {}", env!("CARGO_PKG_VERSION"));
-            println!("dbc-rs library version {}", dbc_rs::VERSION);
+            println!("dbc-rs library version {}", dbc_rs::PKG_VERSION);
         }
     }
 }

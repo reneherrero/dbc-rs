@@ -1,4 +1,3 @@
-use alloc::string::String;
 use core::{convert::From, fmt, num::ParseIntError};
 
 pub mod lang;
@@ -6,50 +5,78 @@ pub(crate) mod messages;
 
 /// Error type for DBC parsing and validation operations.
 ///
-/// Errors are categorized by the component that generated them, making it
-/// easier to identify where validation or parsing failed.
-///
-/// # Examples
-///
-/// ```rust
-/// use dbc_rs::Error;
-///
-/// let error = Error::Signal("Signal name cannot be empty".to_string());
-/// println!("{}", error);
-/// ```
+/// This enum represents all possible errors that can occur when working with DBC files.
+/// Most variants require the `alloc` feature to be enabled.
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    /// General data validation or parsing error.
+    /// Invalid data error (e.g., parse failures, invalid formats).
+    #[cfg(feature = "alloc")]
     InvalidData(String),
-    /// Signal-specific validation or parsing error.
+
+    /// Signal-related error (e.g., invalid signal definition).
+    #[cfg(feature = "alloc")]
     Signal(String),
-    /// Message-specific validation or parsing error.
+
+    /// Message-related error (e.g., invalid message definition).
+    #[cfg(feature = "alloc")]
     Message(String),
-    /// DBC file-level validation or parsing error.
+
+    /// DBC file-level error (e.g., missing required sections).
+    #[cfg(feature = "alloc")]
     Dbc(String),
+
     /// Version parsing error.
+    #[cfg(feature = "alloc")]
     Version(String),
-    /// Node-related validation or parsing error.
+
+    /// Node-related error (e.g., duplicate node names).
+    #[cfg(feature = "alloc")]
     Nodes(String),
+
+    /// Low-level parse error (available in `no_std` builds).
+    ParseError(ParseError),
 }
 
-/// Result type alias for operations that can fail with an [`Error`].
+/// Low-level parsing error that can occur during DBC file parsing.
 ///
-/// This is a convenience type alias that makes it easier to write fallible
-/// operations without repeating `Error` in every return type.
-///
-/// # Examples
-///
-/// ```rust
-/// use dbc_rs::Result;
-///
-/// fn parse_signal(data: &str) -> Result<()> {
-///     // ... parsing logic ...
-///     Ok(())
-/// }
-/// ```
+/// This error type is available in both `std` and `no_std` builds.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ParseError {
+    /// Unexpected end of input encountered.
+    UnexpectedEof,
+
+    /// Expected a specific token or value.
+    Expected(&'static str),
+
+    /// Invalid character encountered.
+    InvalidChar(char),
+
+    /// String length exceeds the maximum allowed length.
+    MaxStrLength(u16),
+
+    /// Version-related parse error.
+    Version(&'static str),
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseError::UnexpectedEof => write!(f, "Unexpected end of input"),
+            ParseError::Expected(msg) => write!(f, "Expected {}", msg),
+            ParseError::InvalidChar(c) => write!(f, "Invalid character: {}", c),
+            ParseError::MaxStrLength(max) => write!(f, "String length exceeds maximum: {}", max),
+            ParseError::Version(msg) => write!(f, "Version error: {}", msg),
+        }
+    }
+}
+
+/// Result type alias for operations that can return an `Error`.
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Result type alias for low-level parsing operations that can return a `ParseError`.
+pub type ParseResult<T> = core::result::Result<T, ParseError>;
+
+#[cfg(feature = "alloc")]
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -73,13 +100,32 @@ impl fmt::Display for Error {
             Error::Nodes(msg) => {
                 write!(f, "{}", messages::format_nodes_error(msg))
             }
+            Error::ParseError(msg) => {
+                write!(f, "Parse Error: {}", msg)
+            }
         }
     }
 }
 
+#[cfg(feature = "alloc")]
 impl From<ParseIntError> for Error {
     fn from(err: ParseIntError) -> Self {
         Error::InvalidData(messages::parse_number_failed(err))
+    }
+}
+
+#[cfg(not(feature = "alloc"))]
+impl From<ParseIntError> for Error {
+    fn from(_err: ParseIntError) -> Self {
+        // In no_std, we can only return ParseError
+        // ParseIntError conversion is not fully supported in no_std
+        Error::ParseError(ParseError::Expected("Invalid number format"))
+    }
+}
+
+impl From<ParseError> for Error {
+    fn from(err: ParseError) -> Self {
+        Error::ParseError(err)
     }
 }
 

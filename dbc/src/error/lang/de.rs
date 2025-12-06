@@ -109,5 +109,6 @@ pub const FORMAT_INVALID_UTF8: &str = "Ungültiges UTF-8: {}";
 pub const FORMAT_READ_FAILED: &str = "Fehler beim Lesen: {}";
 pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "Nachrichten-ID {} ({} dezimal) liegt außerhalb des gültigen Bereichs (Standard 11-Bit: 0x000-0x7FF (0-2,047 dezimal), Erweitert 29-Bit: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 dezimal))";
 pub const FORMAT_SIGNAL_OVERLAP: &str =
-    "Signale '{}' und '{}' überlappen sich in der Nachricht '{}'";
+    "Signale '{}' und '{}' überlappen sich in der Nachricht '{}'. {}";
+pub const SUGGEST_MULTIPLEXING: &str = "Hinweis: Wenn diese Signale multiplexiert sind (zu verschiedenen Zeiten aktiv), ist Signal-Multiplexing-Unterstützung erforderlich (noch nicht implementiert)";
 pub const FORMAT_LINE_NUMBER: &str = "{} (Zeile {})";

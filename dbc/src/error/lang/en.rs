@@ -45,9 +45,16 @@ pub const MESSAGE_DLC_REQUIRED: &str = "dlc is required";
 pub const MESSAGE_SENDER_EMPTY: &str = "Message sender cannot be empty";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "Message DLC must be at least 1 byte";
 pub const MESSAGE_DLC_TOO_LARGE: &str = "Message DLC cannot exceed 64 bytes (CAN FD maximum)";
+pub const FORMAT_MESSAGE_DLC_TOO_SMALL: &str =
+    "Message '{}' (ID {}) has DLC {}, must be at least 1 byte. Use DLC between 1 and 64 bytes";
+pub const FORMAT_MESSAGE_DLC_TOO_LARGE: &str = "Message '{}' (ID {}) has DLC {}, cannot exceed 64 bytes (CAN FD maximum). Use DLC between 1 and 64 bytes";
 pub const MESSAGE_INVALID_FORMAT: &str = "Invalid message format";
 pub const MESSAGE_INVALID_ID: &str = "Invalid message ID";
 pub const MESSAGE_INVALID_DLC: &str = "Invalid DLC";
+pub const FORMAT_MESSAGE_INVALID_ID: &str =
+    "Invalid message ID '{}'. Expected a valid number (0-536,870,911 for extended IDs)";
+pub const FORMAT_MESSAGE_INVALID_DLC: &str =
+    "Invalid DLC '{}' for message '{}' (ID {}). Expected a number between 1 and 64";
 pub const MESSAGE_ID_OUT_OF_RANGE: &str = "Message ID out of valid range";
 
 // ============================================================================
@@ -59,6 +66,9 @@ pub const SIGNAL_START_BIT_REQUIRED: &str = "start_bit is required";
 pub const SIGNAL_LENGTH_REQUIRED: &str = "length is required";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signal length must be at least 1 bit";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "Signal length cannot exceed 512 bits (CAN FD maximum)";
+pub const FORMAT_SIGNAL_LENGTH_TOO_SMALL: &str =
+    "Signal '{}' has length {} bits, must be at least 1 bit. Use length between 1 and 512 bits";
+pub const FORMAT_SIGNAL_LENGTH_TOO_LARGE: &str = "Signal '{}' has length {} bits, cannot exceed 512 bits (CAN FD maximum). Use length between 1 and 512 bits";
 pub const SIGNAL_OVERLAP: &str = "Signals overlap within message";
 
 // ============================================================================
@@ -73,6 +83,10 @@ pub const SIGNAL_PARSE_EXPECTED_AT: &str = "Expected '@' in startbit|length@..."
 pub const SIGNAL_PARSE_EXPECTED_PIPE: &str = "Expected '|' in startbit|length";
 pub const SIGNAL_PARSE_INVALID_START_BIT: &str = "Invalid start_bit";
 pub const SIGNAL_PARSE_INVALID_LENGTH: &str = "Invalid length";
+pub const FORMAT_SIGNAL_PARSE_INVALID_START_BIT: &str =
+    "Signal '{}' has start_bit {}, must be between 0 and 511. Use start_bit between 0 and 511";
+pub const FORMAT_SIGNAL_PARSE_INVALID_LENGTH: &str =
+    "Invalid length '{}' for signal '{}'. Expected a number between 1 and 512";
 pub const SIGNAL_PARSE_MISSING_BYTE_ORDER: &str = "Missing byte order";
 pub const SIGNAL_PARSE_MISSING_SIGN: &str = "Missing sign";
 pub const SIGNAL_PARSE_MISSING_CLOSING_PAREN: &str = "Missing closing ')' for factor,offset";
@@ -96,7 +110,10 @@ pub const FORMAT_DUPLICATE_MESSAGE_ID: &str = "Duplicate message ID: {} (message
 pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Duplicate node name: '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "Message '{}' has sender '{}' which is not in the nodes list";
-pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Signal '{}' extends beyond message boundary: start_bit {} + length {} = {} > {} (DLC {} bytes)";
+pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Signal '{}' extends beyond message boundary: start_bit {} + length {} = {} > {} (DLC {} bytes). {}";
+pub const SUGGEST_CAN_FD: &str =
+    "Consider using CAN FD with DLC {} or higher (requires DLC > 8 bytes)";
+pub const SUGGEST_INCREASE_DLC: &str = "Consider increasing DLC to {} bytes";
 pub const FORMAT_INVALID_RANGE: &str = "Invalid range: min {} > max {}";
 pub const FORMAT_UNKNOWN_BYTE_ORDER: &str = "Unknown byte order '{}'";
 pub const FORMAT_UNKNOWN_SIGN: &str = "Unknown sign '{}'";
@@ -104,5 +121,6 @@ pub const FORMAT_PARSE_NUMBER_FAILED: &str = "Failed to parse number: {}";
 pub const FORMAT_INVALID_UTF8: &str = "Invalid UTF-8: {}";
 pub const FORMAT_READ_FAILED: &str = "Failed to read: {}";
 pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "Message ID {} ({} decimal) is out of valid range (standard 11-bit: 0x000-0x7FF (0-2,047 decimal), extended 29-bit: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 decimal))";
-pub const FORMAT_SIGNAL_OVERLAP: &str = "Signals '{}' and '{}' overlap in message '{}'";
+pub const FORMAT_SIGNAL_OVERLAP: &str = "Signals '{}' and '{}' overlap in message '{}'. {}";
+pub const SUGGEST_MULTIPLEXING: &str = "Note: If these signals are multiplexed (active at different times), signal multiplexing support is required (not yet implemented)";
 pub const FORMAT_LINE_NUMBER: &str = "{} (line {})";
