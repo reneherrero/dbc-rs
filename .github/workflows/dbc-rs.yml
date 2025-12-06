@@ -42,8 +42,10 @@ jobs:
           target: thumbv7m-none-eabi
       - name: Install target standard library
         run: rustup target add thumbv7m-none-eabi
-      - name: Build library without std (no_std mode)
-        run: cargo build --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+      - name: Check library without std (no_std mode)
+        run: cargo check --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+      - name: Build library without std (no_std mode, release)
+        run: cargo build --release --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
 
 
   test-std-msrv:
@@ -71,8 +73,10 @@ jobs:
           target: thumbv7m-none-eabi
       - name: Install target standard library
         run: rustup target add thumbv7m-none-eabi
-      - name: Build library without std (no_std mode, MSRV)
-        run: cargo build --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+      - name: Check library without std (no_std mode, MSRV)
+        run: cargo check --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+      - name: Build library without std (no_std mode, MSRV, release)
+        run: cargo build --release --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
 
   lint:
     name: Lint (clippy)
