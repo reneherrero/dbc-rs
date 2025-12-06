@@ -32,6 +32,8 @@ For proprietary or commercial applications where you need:
 
 **Commercial licenses are available for purchase.**
 
+See [LICENSE-COMMERCIAL](LICENSE-COMMERCIAL) for the full commercial license terms.
+
 ### When Do You Need a Commercial License?
 
 You need a commercial license if:

@@ -84,7 +84,7 @@ This checklist ensures all steps are completed before publishing a new release o
   - [ ] Examples in doc comments compile
   - [ ] Error conditions documented
 
-- [ ] **SECURITY_AUDIT.md reviewed**
+- [ ] **SECURITY.md reviewed**
   - [ ] All fixed issues marked as resolved
   - [ ] Date updated if audit was refreshed
 
@@ -123,7 +123,7 @@ This checklist ensures all steps are completed before publishing a new release o
 
 ### 6. File Synchronization
 
-- [ ] **SECURITY_AUDIT.md reviewed**
+- [ ] **SECURITY.md reviewed**
   - [ ] Version and date updated for release
   - [ ] All security issues documented
 
@@ -290,7 +290,7 @@ cargo publish -p dbc-rs
 - **Never skip steps**: Each step ensures quality and prevents issues
 - **Test thoroughly**: Especially test `no_std` builds before releasing
 - **Document breaking changes**: Users need clear migration paths
-- **Keep SECURITY_AUDIT.md updated**: Review and update for each release
+- **Keep SECURITY.md updated**: Review and update for each release
 - **Verify CI passes**: Don't publish if CI is failing
 - **CI Workflows**: The project uses two separate workflows:
   - `dbc-rs.yml`: Tests the library with multiple configurations (std/no_std, latest/MSRV)

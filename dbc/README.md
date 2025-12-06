@@ -374,7 +374,7 @@ For security reasons (DoS protection), the library enforces the following limits
 
 Attempting to exceed these limits will result in a validation error. These limits accommodate typical DBC file sizes (typically < 1000 messages and < 10 nodes).
 
-For a comprehensive security audit, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
+For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
@@ -472,7 +472,7 @@ For most users, the open-source license (MIT OR Apache-2.0) is sufficient.
 ## References
 
 - [DBC Format Specification](DBC_SPECIFICATIONS.md) - Detailed format documentation
-- [Security Audit](SECURITY_AUDIT.md) - Comprehensive security review
+- [Security Audit](SECURITY.md) - Comprehensive security review
 - Vector Informatik: "DBC File Format Documentation Version 01/2007"
 - CAN Specification (ISO 11898)
 
