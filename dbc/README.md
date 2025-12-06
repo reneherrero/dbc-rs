@@ -4,7 +4,7 @@ A clean, zero-dependency DBC (CAN Database) file parser and editor for Rust.
 
 [![Crates.io](https://img.shields.io/crates/v/dbc-rs.svg)](https://crates.io/crates/dbc-rs)
 [![Documentation](https://docs.rs/dbc-rs/badge.svg)](https://docs.rs/dbc-rs)
-[![License](https://img.shields.io/crates/l/dbc-rs.svg)](https://github.com/reneherrero/dbc-rs/blob/main/LICENSING.md)
+[![License](https://img.shields.io/crates/l/dbc-rs.svg)](https://github.com/reneherrero/dbc-rs/blob/main/dbc/LICENSING.md)
 [![MSRV](https://img.shields.io/badge/rustc-1.85.0+-blue.svg)](https://www.rust-lang.org)
 [![CI](https://github.com/reneherrero/dbc-rs/workflows/dbc-rs%20Library%20CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions/workflows/dbc-rs.yml)
 

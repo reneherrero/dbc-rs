@@ -11,3 +11,6 @@ target/
 coverage/
 *.profraw
 *.profdata
+
+# Local git submodule configuration (not tracked)
+.gitmodules

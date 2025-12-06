@@ -226,7 +226,7 @@ If you have questions or need help:
 
 ## License
 
-By contributing to dbc-rs, you agree that your contributions will be licensed under the same license as the project (MIT OR Apache-2.0). See [LICENSING.md](LICENSING.md) for details.
+By contributing to dbc-rs, you agree that your contributions will be licensed under the same license as the project (MIT OR Apache-2.0). See [LICENSING.md](dbc/LICENSING.md) for details.
 
 Thank you for contributing! 🎉
 

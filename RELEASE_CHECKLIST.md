@@ -111,10 +111,10 @@ This checklist ensures all steps are completed before publishing a new release o
   - [ ] DoS protections verified
 
 - [ ] **License files present**
-  - [ ] LICENSE-APACHE
-  - [ ] LICENSE-MIT
-  - [ ] LICENSE-COMMERCIAL
-  - [ ] LICENSING.md
+  - [ ] dbc/LICENSE-APACHE
+  - [ ] dbc/LICENSE-MIT
+  - [ ] dbc/LICENSE-COMMERCIAL
+  - [ ] dbc/LICENSING.md
 
 - [ ] **Dependencies audited** (if any added in future)
   ```bash

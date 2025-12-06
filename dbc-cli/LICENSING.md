@@ -6,8 +6,8 @@ dbc-rs is available under a **dual-licensing** model:
 
 The software is licensed under either of:
 
-- **Apache License, Version 2.0** ([LICENSE-APACHE](LICENSE-APACHE))
-- **MIT License** ([LICENSE-MIT](LICENSE-MIT))
+- **Apache License, Version 2.0** ([LICENSE-APACHE](../dbc/LICENSE-APACHE))
+- **MIT License** ([LICENSE-MIT](../dbc/LICENSE-MIT))
 
 at your option.
 
@@ -32,7 +32,7 @@ For proprietary or commercial applications where you need:
 
 **Commercial licenses are available for purchase.**
 
-See [LICENSE-COMMERCIAL](../LICENSE-COMMERCIAL) for the full commercial license terms.
+See [LICENSE-COMMERCIAL](../dbc/LICENSE-COMMERCIAL) for the full commercial license terms.
 
 ### When Do You Need a Commercial License?
 
