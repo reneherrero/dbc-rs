@@ -1,3 +1,32 @@
+//! # dbc-rs
+//!
+//! A `no_std` compatible Rust library for parsing and working with DBC (CAN database) files.
+//!
+//! ## Features
+//!
+//! - **`no_std` compatible**: Works in embedded environments without the standard library
+//! - **Zero dependencies**: Pure Rust implementation
+//! - **Memory efficient**: Uses fixed-size arrays for `no_std` builds
+//! - **Type-safe**: Strong typing for all DBC elements
+//! - **Internationalized errors**: Support for multiple languages
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use dbc_rs::Dbc;
+//!
+//! let dbc_content = r#"VERSION "1.0"
+//!
+//! BU_: ECM TCM
+//!
+//! BO_ 256 EngineData : 8 ECM
+//!  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM
+//! "#;
+//!
+//! let dbc = Dbc::parse(dbc_content)?;
+//! # Ok::<(), dbc_rs::Error>(())
+//! ```
+
 #![cfg_attr(not(feature = "alloc"), no_std)]
 
 extern crate alloc;
