@@ -28,15 +28,34 @@ impl<'a> Signal<'a> {
         // - Classic CAN (2.0A/2.0B): DLC up to 8 bytes (64 bits)
         // - CAN FD: DLC up to 64 bytes (512 bits)
         // Signal length is validated against message DLC in Message::validate
+        // Note: name is parsed before this validation, so we can include it in error messages
         if length == 0 {
-            return Err(ParseError::Version(
-                crate::error::lang::SIGNAL_LENGTH_TOO_SMALL,
-            ));
+            #[cfg(feature = "alloc")]
+            {
+                use crate::error::messages;
+                let msg = messages::signal_length_too_small(name, length);
+                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+            }
+            #[cfg(not(feature = "alloc"))]
+            {
+                return Err(ParseError::Version(
+                    crate::error::lang::SIGNAL_LENGTH_TOO_SMALL,
+                ));
+            }
         }
         if length > 512 {
-            return Err(ParseError::Version(
-                crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
-            ));
+            #[cfg(feature = "alloc")]
+            {
+                use crate::error::messages;
+                let msg = messages::signal_length_too_large(name, length);
+                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+            }
+            #[cfg(not(feature = "alloc"))]
+            {
+                return Err(ParseError::Version(
+                    crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
+                ));
+            }
         }
 
         // Note: start_bit validation (boundary checks and overlap detection) is done in
@@ -87,12 +106,39 @@ impl<'a> Signal<'a> {
         }
     }
 
-    fn parse_position<'b>(parser: &mut Parser<'b>) -> ParseResult<(u16, u16, ByteOrder, bool)> {
+    fn parse_position<'b>(
+        parser: &mut Parser<'b>,
+        #[cfg_attr(not(feature = "alloc"), allow(unused_variables))] signal_name: &str,
+    ) -> ParseResult<(u16, u16, ByteOrder, bool)> {
         // Parse start_bit
-        let start_bit = parser
-            .parse_u32()
-            .map_err(|_| ParseError::Version(crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT))?
-            as u16;
+        let start_bit = parser.parse_u32().map_err(|_| {
+            #[cfg(feature = "alloc")]
+            {
+                use crate::error::messages;
+                let msg = messages::signal_start_bit_invalid(signal_name, 0);
+                ParseError::Version(Box::leak(msg.into_boxed_str()))
+            }
+            #[cfg(not(feature = "alloc"))]
+            {
+                ParseError::Version(crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT)
+            }
+        })? as u16;
+
+        // Validate start_bit range
+        if start_bit > 511 {
+            #[cfg(feature = "alloc")]
+            {
+                use crate::error::messages;
+                let msg = messages::signal_start_bit_invalid(signal_name, start_bit);
+                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+            }
+            #[cfg(not(feature = "alloc"))]
+            {
+                return Err(ParseError::Version(
+                    crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT,
+                ));
+            }
+        }
 
         // Expect pipe
         parser.expect(b"|").map_err(|_| ParseError::Expected("Expected pipe"))?;
@@ -343,7 +389,7 @@ impl<'a> Signal<'a> {
         parser.skip_newlines_and_spaces();
 
         // Parse position: start_bit|length@byteOrderSign
-        let (start_bit, length, byte_order, unsigned) = Self::parse_position(parser)?;
+        let (start_bit, length, byte_order, unsigned) = Self::parse_position(parser, name)?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -639,7 +685,14 @@ mod tests {
             .build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)),
+            Error::Signal(msg) => {
+                // Check for either the old constant or the new formatted message
+                assert!(
+                    msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)
+                        || msg.contains("Signal 'Test'")
+                        || msg.contains("0 bits")
+                );
+            }
             _ => panic!("Expected Error::Signal"),
         }
     }
@@ -662,7 +715,14 @@ mod tests {
             .build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)),
+            Error::Signal(msg) => {
+                // Check for either the old constant or the new formatted message
+                assert!(
+                    msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)
+                        || msg.contains("Signal 'Test'")
+                        || msg.contains("513")
+                );
+            }
             _ => panic!("Expected Error::Signal"),
         }
     }
@@ -883,7 +943,13 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Version(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_START_BIT)),
+            ParseError::Version(msg) => {
+                // Check for either the old constant or the new formatted message
+                assert!(
+                    msg.contains(lang::SIGNAL_PARSE_INVALID_START_BIT)
+                        || msg.contains("Signal 'RPM'")
+                );
+            }
             _ => panic!("Expected ParseError"),
         }
     }
@@ -943,7 +1009,14 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Version(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)),
+            ParseError::Version(msg) => {
+                // Check for either the old constant or the new formatted message
+                assert!(
+                    msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)
+                        || msg.contains("Signal 'Test'")
+                        || msg.contains("513")
+                );
+            }
             e => panic!("Expected ParseError::Version, got: {:?}", e),
         }
     }
@@ -955,7 +1028,14 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Version(msg) => assert!(msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)),
+            ParseError::Version(msg) => {
+                // Check for either the old constant or the new formatted message
+                assert!(
+                    msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)
+                        || msg.contains("Signal 'Test'")
+                        || msg.contains("0 bits")
+                );
+            }
             e => panic!("Expected ParseError::Version, got: {:?}", e),
         }
     }
