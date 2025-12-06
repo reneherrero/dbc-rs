@@ -26,6 +26,61 @@ impl<'a, 'b> Iterator for NodesIter<'a, 'b> {
     }
 }
 
+/// Represents a collection of node (ECU) names from a DBC file.
+///
+/// The `BU_` statement in a DBC file lists all nodes (ECUs) on the CAN bus.
+/// This struct stores the node names as borrowed references.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc = Dbc::parse(r#"VERSION "1.0"
+///
+/// BU_: ECM TCM BCM
+///
+/// BO_ 256 Engine : 8 ECM
+///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+/// "#)?;
+///
+/// // Access nodes
+/// assert_eq!(dbc.nodes().len(), 3);
+/// assert!(dbc.nodes().contains("ECM"));
+/// assert!(dbc.nodes().contains("TCM"));
+///
+/// // Iterate over nodes
+/// for node in dbc.nodes().iter() {
+///     println!("Node: {}", node);
+/// }
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+///
+/// # Empty Nodes
+///
+/// A DBC file may have an empty node list (`BU_:` with no nodes):
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc = Dbc::parse(r#"VERSION "1.0"
+///
+/// BU_:
+///
+/// BO_ 256 Engine : 8 ECM
+/// "#)?;
+///
+/// assert!(dbc.nodes().is_empty());
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+///
+/// # DBC Format
+///
+/// In DBC files, nodes are specified on the `BU_` line:
+/// - Format: `BU_: Node1 Node2 Node3 ...`
+/// - Node names are space-separated
+/// - Maximum of 256 nodes (DoS protection)
+/// - Duplicate node names are not allowed (case-sensitive)
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Nodes<'a> {
     nodes: [Option<&'a str>; crate::MAX_NODES],
@@ -158,14 +213,23 @@ impl<'a> Nodes<'a> {
         })
     }
 
-    /// Get an iterator over the nodes
+    /// Returns an iterator over the node names.
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM BCM")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    /// "#)?;
+    ///
+    /// // Iterate over nodes
+    /// let nodes: Vec<&str> = dbc.nodes().iter().collect();
+    /// assert_eq!(nodes, vec!["ECM", "TCM", "BCM"]);
+    ///
+    /// // Or use in a loop
     /// for node in dbc.nodes().iter() {
     ///     println!("Node: {}", node);
     /// }
@@ -181,16 +245,28 @@ impl<'a> Nodes<'a> {
         }
     }
 
-    /// Check if a node is in the list
+    /// Checks if a node name is in the list.
+    ///
+    /// The check is case-sensitive.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The node name to check
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM
+    /// "#)?;
+    ///
     /// assert!(dbc.nodes().contains("ECM"));
+    /// assert!(dbc.nodes().contains("TCM"));
     /// assert!(!dbc.nodes().contains("BCM"));
+    /// assert!(!dbc.nodes().contains("ecm")); // Case-sensitive
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
@@ -199,14 +275,18 @@ impl<'a> Nodes<'a> {
         self.iter().any(|n| n == node)
     }
 
-    /// Get the number of nodes
+    /// Returns the number of nodes in the collection.
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM BCM")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    /// "#)?;
+    ///
     /// assert_eq!(dbc.nodes().len(), 3);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -216,32 +296,54 @@ impl<'a> Nodes<'a> {
         self.count
     }
 
-    /// Returns `true` if there are no nodes
+    /// Returns `true` if there are no nodes in the collection.
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"")?;
+    /// // Empty node list
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_:
+    /// "#)?;
     /// assert!(dbc.nodes().is_empty());
+    ///
+    /// // With nodes
+    /// let dbc2 = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    /// "#)?;
+    /// assert!(!dbc2.nodes().is_empty());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
 
-    /// Get a node by index, or None if index is out of bounds
+    /// Gets a node by index.
+    ///
+    /// Returns `None` if the index is out of bounds.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The zero-based index of the node
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM")?;
-    /// if let Some(node) = dbc.nodes().at(0) {
-    ///     assert_eq!(node, "ECM");
-    /// }
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    /// "#)?;
+    ///
+    /// assert_eq!(dbc.nodes().at(0), Some("ECM"));
+    /// assert_eq!(dbc.nodes().at(1), Some("TCM"));
+    /// assert_eq!(dbc.nodes().at(2), Some("BCM"));
+    /// assert_eq!(dbc.nodes().at(3), None); // Out of bounds
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
@@ -253,6 +355,44 @@ impl<'a> Nodes<'a> {
         self.nodes[index]
     }
 
+    /// Converts the nodes to their DBC file representation.
+    ///
+    /// Returns a string in the format: `BU_: Node1 Node2 Node3 ...`
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    /// "#)?;
+    ///
+    /// let dbc_string = dbc.nodes().to_dbc_string();
+    /// assert_eq!(dbc_string, "BU_: ECM TCM BCM");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    ///
+    /// # Empty Nodes
+    ///
+    /// Empty node lists are represented as `BU_:`:
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_:
+    /// "#)?;
+    ///
+    /// assert_eq!(dbc.nodes().to_dbc_string(), "BU_:");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    ///
+    /// # Feature Requirements
+    ///
+    /// This method requires the `alloc` feature to be enabled.
     #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_dbc_string(&self) -> String {

@@ -3,17 +3,100 @@ use crate::{
     error::{ParseError, ParseResult, lang},
 };
 
+/// Represents a version string from a DBC file.
+///
+/// The `VERSION` statement in a DBC file specifies the database version.
+/// This struct stores the version string as a borrowed reference.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc_content = r#"VERSION "1.0"
+///
+/// BU_: ECM
+///
+/// BO_ 256 Engine : 8 ECM
+///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+/// "#;
+///
+/// let dbc = Dbc::parse(dbc_content)?;
+/// if let Some(version) = dbc.version() {
+///     println!("DBC version: {}", version);
+///     // Access the raw string
+///     assert_eq!(version.as_str(), "1.0");
+/// }
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+///
+/// # Format
+///
+/// The version string can be any sequence of printable characters enclosed in quotes.
+/// Common formats include:
+/// - `"1.0"` - Simple semantic version
+/// - `"1.2.3"` - Full semantic version
+/// - `"1.0-beta"` - Version with suffix
+/// - `""` - Empty version string (allowed)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Version<'a> {
     version: &'a str,
 }
 
 impl<'a> Version<'a> {
+    /// Creates a new `Version` from a version string.
+    ///
+    /// # Note
+    ///
+    /// This method is intended for internal use. For parsing from DBC content,
+    /// use `Version::parse()`. For programmatic construction, use `VersionBuilder`
+    /// (requires `alloc` feature).
+    ///
+    /// # Arguments
+    ///
+    /// * `version` - The version string (should be validated before calling this)
     pub(crate) fn new(version: &'a str) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self { version }
     }
 
+    /// Parses a `VERSION` statement from a DBC file.
+    ///
+    /// This method expects the parser to be positioned at or after the `VERSION` keyword.
+    /// It will parse the version string enclosed in quotes.
+    ///
+    /// # Format
+    ///
+    /// The expected format is: `VERSION "version_string"`
+    ///
+    /// # Arguments
+    ///
+    /// * `parser` - The parser positioned at the VERSION statement
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(Version)` if parsing succeeds, or `Err(ParseError)` if:
+    /// - The opening quote is missing
+    /// - The closing quote is missing
+    /// - The version string exceeds the maximum length (255 characters)
+    /// - The version string contains invalid UTF-8
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// // Version is typically accessed from a parsed DBC
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    /// "#)?;
+    ///
+    /// if let Some(version) = dbc.version() {
+    ///     assert_eq!(version.as_str(), "1.0");
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[must_use = "parse result should be checked"]
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
         use crate::VERSION;
@@ -56,10 +139,70 @@ impl<'a> Version<'a> {
         Ok(Version::new(version_str))
     }
 
+    /// Returns the version string as a `&str`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.2.3"
+    ///
+    /// BU_: ECM
+    /// "#)?;
+    ///
+    /// if let Some(version) = dbc.version() {
+    ///     assert_eq!(version.as_str(), "1.2.3");
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use]
     pub fn as_str(&self) -> &'a str {
         self.version
     }
 
+    /// Converts the version to its DBC file representation.
+    ///
+    /// Returns a string in the format: `VERSION "version_string"`
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    /// "#)?;
+    ///
+    /// if let Some(version) = dbc.version() {
+    ///     let dbc_string = version.to_dbc_string();
+    ///     assert_eq!(dbc_string, "VERSION \"1.0\"");
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    ///
+    /// # Empty Version
+    ///
+    /// Empty version strings are represented as `VERSION ""`:
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION ""
+    ///
+    /// BU_: ECM
+    /// "#)?;
+    ///
+    /// if let Some(version) = dbc.version() {
+    ///     assert_eq!(version.to_dbc_string(), "VERSION \"\"");
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    ///
+    /// # Feature Requirements
+    ///
+    /// This method requires the `alloc` feature to be enabled.
     #[must_use]
     #[cfg(feature = "alloc")]
     pub fn to_dbc_string(&self) -> String {
@@ -72,7 +215,28 @@ impl<'a> Version<'a> {
     }
 }
 
-// Display implementation
+/// Display implementation for `Version`.
+///
+/// Formats the version as just the version string (without the `VERSION` keyword or quotes).
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc = Dbc::parse(r#"VERSION "1.2.3"
+///
+/// BU_: ECM
+/// "#)?;
+///
+/// if let Some(version) = dbc.version() {
+///     // Display trait formats as just the version string
+///     assert_eq!(format!("{}", version), "1.2.3");
+///     // Use to_dbc_string() for full DBC format
+///     assert_eq!(version.to_dbc_string(), "VERSION \"1.2.3\"");
+/// }
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
 impl<'a> core::fmt::Display for Version<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.version)

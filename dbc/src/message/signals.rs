@@ -228,3 +228,215 @@ impl<'a> Signals<'a> {
         [const { None }; MAX_SIGNALS_PER_MESSAGE]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Signals;
+    use crate::{Parser, Signal};
+
+    #[test]
+    #[cfg(feature = "alloc")]
+    fn test_signals_from_signals_slice() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+        let signal2 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        let signals = Signals::from_signals_slice(&[signal1, signal2]);
+        assert_eq!(signals.len(), 2);
+        assert!(!signals.is_empty());
+        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+        assert_eq!(signals.at(1).unwrap().name(), "Signal2");
+    }
+
+    #[test]
+    #[cfg(feature = "alloc")]
+    fn test_signals_from_signals_slice_empty() {
+        let signals = Signals::from_signals_slice(&[]);
+        assert_eq!(signals.len(), 0);
+        assert!(signals.is_empty());
+        assert!(signals.at(0).is_none());
+    }
+
+    #[test]
+    #[cfg(feature = "alloc")]
+    fn test_signals_from_signals_slice_multiple() {
+        // Test with multiple signals to verify capacity handling
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+        let signal2 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+        let signal3 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        let signals = Signals::from_signals_slice(&[signal1, signal2, signal3]);
+        assert_eq!(signals.len(), 3);
+        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+        assert_eq!(signals.at(1).unwrap().name(), "Signal2");
+        assert_eq!(signals.at(2).unwrap().name(), "Signal3");
+    }
+
+    #[test]
+    fn test_signals_from_options_slice() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+        let signal2 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        const MAX_CAP: usize = Signals::max_capacity();
+        let mut options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        options[0] = Some(signal1);
+        options[1] = Some(signal2);
+
+        let signals = Signals::from_options_slice(&options, 2);
+        assert_eq!(signals.len(), 2);
+        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+        assert_eq!(signals.at(1).unwrap().name(), "Signal2");
+    }
+
+    #[test]
+    fn test_signals_from_options_slice_with_none() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        const MAX_CAP: usize = Signals::max_capacity();
+        let mut options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        options[0] = Some(signal1);
+        options[1] = None; // Gap in the array
+        options[2] = Some(
+            Signal::parse(&mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap(),
+        );
+
+        let signals = Signals::from_options_slice(&options, 3);
+        assert_eq!(signals.len(), 3);
+        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+        assert!(signals.at(1).is_none()); // None is preserved
+        assert_eq!(signals.at(2).unwrap().name(), "Signal3");
+    }
+
+    #[test]
+    fn test_signals_from_options_slice_count_less_than_length() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        const MAX_CAP: usize = Signals::max_capacity();
+        let mut options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        options[0] = Some(signal1);
+        // Fill more but only use count=1
+        options[1] = Some(
+            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap(),
+        );
+
+        let signals = Signals::from_options_slice(&options, 1);
+        assert_eq!(signals.len(), 1);
+        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+        assert!(signals.at(1).is_none());
+    }
+
+    #[test]
+    fn test_signals_find_not_found() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        const MAX_CAP: usize = Signals::max_capacity();
+        let mut options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        options[0] = Some(signal1);
+
+        let signals = Signals::from_options_slice(&options, 1);
+        assert!(signals.find("Nonexistent").is_none());
+        assert!(signals.find("").is_none());
+        assert!(signals.find("signal1").is_none()); // Case sensitive
+    }
+
+    #[test]
+    fn test_signals_find_first_match() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+        let signal2 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap(); // Same name (shouldn't happen in practice but test the behavior)
+
+        const MAX_CAP: usize = Signals::max_capacity();
+        let mut options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        options[0] = Some(signal1);
+        options[1] = Some(signal2);
+
+        let signals = Signals::from_options_slice(&options, 2);
+        // Should find the first match
+        let found = signals.find("Signal1");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().start_bit(), 0); // First signal
+    }
+
+    #[test]
+    fn test_signals_iter_empty() {
+        const MAX_CAP: usize = Signals::max_capacity();
+        let options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        let signals = Signals::from_options_slice(&options, 0);
+
+        let mut iter = signals.iter();
+        assert!(iter.next().is_none());
+        assert_eq!(signals.len(), 0);
+        assert!(signals.is_empty());
+    }
+
+    #[test]
+    fn test_signals_iter_skips_none() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+        let signal2 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 16|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        const MAX_CAP: usize = Signals::max_capacity();
+        let mut options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        options[0] = Some(signal1);
+        options[1] = None; // Gap
+        options[2] = Some(signal2);
+
+        let signals = Signals::from_options_slice(&options, 3);
+        let names: Vec<&str> = signals.iter().map(|s| s.name()).collect();
+        assert_eq!(names, vec!["Signal1", "Signal2"]);
+    }
+
+    #[test]
+    fn test_signals_at_with_gaps() {
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+                .unwrap();
+
+        const MAX_CAP: usize = Signals::max_capacity();
+        let mut options: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
+        options[0] = Some(signal1);
+        options[1] = None;
+
+        let signals = Signals::from_options_slice(&options, 2);
+        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+        assert!(signals.at(1).is_none()); // None is returned
+    }
+
+    #[test]
+    #[cfg(not(feature = "alloc"))]
+    fn test_signals_new_parse_buffer() {
+        let buffer = Signals::new_parse_buffer();
+        assert_eq!(buffer.len(), Signals::max_capacity());
+        // All should be None
+        for opt in buffer.iter() {
+            assert!(opt.is_none());
+        }
+    }
+}

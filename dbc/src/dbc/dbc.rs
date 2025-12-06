@@ -671,7 +671,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let dbc = DbcBuilder::new()
+        let dbc = DbcBuilder::new(None)
             .version(version)
             .nodes(nodes)
             .add_message(message1)
@@ -721,7 +721,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let result = DbcBuilder::new()
+        let result = DbcBuilder::new(None)
             .version(version)
             .nodes(nodes)
             .add_message(message1)
@@ -767,7 +767,8 @@ mod tests {
             .build()
             .unwrap();
 
-        let result = DbcBuilder::new().version(version).nodes(nodes).add_message(message).build();
+        let result =
+            DbcBuilder::new(None).version(version).nodes(nodes).add_message(message).build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Dbc(msg) => {
@@ -1086,7 +1087,7 @@ BO_ 512 BrakeData : 4 TCM
             .build()
             .unwrap();
 
-        let dbc = DbcBuilder::new()
+        let dbc = DbcBuilder::new(None)
             .version(version)
             .nodes(nodes)
             .add_message(message1)

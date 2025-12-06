@@ -1,10 +1,55 @@
 use crate::{Parser, error::ParseError, error::ParseResult, error::messages};
 
+/// Represents the receiver nodes for a signal in a DBC file.
+///
+/// A signal can have three types of receivers:
+/// - **Broadcast** (`*`): The signal is broadcast to all nodes on the bus
+/// - **Specific nodes**: A list of specific node names that receive this signal
+/// - **None**: No explicit receivers specified (signal may be unused or receiver is implicit)
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc = Dbc::parse(r#"VERSION "1.0"
+///
+/// BU_: ECM TCM BCM
+///
+/// BO_ 256 Engine : 8 ECM
+///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+///  SG_ Temp : 16|8@0- (1,-40) [-40|215] "°C" TCM BCM
+/// "#)?;
+///
+/// let message = dbc.messages().at(0).unwrap();
+///
+/// // Broadcast receiver
+/// let rpm_signal = message.signals().find("RPM").unwrap();
+/// assert_eq!(rpm_signal.receivers().len(), 0); // Broadcast has no specific nodes
+///
+/// // Specific nodes
+/// let temp_signal = message.signals().find("Temp").unwrap();
+/// assert_eq!(temp_signal.receivers().len(), 2);
+/// assert!(temp_signal.receivers().contains("TCM"));
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+///
+/// # DBC Format
+///
+/// In DBC files, receivers are specified after the signal definition:
+/// - `*` indicates broadcast
+/// - Space-separated node names indicate specific receivers
+/// - No receivers means `None`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(clippy::large_enum_variant)] // Nodes variant is large but necessary for no_std
 pub enum Receivers<'a> {
+    /// Broadcast receiver - signal is sent to all nodes on the bus.
     Broadcast,
+    /// Specific receiver nodes - array of node names and count.
+    ///
+    /// The array can hold up to 64 nodes. The second element is the actual count.
     Nodes([Option<&'a str>; 64], usize), // Stores array and count directly
+    /// No explicit receivers specified.
     None,
 }
 
@@ -111,19 +156,51 @@ impl<'a> Receivers<'a> {
         }
     }
 
-    /// Get an iterator over the nodes
+    /// Returns an iterator over the receiver node names.
+    ///
+    /// For `Receivers::Broadcast` and `Receivers::None`, the iterator will be empty.
+    /// For `Receivers::Nodes`, it iterates over the specific node names.
     ///
     /// # Examples
     ///
-    /// ```
-    /// use dbc_rs::{Dbc, Signal};
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    /// "#)?;
+    ///
     /// let message = dbc.messages().at(0).unwrap();
     /// let signal = message.signals().at(0).unwrap();
-    /// for receiver in signal.receivers().iter() {
-    ///     println!("Receiver: {}", receiver);
-    /// }
+    ///
+    /// // Iterate over receiver nodes
+    /// let receivers: Vec<&str> = signal.receivers().iter().collect();
+    /// assert_eq!(receivers, vec!["TCM", "BCM"]);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    ///
+    /// # Broadcast and None
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+    /// "#)?;
+    ///
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    ///
+    /// // Broadcast receivers return empty iterator
+    /// assert_eq!(signal.receivers().iter().count(), 0);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
@@ -162,14 +239,24 @@ impl<'a> Receivers<'a> {
         }
     }
 
-    /// Get the number of nodes (only valid for Receivers::Nodes variant)
+    /// Returns the number of receiver nodes.
+    ///
+    /// - For `Receivers::Nodes`: Returns the count of specific receiver nodes
+    /// - For `Receivers::Broadcast` and `Receivers::None`: Returns `0`
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    /// "#)?;
+    ///
     /// let message = dbc.messages().at(0).unwrap();
     /// let signal = message.signals().at(0).unwrap();
     /// assert_eq!(signal.receivers().len(), 2);
@@ -184,14 +271,24 @@ impl<'a> Receivers<'a> {
         }
     }
 
-    /// Returns `true` if there are no receiver nodes
+    /// Returns `true` if there are no specific receiver nodes.
+    ///
+    /// This returns `true` for both `Receivers::Broadcast` and `Receivers::None`,
+    /// as neither has specific node names.
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+    /// "#)?;
+    ///
     /// let message = dbc.messages().at(0).unwrap();
     /// let signal = message.signals().at(0).unwrap();
     /// assert!(signal.receivers().is_empty());
@@ -203,18 +300,34 @@ impl<'a> Receivers<'a> {
         self.len() == 0
     }
 
-    /// Check if a node is in the receivers list
+    /// Checks if a node name is in the receivers list.
+    ///
+    /// For `Receivers::Broadcast` and `Receivers::None`, this always returns `false`.
+    /// For `Receivers::Nodes`, it checks if the node name is in the list.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The node name to check
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    /// "#)?;
+    ///
     /// let message = dbc.messages().at(0).unwrap();
     /// let signal = message.signals().at(0).unwrap();
-    /// assert!(signal.receivers().contains("ECM"));
-    /// assert!(!signal.receivers().contains("BCM"));
+    ///
+    /// assert!(signal.receivers().contains("TCM"));
+    /// assert!(signal.receivers().contains("BCM"));
+    /// assert!(!signal.receivers().contains("ECM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
@@ -223,19 +336,35 @@ impl<'a> Receivers<'a> {
         self.iter().any(|n| n == node)
     }
 
-    /// Get a node by index, or None if index is out of bounds
+    /// Gets a receiver node by index.
+    ///
+    /// Returns `None` if:
+    /// - The index is out of bounds
+    /// - The receiver is `Broadcast` or `None`
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - The zero-based index of the receiver node
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    /// "#)?;
+    ///
     /// let message = dbc.messages().at(0).unwrap();
     /// let signal = message.signals().at(0).unwrap();
-    /// if let Some(receiver) = signal.receivers().at(0) {
-    ///     assert_eq!(receiver, "ECM");
-    /// }
+    ///
+    /// assert_eq!(signal.receivers().at(0), Some("TCM"));
+    /// assert_eq!(signal.receivers().at(1), Some("BCM"));
+    /// assert_eq!(signal.receivers().at(2), None);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]

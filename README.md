@@ -13,11 +13,13 @@ A Rust workspace containing the DBC (CAN Database) file parser library and comma
 The core library for parsing, editing, and writing DBC files. Supports both `std` and `no_std` environments.
 
 **Features:**
-- Zero dependencies
-- `no_std` + `alloc` support
-- Full DBC file parsing and writing
-- Internationalization support (i18n)
-- Comprehensive validation
+- ✅ **Zero dependencies** - Pure Rust implementation
+- ✅ **no_std + alloc support** - Works on embedded targets without the standard library
+- ✅ **Full editing & writing** - Modify and save DBC files with the same structs
+- ✅ **Feature flag control** - Optional `std` feature for desktop conveniences
+- ✅ **Internationalized errors** - Build-time language selection (English, French, Spanish, German, Japanese)
+- ✅ **Comprehensive validation** - Signal overlap detection, boundary checking, and more
+- ✅ **Well tested** - Tested with real-world DBC files
 
 ### [`dbc-cli`](./dbc-cli/)
 

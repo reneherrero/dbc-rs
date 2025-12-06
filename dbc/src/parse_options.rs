@@ -62,3 +62,62 @@ impl ParseOptions {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ParseOptions;
+
+    #[test]
+    fn test_parse_options_default() {
+        let options = ParseOptions::default();
+        assert!(options.strict_boundary_check);
+    }
+
+    #[test]
+    fn test_parse_options_new() {
+        let options = ParseOptions::new();
+        assert!(options.strict_boundary_check);
+    }
+
+    #[test]
+    fn test_parse_options_lenient() {
+        let options = ParseOptions::lenient();
+        assert!(!options.strict_boundary_check);
+    }
+
+    #[test]
+    fn test_parse_options_equality() {
+        let default1 = ParseOptions::default();
+        let default2 = ParseOptions::new();
+        assert_eq!(default1, default2);
+
+        let lenient1 = ParseOptions::lenient();
+        let lenient2 = ParseOptions::lenient();
+        assert_eq!(lenient1, lenient2);
+
+        assert_ne!(default1, lenient1);
+    }
+
+    #[test]
+    fn test_parse_options_debug() {
+        let options = ParseOptions::default();
+        let debug_str = format!("{:?}", options);
+        assert!(debug_str.contains("ParseOptions"));
+    }
+
+    #[test]
+    fn test_parse_options_clone() {
+        let original = ParseOptions::lenient();
+        let cloned = original;
+        assert_eq!(original, cloned);
+        assert!(!cloned.strict_boundary_check);
+    }
+
+    #[test]
+    fn test_parse_options_copy() {
+        let options = ParseOptions::new();
+        let copied = options; // Copy, not move
+        assert_eq!(options, copied); // Original still valid
+        assert!(options.strict_boundary_check);
+    }
+}

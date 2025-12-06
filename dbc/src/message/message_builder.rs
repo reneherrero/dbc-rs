@@ -1,7 +1,6 @@
 use crate::{
-    error::{Error, Result, messages},
-    message::Message,
-    signal::Signal,
+    error::messages,
+    {Error, Message, ParseOptions, Result, Signal},
 };
 
 #[cfg(feature = "alloc")]
@@ -98,7 +97,7 @@ impl MessageBuilder {
             &sender,
             signals_options_slice,
             signals_options_slice.len(),
-            crate::ParseOptions::new(), // Builder always uses strict mode
+            ParseOptions::new(), // Builder always uses strict mode
         )
         .map_err(Error::from)?;
         Ok(Self {
@@ -124,7 +123,7 @@ impl MessageBuilder {
             &sender,
             signals_options_slice,
             signals_options_slice.len(),
-            crate::ParseOptions::new(), // Builder always uses strict mode
+            ParseOptions::new(), // Builder always uses strict mode
         )
         .map_err(|e| match e {
             crate::error::ParseError::Version(msg) => Error::Dbc(String::from(msg)),
