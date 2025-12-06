@@ -1,6 +1,6 @@
 use crate::{Parser, error::ParseError, error::ParseResult, error::messages};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(clippy::large_enum_variant)] // Nodes variant is large but necessary for no_std
 pub enum Receivers<'a> {
     Broadcast,
@@ -112,6 +112,20 @@ impl<'a> Receivers<'a> {
     }
 
     /// Get an iterator over the nodes
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::{Dbc, Signal};
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    /// for receiver in signal.receivers().iter() {
+    ///     println!("Receiver: {}", receiver);
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &'a str> + '_ {
@@ -149,6 +163,18 @@ impl<'a> Receivers<'a> {
     }
 
     /// Get the number of nodes (only valid for Receivers::Nodes variant)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    /// assert_eq!(signal.receivers().len(), 2);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
@@ -159,6 +185,18 @@ impl<'a> Receivers<'a> {
     }
 
     /// Returns `true` if there are no receiver nodes
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    /// assert!(signal.receivers().is_empty());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -166,6 +204,19 @@ impl<'a> Receivers<'a> {
     }
 
     /// Check if a node is in the receivers list
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    /// assert!(signal.receivers().contains("ECM"));
+    /// assert!(!signal.receivers().contains("BCM"));
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn contains(&self, node: &str) -> bool {
@@ -173,6 +224,20 @@ impl<'a> Receivers<'a> {
     }
 
     /// Get a node by index, or None if index is out of bounds
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" ECM TCM")?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    /// if let Some(receiver) = signal.receivers().at(0) {
+    ///     assert_eq!(receiver, "ECM");
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn at(&self, index: usize) -> Option<&'a str> {

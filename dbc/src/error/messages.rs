@@ -1,13 +1,15 @@
 use super::lang;
+#[cfg(feature = "alloc")]
 use alloc::{format, string::String, vec::Vec};
+#[cfg(feature = "alloc")]
 use core::option::Option::Some;
 
 // Re-export constants from the selected language module
 #[cfg(feature = "alloc")]
 pub(crate) use lang::{
-    DBC_NODES_REQUIRED, DBC_VERSION_REQUIRED, MESSAGE_DLC_REQUIRED, MESSAGE_ID_REQUIRED,
-    MESSAGE_NAME_EMPTY, MESSAGE_SENDER_EMPTY, NODES_TOO_MANY, SIGNAL_LENGTH_REQUIRED,
-    SIGNAL_NAME_EMPTY, SIGNAL_RECEIVERS_TOO_MANY, SIGNAL_START_BIT_REQUIRED, VERSION_EMPTY,
+    DBC_VERSION_REQUIRED, MESSAGE_DLC_REQUIRED, MESSAGE_ID_REQUIRED, MESSAGE_NAME_EMPTY,
+    MESSAGE_SENDER_EMPTY, NODES_TOO_MANY, SIGNAL_LENGTH_REQUIRED, SIGNAL_NAME_EMPTY,
+    SIGNAL_RECEIVERS_TOO_MANY, SIGNAL_START_BIT_REQUIRED, VERSION_EMPTY,
 };
 #[cfg(not(feature = "alloc"))]
 pub(crate) use lang::{NODES_TOO_MANY, SIGNAL_RECEIVERS_TOO_MANY};
@@ -101,13 +103,34 @@ pub(crate) fn signal_extends_beyond_message(
     max_bits: u16,
     dlc: u8,
 ) -> String {
-    let args: [&dyn core::fmt::Display; 6] = [
+    // Calculate minimum DLC needed (round up to next byte boundary)
+    let required_bits = end_bit + 1; // +1 because bits are 0-indexed
+    let required_bytes = required_bits.div_ceil(8); // Round up to bytes
+    let min_dlc = required_bytes.min(64) as u8; // Cap at CAN FD maximum
+
+    // Generate suggestion based on current DLC and required DLC
+    let suggestion = if dlc <= 8 && min_dlc > 8 {
+        // Classic CAN (DLC <= 8) but needs CAN FD (DLC > 8)
+        replace_placeholders(lang::SUGGEST_CAN_FD, &[&min_dlc as &dyn core::fmt::Display])
+    } else if min_dlc > dlc && min_dlc <= 64 {
+        // CAN FD but DLC needs to be increased
+        replace_placeholders(
+            lang::SUGGEST_INCREASE_DLC,
+            &[&min_dlc as &dyn core::fmt::Display],
+        )
+    } else {
+        // Signal exceeds even CAN FD maximum (64 bytes = 512 bits)
+        "Signal exceeds CAN FD maximum (64 bytes = 512 bits)".to_string()
+    };
+
+    let args: [&dyn core::fmt::Display; 7] = [
         &signal_name as &dyn core::fmt::Display,
         &start_bit,
         &length,
         &end_bit,
         &max_bits,
         &dlc,
+        &suggestion,
     ];
     replace_placeholders(lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE, &args)
 }
@@ -167,10 +190,12 @@ fn format_number_with_commas(s: &str) -> String {
 
 #[cfg(feature = "alloc")]
 pub(crate) fn signal_overlap(signal1: &str, signal2: &str, message: &str) -> String {
-    let args: [&dyn core::fmt::Display; 3] = [
+    let suggestion = lang::SUGGEST_MULTIPLEXING;
+    let args: [&dyn core::fmt::Display; 4] = [
         &signal1 as &dyn core::fmt::Display,
         &signal2 as &dyn core::fmt::Display,
         &message as &dyn core::fmt::Display,
+        &suggestion,
     ];
     replace_placeholders(lang::FORMAT_SIGNAL_OVERLAP, &args)
 }

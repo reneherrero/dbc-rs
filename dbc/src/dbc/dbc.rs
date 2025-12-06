@@ -1,7 +1,7 @@
 #[cfg(feature = "alloc")]
 use crate::{Error, Result, error::messages as error_messages};
 use crate::{
-    Message, Messages, Nodes, Parser, Signal, Signals, Version,
+    Message, Messages, Nodes, ParseOptions, Parser, Signal, Signals, Version,
     error::{ParseError, ParseResult},
 };
 
@@ -22,6 +22,7 @@ impl<'a> Dbc<'a> {
         messages: &[Option<Message<'_>>],
         message_count: usize,
     ) -> ParseResult<()> {
+        #[cfg(feature = "alloc")]
         use crate::error::messages as error_messages;
 
         // Check for duplicate message IDs
@@ -37,22 +38,46 @@ impl<'a> Dbc<'a> {
                     None => continue, // Should not happen, but be safe
                 };
                 if msg1.id() == msg2.id() {
-                    let msg =
-                        error_messages::duplicate_message_id(msg1.id(), msg1.name(), msg2.name());
-                    return Err(ParseError::Version(msg.leak()));
+                    #[cfg(feature = "alloc")]
+                    {
+                        let msg = error_messages::duplicate_message_id(
+                            msg1.id(),
+                            msg1.name(),
+                            msg2.name(),
+                        );
+                        return Err(ParseError::Version(msg.leak()));
+                    }
+                    #[cfg(not(feature = "alloc"))]
+                    {
+                        return Err(ParseError::Version(
+                            crate::error::lang::FORMAT_DUPLICATE_MESSAGE_ID,
+                        ));
+                    }
                 }
             }
         }
 
         // Validate that all message senders are in the nodes list
-        for msg_opt in messages_slice {
-            let msg = match msg_opt {
-                Some(m) => m,
-                None => continue, // Should not happen, but be safe
-            };
-            if !nodes.contains(msg.sender()) {
-                let msg_str = error_messages::sender_not_in_nodes(msg.name(), msg.sender());
-                return Err(ParseError::Version(msg_str.leak()));
+        // Skip validation if nodes list is empty (empty nodes allowed per DBC spec)
+        if !nodes.is_empty() {
+            for msg_opt in messages_slice {
+                let msg = match msg_opt {
+                    Some(m) => m,
+                    None => continue, // Should not happen, but be safe
+                };
+                if !nodes.contains(msg.sender()) {
+                    #[cfg(feature = "alloc")]
+                    {
+                        let msg_str = error_messages::sender_not_in_nodes(msg.name(), msg.sender());
+                        return Err(ParseError::Version(msg_str.leak()));
+                    }
+                    #[cfg(not(feature = "alloc"))]
+                    {
+                        return Err(ParseError::Version(
+                            crate::error::lang::FORMAT_SENDER_NOT_IN_NODES,
+                        ));
+                    }
+                }
             }
         }
 
@@ -165,6 +190,35 @@ impl<'a> Dbc<'a> {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse(data: &'a str) -> ParseResult<Self> {
+        Self::parse_with_options(data, ParseOptions::default())
+    }
+
+    /// Parses a DBC file from a string with custom parsing options.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The DBC file content as a string
+    /// * `options` - Parsing options to control validation behavior
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::{Dbc, ParseOptions};
+    ///
+    /// let dbc_content = r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Test : 8 ECM
+    ///  SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
+    /// "#;
+    ///
+    /// // Use lenient mode to allow signals that extend beyond message boundaries
+    /// let options = ParseOptions::lenient();
+    /// let dbc = Dbc::parse_with_options(dbc_content, options)?;
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn parse_with_options(data: &'a str, options: ParseOptions) -> ParseResult<Self> {
         // FIRST PASS: Count messages (two-pass parsing to allocate correct sizes)
         let mut parser1 = Parser::new(data.as_bytes())?;
         let _ = Messages::count_messages_and_signals(&mut parser1)?;
@@ -339,7 +393,8 @@ impl<'a> Dbc<'a> {
                             &signals_array[..]
                         }
                     };
-                    let message = Message::parse(&mut message_parser, signals_slice, signal_count)?;
+                    let message =
+                        Message::parse(&mut message_parser, signals_slice, signal_count, options)?;
 
                     #[cfg(not(feature = "alloc"))]
                     {
@@ -363,8 +418,8 @@ impl<'a> Dbc<'a> {
             }
         }
 
-        // Ensure we have nodes (required by DBC spec)
-        let nodes = nodes.ok_or(ParseError::Version(crate::error::lang::DBC_NODES_REQUIRED))?;
+        // Allow empty nodes (DBC spec allows empty BU_: line)
+        let nodes = nodes.unwrap_or_default();
 
         // If no version was parsed, default to empty version
         let version = version.or_else(|| {
@@ -425,6 +480,27 @@ impl<'a> Dbc<'a> {
         Dbc::parse(content_ref).map_err(Error::ParseError)
     }
 
+    /// Parse a DBC file from a file path
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// // Create a temporary file for the example
+    /// let dbc_content = r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
+    /// "#;
+    /// std::fs::write("/tmp/example.dbc", dbc_content)?;
+    ///
+    /// let dbc = Dbc::from_file("/tmp/example.dbc")?;
+    /// println!("Parsed {} messages", dbc.messages().len());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
     #[cfg(feature = "std")]
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Dbc<'static>> {
         let file =
@@ -432,6 +508,20 @@ impl<'a> Dbc<'a> {
         Self::from_reader(file)
     }
 
+    /// Parse a DBC file from a reader
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    /// use std::io::Cursor;
+    ///
+    /// let data = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM";
+    /// let reader = Cursor::new(data);
+    /// let dbc = Dbc::from_reader(reader)?;
+    /// println!("Parsed {} messages", dbc.messages().len());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[cfg(feature = "std")]
     pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Dbc<'static>> {
         let mut buffer = String::new();
@@ -445,7 +535,6 @@ impl<'a> Dbc<'a> {
     }
 
     /// Serialize this DBC to a DBC format string
-    /// Convert the DBC structure back to DBC file format string
     ///
     /// # Examples
     ///
@@ -454,20 +543,9 @@ impl<'a> Dbc<'a> {
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
     /// let dbc_string = dbc.to_dbc_string();
-    /// std::fs::write("output.dbc", dbc_string)?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// ```
-    /// Convert the DBC structure back to DBC file format string
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
-    /// let dbc_string = dbc.to_dbc_string();
-    /// std::fs::write("output.dbc", dbc_string)?;
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// // The string can be written to a file or used elsewhere
+    /// assert!(dbc_string.contains("VERSION"));
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[cfg(feature = "alloc")]
     #[must_use]
@@ -495,6 +573,13 @@ impl<'a> Dbc<'a> {
         }
 
         result
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a> core::fmt::Display for Dbc<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.to_dbc_string())
     }
 }
 
@@ -761,6 +846,8 @@ BO_ 256 EngineData : 8 TCM
     #[test]
     fn test_parse_missing_nodes() {
         // Test parsing without BU_ statement
+        // Note: The parser allows missing BU_ line and treats it as empty nodes
+        // This is consistent with allowing empty nodes per DBC spec
         let data = r#"VERSION "1.0"
 
 BO_ 256 EngineData : 8 ECM
@@ -768,13 +855,10 @@ BO_ 256 EngineData : 8 ECM
 "#;
 
         let result = Dbc::parse(data);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::Version(_) | ParseError::UnexpectedEof => {
-                // Accept various parse errors for now
-            }
-            _ => panic!("Expected ParseError"),
-        }
+        // Parser should succeed with empty nodes (missing BU_ is treated as empty nodes)
+        assert!(result.is_ok());
+        let dbc = result.unwrap();
+        assert!(dbc.nodes().is_empty());
     }
 
     #[test]
@@ -1151,5 +1235,50 @@ BU_: ECM
             _ => panic!("Expected ParseError"),
         };
         // Note: Line number tracking is not yet implemented, so we just verify an error is returned
+    }
+
+    #[test]
+    fn test_parse_with_lenient_boundary_check() {
+        // Test that lenient mode allows signals that extend beyond message boundaries
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ CHECKSUM : 63|8@1+ (1,0) [0|255] ""
+"#;
+
+        // Strict mode should fail
+        let result = Dbc::parse(data);
+        assert!(result.is_err());
+
+        // Lenient mode should succeed
+        let options = ParseOptions::lenient();
+        let dbc = Dbc::parse_with_options(data, options).unwrap();
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().at(0).unwrap();
+        assert_eq!(message.signals().len(), 1);
+        assert_eq!(message.signals().at(0).unwrap().name(), "CHECKSUM");
+    }
+
+    #[test]
+    fn test_parse_with_strict_boundary_check() {
+        // Test that strict mode (default) rejects signals that extend beyond boundaries
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ CHECKSUM : 63|8@1+ (1,0) [0|255] ""
+"#;
+
+        // Default (strict) mode should fail
+        let result = Dbc::parse(data);
+        assert!(result.is_err());
+
+        // Explicit strict mode should also fail
+        let options = ParseOptions::new();
+        let result = Dbc::parse_with_options(data, options);
+        assert!(result.is_err());
     }
 }

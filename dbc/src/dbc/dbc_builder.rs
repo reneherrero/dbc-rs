@@ -55,8 +55,8 @@ impl DbcBuilder {
         let version = self
             .version
             .ok_or_else(|| Error::Dbc(messages::DBC_VERSION_REQUIRED.to_string()))?;
-        let nodes =
-            self.nodes.ok_or_else(|| Error::Dbc(messages::DBC_NODES_REQUIRED.to_string()))?;
+        // Allow empty nodes (DBC spec allows empty BU_: line)
+        let nodes = self.nodes.unwrap_or_default();
         Ok((version, nodes, self.messages))
     }
 
@@ -191,6 +191,8 @@ mod tests {
 
     #[test]
     fn test_dbc_builder_missing_nodes() {
+        // Empty nodes are now allowed per DBC spec
+        // When nodes are empty, sender validation is skipped
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
         let signal = SignalBuilder::new()
@@ -215,12 +217,11 @@ mod tests {
             .build()
             .unwrap();
 
+        // Building without nodes should succeed (empty nodes allowed)
         let result = DbcBuilder::new().version(version).add_message(message).build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_NODES_REQUIRED)),
-            _ => panic!("Expected Dbc error"),
-        }
+        assert!(result.is_ok());
+        let dbc = result.unwrap();
+        assert!(dbc.nodes().is_empty());
     }
 
     #[test]
@@ -364,14 +365,12 @@ mod tests {
 
     #[test]
     fn test_dbc_builder_validate_missing_nodes() {
+        // Empty nodes are now allowed per DBC spec
         let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
         let version = Version::parse(&mut parser).unwrap();
         let result = DbcBuilder::new().version(version).validate();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_NODES_REQUIRED)),
-            _ => panic!("Expected Dbc error"),
-        }
+        // Validation should succeed with empty nodes
+        assert!(result.is_ok());
     }
 
     #[test]

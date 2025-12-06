@@ -111,5 +111,6 @@ pub const FORMAT_INVALID_UTF8: &str = "UTF-8 invalide : {}";
 pub const FORMAT_READ_FAILED: &str = "Échec de la lecture : {}";
 pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "L'ID de message {} ({} décimal) est hors de la plage valide (11 bits standard : 0x000-0x7FF (0-2,047 décimal), 29 bits étendu : 0x0000_0000-0x1FFF_FFFF (0-536,870,911 décimal))";
 pub const FORMAT_SIGNAL_OVERLAP: &str =
-    "Les signaux '{}' et '{}' se chevauchent dans le message '{}'";
+    "Les signaux '{}' et '{}' se chevauchent dans le message '{}'. {}";
+pub const SUGGEST_MULTIPLEXING: &str = "Note : Si ces signaux sont multiplexés (actifs à des moments différents), le support de multiplexage de signaux est requis (pas encore implémenté)";
 pub const FORMAT_LINE_NUMBER: &str = "{} (ligne {})";

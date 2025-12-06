@@ -26,7 +26,7 @@ impl<'a, 'b> Iterator for NodesIter<'a, 'b> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Nodes<'a> {
     nodes: [Option<&'a str>; crate::MAX_NODES],
     count: usize,
@@ -159,6 +159,18 @@ impl<'a> Nodes<'a> {
     }
 
     /// Get an iterator over the nodes
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM BCM")?;
+    /// for node in dbc.nodes().iter() {
+    ///     println!("Node: {}", node);
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &'a str> + '_ {
@@ -169,6 +181,18 @@ impl<'a> Nodes<'a> {
         }
     }
 
+    /// Check if a node is in the list
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM")?;
+    /// assert!(dbc.nodes().contains("ECM"));
+    /// assert!(!dbc.nodes().contains("BCM"));
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn contains(&self, node: &str) -> bool {
@@ -176,17 +200,50 @@ impl<'a> Nodes<'a> {
     }
 
     /// Get the number of nodes
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM BCM")?;
+    /// assert_eq!(dbc.nodes().len(), 3);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
         self.count
     }
 
+    /// Returns `true` if there are no nodes
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"")?;
+    /// assert!(dbc.nodes().is_empty());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
 
     /// Get a node by index, or None if index is out of bounds
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM")?;
+    /// if let Some(node) = dbc.nodes().at(0) {
+    ///     assert_eq!(node, "ECM");
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use]
     pub fn at(&self, index: usize) -> Option<&'a str> {
@@ -196,36 +253,33 @@ impl<'a> Nodes<'a> {
         self.nodes[index]
     }
 
-    #[allow(clippy::inherent_to_string)]
-    #[cfg(feature = "alloc")]
-    #[must_use]
-    pub fn to_string(&self) -> String {
-        if self.count == 0 {
-            return String::new();
-        }
-        // Pre-allocate: estimate ~10 chars per node name + spaces
-        let capacity = self.count * 10;
-        let mut result = String::with_capacity(capacity);
-        for (i, node) in self.iter().enumerate() {
-            if i > 0 {
-                result.push(' ');
-            }
-            result.push_str(node);
-        }
-        result
-    }
-
     #[cfg(feature = "alloc")]
     #[must_use]
     pub fn to_dbc_string(&self) -> String {
         let mut result = String::from(crate::BU_);
         result.push(':');
-        let nodes_str = self.to_string();
+        let nodes_str = alloc::format!("{}", self);
         if !nodes_str.is_empty() {
             result.push(' ');
             result.push_str(&nodes_str);
         }
         result
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<'a> core::fmt::Display for Nodes<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if self.count == 0 {
+            return Ok(());
+        }
+        for (i, node) in self.iter().enumerate() {
+            if i > 0 {
+                write!(f, " ")?;
+            }
+            write!(f, "{}", node)?;
+        }
+        Ok(())
     }
 }
 
@@ -333,7 +387,7 @@ mod tests {
     fn test_nodes_to_string_single() {
         use crate::nodes::NodesBuilder;
         let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        assert_eq!(nodes.to_string(), "ECM");
+        assert_eq!(alloc::format!("{}", nodes), "ECM");
     }
 
     #[test]
@@ -346,7 +400,7 @@ mod tests {
             .add_node("BCM")
             .build()
             .unwrap();
-        assert_eq!(nodes.to_string(), "ECM TCM BCM");
+        assert_eq!(alloc::format!("{}", nodes), "ECM TCM BCM");
     }
 
     #[test]

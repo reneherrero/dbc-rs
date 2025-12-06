@@ -109,5 +109,7 @@ pub const FORMAT_PARSE_NUMBER_FAILED: &str = "Error al analizar el número: {}";
 pub const FORMAT_INVALID_UTF8: &str = "UTF-8 inválido: {}";
 pub const FORMAT_READ_FAILED: &str = "Error al leer: {}";
 pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "El ID de mensaje {} ({} decimal) está fuera del rango válido (11 bits estándar: 0x000-0x7FF (0-2,047 decimal), 29 bits extendido: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 decimal))";
-pub const FORMAT_SIGNAL_OVERLAP: &str = "Las señales '{}' y '{}' se superponen en el mensaje '{}'";
+pub const FORMAT_SIGNAL_OVERLAP: &str =
+    "Las señales '{}' y '{}' se superponen en el mensaje '{}'. {}";
+pub const SUGGEST_MULTIPLEXING: &str = "Nota: Si estas señales están multiplexadas (activas en diferentes momentos), se requiere soporte de multiplexación de señales (aún no implementado)";
 pub const FORMAT_LINE_NUMBER: &str = "{} (línea {})";

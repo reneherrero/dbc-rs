@@ -90,7 +90,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         "Created DBC with version: {}",
         dbc.version().map(|v| v.to_string()).unwrap_or_default()
     );
-    println!("Nodes: {}", dbc.nodes().to_string());
+    println!("Nodes: {}", dbc.nodes());
     println!("Messages: {}", dbc.messages().len());
 
     for msg in dbc.messages().iter() {

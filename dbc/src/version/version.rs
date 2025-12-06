@@ -3,7 +3,7 @@ use crate::{
     error::{ParseError, ParseResult, lang},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Version<'a> {
     version: &'a str,
 }
