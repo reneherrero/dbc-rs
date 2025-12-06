@@ -5,7 +5,9 @@ Cargo.lock
 rust_out
 
 # Coverage artifacts
-llvm-cov-target/
+llvm-cov-# Rust build artifacts
+target/
+**/target/
 coverage/
 *.profraw
 *.profdata
