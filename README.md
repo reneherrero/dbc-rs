@@ -90,7 +90,7 @@ The project aims for at least 80% code coverage. Coverage reports are automatica
 
 ## Security
 
-For a comprehensive security audit, see [SECURITY_AUDIT.md](SECURITY_AUDIT.md) (also available in the `dbc` crate).
+For a comprehensive security audit, see [SECURITY_AUDIT.md](dbc/SECURITY_AUDIT.md).
 
 ## License
 

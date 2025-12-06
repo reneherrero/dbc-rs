@@ -1,7 +1,7 @@
 # Security Audit Report
 
-**Date**: 2024-12-26  
-**Version**: 0.1.0-alpha  
+**Date**: 2024-12-06  
+**Version**: 0.1.0-beta.1  
 **Auditor**: Automated Security Review
 
 ## Executive Summary
@@ -298,6 +298,29 @@ All previously identified security issues have been **resolved**. The remaining 
 **Overall Security Rating**: 🟢 **EXCELLENT** (9.5/10)
 
 The library is suitable for production use. All critical and high-priority security issues have been addressed.
+
+## Changes Since Alpha Release (0.1.0-alpha)
+
+### Security Enhancements
+- ✅ **Enhanced Error Messages**: Improved error context with actionable recovery suggestions
+- ✅ **Configurable Parsing**: `ParseOptions` allows lenient mode for real-world DBC files while maintaining strict validation by default
+- ✅ **Property-Based Testing**: Added comprehensive property-based tests to catch edge cases
+- ✅ **Benchmark Suite**: Performance benchmarks added for security-critical parsing operations
+
+### No New Security Issues
+- ✅ All security controls remain in place
+- ✅ No unsafe code introduced
+- ✅ All DoS protection limits verified (256 nodes, 64 receivers, 10,000 messages, 64 signals, 256 char units)
+- ✅ Input validation remains comprehensive
+- ✅ Error handling patterns maintained
+- ✅ Memory safety guarantees unchanged
+
+### Verification Results
+- ✅ **No unsafe code**: Verified - zero unsafe blocks in codebase
+- ✅ **DoS limits**: All limits verified and enforced
+- ✅ **Input validation**: All validation checks confirmed
+- ✅ **Error handling**: All `unwrap()`/`expect()` calls are in test code only
+- ✅ **Memory safety**: Rust ownership system properly utilized
 
 ## Next Steps
 

@@ -87,7 +87,6 @@ This checklist ensures all steps are completed before publishing a new release o
 - [ ] **SECURITY_AUDIT.md reviewed**
   - [ ] All fixed issues marked as resolved
   - [ ] Date updated if audit was refreshed
-  - [ ] Both workspace root and `dbc/` versions are in sync
 
 ### 4. Version Updates
 
@@ -124,13 +123,9 @@ This checklist ensures all steps are completed before publishing a new release o
 
 ### 6. File Synchronization
 
-- [ ] **SECURITY_AUDIT.md synchronized**
-  - [ ] Workspace root version updated
-  - [ ] `dbc/SECURITY_AUDIT.md` updated (same content)
-  - [ ] Both files are identical
-  ```bash
-  diff SECURITY_AUDIT.md dbc/SECURITY_AUDIT.md
-  ```
+- [ ] **SECURITY_AUDIT.md reviewed**
+  - [ ] Version and date updated for release
+  - [ ] All security issues documented
 
 ### 7. Final Verification
 
@@ -278,6 +273,6 @@ cargo publish -p dbc-rs
 - **Never skip steps**: Each step ensures quality and prevents issues
 - **Test thoroughly**: Especially test `no_std` builds before releasing
 - **Document breaking changes**: Users need clear migration paths
-- **Keep SECURITY_AUDIT.md in sync**: Both workspace and crate versions
+- **Keep SECURITY_AUDIT.md updated**: Review and update for each release
 - **Verify CI passes**: Don't publish if CI is failing
 
