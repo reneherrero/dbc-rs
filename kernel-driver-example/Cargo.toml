@@ -13,29 +13,45 @@ crate-type = ["rlib"]
 [dependencies]
 dbc-rs = { path = "../dbc", default-features = false, features = ["kernel"] }
 
-# Kernel bindings are provided by the kernel build system during compilation
-# The actual kernel crate comes from KDIR/rust/bindings/lib.rs
-# This dependency is resolved at build time by the kernel Makefile
+# ============================================================================
+# TI Kernel Setup for Testing
+# ============================================================================
 #
-# For TI kernel (ti-linux-kernel):
-# 1. Clone: git clone https://git.ti.com/git/ti-linux-kernel/ti-linux-kernel.git
-# 2. Checkout branch: git checkout ti-linux-6.12.y (or appropriate version)
-# 3. Configure with CONFIG_RUST=y (if Rust support is available)
-# 4. Point KDIR to the cloned TI kernel source
+# To test against the TI kernel, follow these steps:
 #
-# For local development/testing with actual kernel crate:
-# Uncomment one of the options below and adjust paths as needed:
+# 1. Set up TI kernel source (from repository root):
+#    ./setup-ti-kernel.sh
 #
-# Use local kernel source (path to kernel's rust directory):
-# [dependencies.kernel]
-# path = "/path/to/kernel-source/rust"
+#    This will:
+#    - Clone TI kernel as a git submodule at ti-linux-kernel/
+#    - Checkout the appropriate branch (ti-linux-6.12.y by default)
+#    - Verify Rust support configuration
 #
-# Note: The kernel crate is typically provided by the kernel build system during
-# module compilation. These options are for standalone testing/development.
-# 
-# IMPORTANT: Git-based kernel dependency doesn't work because rust-for-linux
-# doesn't structure the kernel crate as a standalone package. Use Option 1
-# (local path) if you have kernel source, or rely on the mock for testing.
+# 2. Configure kernel with Rust support:
+#    cd ti-linux-kernel
+#    make ARCH=arm64 defconfig
+#    # Edit .config and set: CONFIG_RUST=y
+#    # Or use menuconfig: make ARCH=arm64 menuconfig
+#
+# 3. Build kernel bindings (generates rust/ directory):
+#    make ARCH=arm64 rustavailable
+#    make ARCH=arm64 rustfmtcheck
+#
+# 4. The kernel dependency below should now work:
+#    - Path points to ../ti-linux-kernel/rust (relative to this directory)
+#    - Update the path if your kernel source is in a different location
+#
+# 5. Test compilation:
+#    cd kernel-driver-example
+#    cargo check
+#
+# Note: If you haven't set up the kernel source yet, comment out the
+# [dependencies.kernel] section below to use the mock for testing.
+#
+# ============================================================================
+
+[dependencies.kernel]
+path = "../ti-linux-kernel/rust" # Update this if kernel source is elsewhere
 
 [profile.release]
 opt-level = 3

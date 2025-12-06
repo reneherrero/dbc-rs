@@ -100,6 +100,7 @@ fn replace_placeholders(fmt: &str, args: &[&dyn core::fmt::Display]) -> String {
     let mut result = String::with_capacity(fmt.len() + args.len() * 10);
     #[cfg(all(feature = "kernel", not(feature = "alloc")))]
     let mut result = String::try_from("").unwrap_or_else(|_| unreachable!());
+
     let mut arg_idx = 0;
     let mut chars = fmt.chars().peekable();
 
@@ -108,13 +109,28 @@ fn replace_placeholders(fmt: &str, args: &[&dyn core::fmt::Display]) -> String {
             chars.next(); // consume '}'
             if arg_idx < args.len() {
                 use alloc::string::ToString;
-                result.push_str(&args[arg_idx].to_string());
+                let arg_str = args[arg_idx].to_string();
+                #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+                result.push_str(&arg_str);
+                #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+                result.try_push_str(&arg_str).unwrap_or_else(|_| unreachable!());
                 arg_idx += 1;
             } else {
+                #[cfg(all(feature = "alloc", not(feature = "kernel")))]
                 result.push_str("{}");
+                #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+                result.try_push_str("{}").unwrap_or_else(|_| unreachable!());
             }
         } else {
+            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
             result.push(c);
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                // For single characters, convert to string and push
+                let mut char_str = [0u8; 4];
+                let char_str = c.encode_utf8(&mut char_str);
+                result.try_push_str(char_str).unwrap_or_else(|_| unreachable!());
+            }
         }
     }
     result
