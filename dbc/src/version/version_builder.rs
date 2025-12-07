@@ -126,8 +126,7 @@ impl VersionBuilder {
         #[cfg(all(feature = "kernel", not(feature = "alloc")))]
         {
             let formatted = alloc::format!("{}", major);
-            self.version =
-                Some(String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!()));
+            self.version = Some(String::from_str(&formatted));
         }
         #[cfg(all(feature = "alloc", not(feature = "kernel")))]
         {
@@ -170,7 +169,7 @@ impl VersionBuilder {
             #[cfg(all(feature = "kernel", not(feature = "alloc")))]
             {
                 let formatted = alloc::format!("{}.{}", v, minor);
-                *v = String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!());
+                *v = String::from_str(&formatted);
             }
             #[cfg(all(feature = "alloc", not(feature = "kernel")))]
             {
@@ -181,8 +180,7 @@ impl VersionBuilder {
             #[cfg(all(feature = "kernel", not(feature = "alloc")))]
             {
                 let formatted = alloc::format!("{}", minor);
-                self.version =
-                    Some(String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!()));
+                self.version = Some(String::from_str(&formatted));
             }
             #[cfg(all(feature = "alloc", not(feature = "kernel")))]
             {
@@ -228,7 +226,7 @@ impl VersionBuilder {
             #[cfg(all(feature = "kernel", not(feature = "alloc")))]
             {
                 let formatted = alloc::format!("{}.{}", v, patch);
-                *v = String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!());
+                *v = String::from_str(&formatted);
             }
             #[cfg(all(feature = "alloc", not(feature = "kernel")))]
             {
@@ -239,8 +237,7 @@ impl VersionBuilder {
             #[cfg(all(feature = "kernel", not(feature = "alloc")))]
             {
                 let formatted = alloc::format!("{}", patch);
-                self.version =
-                    Some(String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!()));
+                self.version = Some(String::from_str(&formatted));
             }
             #[cfg(all(feature = "alloc", not(feature = "kernel")))]
             {

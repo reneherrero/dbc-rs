@@ -16,8 +16,7 @@ use alloc::string::String as ErrorString;
 // Helper function to convert &str to ErrorString
 #[cfg(all(feature = "kernel", not(feature = "alloc")))]
 pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
-    ErrorString::try_from(s)
-        .unwrap_or_else(|_| ErrorString::try_from("").unwrap_or_else(|_| unreachable!()))
+    ErrorString::from_str(s)
 }
 
 #[cfg(all(feature = "alloc", not(feature = "kernel")))]
@@ -122,27 +121,27 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::InvalidData(msg) => {
-                let formatted = messages::format_invalid_data(msg).map_err(|_| fmt::Error)?;
+                let formatted = messages::format_invalid_data(msg);
                 write!(f, "{}", formatted)
             }
             Error::Signal(msg) => {
-                let formatted = messages::format_signal_error(msg).map_err(|_| fmt::Error)?;
+                let formatted = messages::format_signal_error(msg);
                 write!(f, "{}", formatted)
             }
             Error::Message(msg) => {
-                let formatted = messages::format_message_error(msg).map_err(|_| fmt::Error)?;
+                let formatted = messages::format_message_error(msg);
                 write!(f, "{}", formatted)
             }
             Error::Dbc(msg) => {
-                let formatted = messages::format_dbc_error(msg).map_err(|_| fmt::Error)?;
+                let formatted = messages::format_dbc_error(msg);
                 write!(f, "{}", formatted)
             }
             Error::Version(msg) => {
-                let formatted = messages::format_version_error(msg).map_err(|_| fmt::Error)?;
+                let formatted = messages::format_version_error(msg);
                 write!(f, "{}", formatted)
             }
             Error::Nodes(msg) => {
-                let formatted = messages::format_nodes_error(msg).map_err(|_| fmt::Error)?;
+                let formatted = messages::format_nodes_error(msg);
                 write!(f, "{}", formatted)
             }
             Error::ParseError(msg) => write!(f, "Parse Error: {}", msg),
@@ -161,13 +160,8 @@ impl From<ParseIntError> for Error {
 #[cfg(all(feature = "kernel", not(feature = "alloc")))]
 impl From<ParseIntError> for Error {
     fn from(err: ParseIntError) -> Self {
-        // In kernel mode, parse_number_failed returns Result
-        Error::InvalidData(messages::parse_number_failed(err).unwrap_or_else(|_| {
-            ErrorString::try_from("Failed to parse number").unwrap_or_else(|_| {
-                // Fallback: create empty string if allocation fails
-                ErrorString::try_from("").unwrap_or_else(|_| unreachable!())
-            })
-        }))
+        // In kernel mode, parse_number_failed returns String (infallible)
+        Error::InvalidData(messages::parse_number_failed(err))
     }
 }
 

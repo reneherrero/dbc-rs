@@ -36,8 +36,8 @@ pub fn alloc_string_from(s: &str) -> AllocString {
 
 #[cfg(all(feature = "kernel", not(feature = "alloc")))]
 #[allow(dead_code)]
-pub fn alloc_string_from(s: &str) -> Result<AllocString, ()> {
-    crate::kernel::alloc::string::String::try_from(s)
+pub fn alloc_string_from(s: &str) -> AllocString {
+    crate::kernel::alloc::string::String::from_str(s)
 }
 
 // Helper functions for format!
@@ -50,12 +50,12 @@ pub fn alloc_format(args: core::fmt::Arguments<'_>) -> AllocString {
 
 #[cfg(all(feature = "kernel", not(feature = "alloc")))]
 #[allow(dead_code)]
-pub fn alloc_format(args: core::fmt::Arguments<'_>) -> Result<AllocString, ()> {
+pub fn alloc_format(args: core::fmt::Arguments<'_>) -> AllocString {
     // In kernel mode, we need to format to a temporary string first
     // This is a limitation - we'll need to handle this differently
     // For now, use alloc::format and convert
     let s = alloc::fmt::format(args);
-    crate::kernel::alloc::string::String::try_from(s.as_str())
+    crate::kernel::alloc::string::String::from_str(s.as_str())
 }
 
 // Helper for Vec operations
@@ -68,6 +68,6 @@ pub fn vec_push<T>(vec: &mut AllocVec<T>, item: T) {
 
 #[cfg(all(feature = "kernel", not(feature = "alloc")))]
 #[allow(dead_code)]
-pub fn vec_push<T>(vec: &mut AllocVec<T>, item: T) -> Result<(), ()> {
-    vec.try_push(item)
+pub fn vec_push<T>(vec: &mut AllocVec<T>, item: T) {
+    vec.push(item);
 }
