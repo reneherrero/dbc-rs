@@ -29,7 +29,16 @@ CROSS_COMPILE ?=
 
 # Rust target for kernel (override with ARCH=...)
 ARCH ?= $(shell uname -m)
-RUST_TARGET := $(shell $(KDIR)/scripts/rust/rust_target.sh)
+
+# Get Rust target from kernel (if available)
+# For TI kernel, this requires: make ARCH=$(ARCH) prepare
+RUST_TARGET := $(shell if [ -f "$(KDIR)/scripts/rust/rust_target.sh" ]; then \
+	$(KDIR)/scripts/rust/rust_target.sh; \
+	elif [ "$(ARCH)" = "arm64" ]; then \
+	echo "aarch64-unknown-none"; \
+	else \
+	echo "x86_64-unknown-none"; \
+	fi)
 
 # Cargo build directory
 CARGO_BUILD_DIR := target/$(RUST_TARGET)/release
@@ -42,6 +51,22 @@ all:
 	@echo "CROSS_COMPILE: $(CROSS_COMPILE)"
 	@echo "RUST_TARGET: $(RUST_TARGET)"
 	@echo ""
+	@# Check if kernel has Rust support
+	@if [ ! -f "$(KDIR)/scripts/rust/rust_target.sh" ] && [ ! -f "$(KDIR)/rust/Cargo.toml" ]; then \
+		echo "ERROR: Kernel Rust support not found!"; \
+		echo "  KDIR: $(KDIR)"; \
+		echo ""; \
+		echo "For TI kernel, ensure:"; \
+		echo "  1. Set environment variables:"; \
+		echo "     export KDIR=/home/rene/Source/dbc-rs/ti-linux-kernel"; \
+		echo "     export ARCH=arm64"; \
+		echo "     export CROSS_COMPILE=aarch64-linux-gnu-"; \
+		echo "  2. Kernel is configured: cd ti-linux-kernel && make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig"; \
+		echo "  3. Rust is enabled: echo 'CONFIG_RUST=y' >> .config && make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig"; \
+		echo "  4. Kernel is prepared: make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- prepare"; \
+		echo ""; \
+		exit 1; \
+	fi
 	@echo "Step 1: Building Rust library..."
 	@if [ -n "$(CROSS_COMPILE)" ]; then \
 		echo "Cross-compiling for $(ARCH)"; \
