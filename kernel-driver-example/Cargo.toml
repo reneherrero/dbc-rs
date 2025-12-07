@@ -36,8 +36,15 @@ dbc-rs = { path = "../dbc", default-features = false, features = ["kernel"] }
 # NOTE: This dependency is NOT used for kernel module builds.
 # Kernel modules are built via Makefile, which integrates with the kernel
 # build system directly. This is only here for reference/documentation.
-# [dependencies.kernel]
-# path = "../ti-linux-kernel/rust" # This path doesn't contain Cargo.toml
+#
+# NOTE: The kernel does NOT expose itself as a Cargo crate.
+# Kernel modules are built via Makefile, which integrates with the kernel
+# build system directly. To test compilation with the actual kernel:
+#   1. Prepare the kernel: cd ../rust-for-linux && make prepare
+#   2. Build via Makefile: make KDIR=../rust-for-linux
+#
+# The kernel's Rust bindings are provided at build time by the kernel
+# build system, not as a Cargo dependency.
 
 [profile.release]
 opt-level = 3
