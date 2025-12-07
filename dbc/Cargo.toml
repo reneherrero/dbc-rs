@@ -18,12 +18,20 @@ rust-version.workspace = true
 features = ["alloc", "std"]
 
 [features]
-default = ["std"]
+default = ["std", "lang-en"]
 alloc = []
 std = ["alloc"]
 # EXPERIMENTAL: Kernel feature for Linux kernel module compatibility
 # This feature is experimental and subject to change. Mutually exclusive with alloc and std.
 kernel = []
+
+# Language selection (mutually exclusive - only one should be enabled)
+# Default language is English
+lang-en = [] # English (default)
+lang-de = [] # German
+lang-es = [] # Spanish
+lang-fr = [] # French
+lang-ja = [] # Japanese
 
 # Feature conflicts: kernel is mutually exclusive with alloc and std
 [package.metadata.cargo-features]

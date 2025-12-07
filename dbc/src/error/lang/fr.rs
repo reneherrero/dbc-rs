@@ -48,9 +48,14 @@ pub const MESSAGE_SENDER_EMPTY: &str = "L'expéditeur du message ne peut pas êt
 pub const MESSAGE_DLC_TOO_SMALL: &str = "Le DLC du message doit être d'au moins 1 octet";
 pub const MESSAGE_DLC_TOO_LARGE: &str =
     "Le DLC du message ne peut pas dépasser 64 octets (maximum CAN FD)";
+pub const FORMAT_MESSAGE_DLC_TOO_SMALL: &str = "Le message '{}' (ID {}) a un DLC {}, doit être d'au moins 1 octet. Utilisez un DLC entre 1 et 64 octets";
+pub const FORMAT_MESSAGE_DLC_TOO_LARGE: &str = "Le message '{}' (ID {}) a un DLC {}, ne peut pas dépasser 64 octets (maximum CAN FD). Utilisez un DLC entre 1 et 64 octets";
 pub const MESSAGE_INVALID_FORMAT: &str = "Format de message invalide";
 pub const MESSAGE_INVALID_ID: &str = "ID de message invalide";
 pub const MESSAGE_INVALID_DLC: &str = "DLC invalide";
+pub const FORMAT_MESSAGE_INVALID_ID: &str = "ID de message invalide '{}'. Un nombre valide était attendu (0-536,870,911 pour les IDs étendus)";
+pub const FORMAT_MESSAGE_INVALID_DLC: &str =
+    "DLC invalide '{}' pour le message '{}' (ID {}). Un nombre entre 1 et 64 était attendu";
 pub const MESSAGE_ID_OUT_OF_RANGE: &str = "ID de message hors de la plage valide";
 
 // ============================================================================
@@ -63,6 +68,8 @@ pub const SIGNAL_LENGTH_REQUIRED: &str = "length est requis";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "La longueur du signal doit être d'au moins 1 bit";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str =
     "La longueur du signal ne peut pas dépasser 512 bits (maximum CAN FD)";
+pub const FORMAT_SIGNAL_LENGTH_TOO_SMALL: &str = "Le signal '{}' a une longueur de {} bits, doit être d'au moins 1 bit. Utilisez une longueur entre 1 et 512 bits";
+pub const FORMAT_SIGNAL_LENGTH_TOO_LARGE: &str = "Le signal '{}' a une longueur de {} bits, ne peut pas dépasser 512 bits (maximum CAN FD). Utilisez une longueur entre 1 et 512 bits";
 pub const SIGNAL_OVERLAP: &str = "Les signaux se chevauchent dans le message";
 
 // ============================================================================
@@ -77,6 +84,9 @@ pub const SIGNAL_PARSE_EXPECTED_AT: &str = "Attendu '@' dans startbit|length@...
 pub const SIGNAL_PARSE_EXPECTED_PIPE: &str = "Attendu '|' dans startbit|length";
 pub const SIGNAL_PARSE_INVALID_START_BIT: &str = "start_bit invalide";
 pub const SIGNAL_PARSE_INVALID_LENGTH: &str = "Longueur invalide";
+pub const FORMAT_SIGNAL_PARSE_INVALID_START_BIT: &str = "Le signal '{}' a un start_bit {}, doit être entre 0 et 511. Utilisez un start_bit entre 0 et 511";
+pub const FORMAT_SIGNAL_PARSE_INVALID_LENGTH: &str =
+    "Longueur invalide '{}' pour le signal '{}'. Un nombre entre 1 et 512 était attendu";
 pub const SIGNAL_PARSE_MISSING_BYTE_ORDER: &str = "Ordre des octets manquant";
 pub const SIGNAL_PARSE_MISSING_SIGN: &str = "Signe manquant";
 pub const SIGNAL_PARSE_MISSING_CLOSING_PAREN: &str = "Manquant ')' pour factor,offset";
@@ -102,7 +112,10 @@ pub const FORMAT_DUPLICATE_MESSAGE_ID: &str =
 pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Nom de nœud en double : '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "Le message '{}' a un expéditeur '{}' qui n'est pas dans la liste des nœuds";
-pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Le signal '{}' dépasse la limite du message : start_bit {} + length {} = {} > {} (DLC {} octets)";
+pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Le signal '{}' dépasse la limite du message : start_bit {} + length {} = {} > {} (DLC {} octets). {}";
+pub const SUGGEST_CAN_FD: &str =
+    "Envisagez d'utiliser CAN FD avec un DLC {} ou supérieur (nécessite DLC > 8 octets)";
+pub const SUGGEST_INCREASE_DLC: &str = "Envisagez d'augmenter le DLC à {} octets";
 pub const FORMAT_INVALID_RANGE: &str = "Plage invalide : min {} > max {}";
 pub const FORMAT_UNKNOWN_BYTE_ORDER: &str = "Ordre des octets inconnu '{}'";
 pub const FORMAT_UNKNOWN_SIGN: &str = "Signe inconnu '{}'";

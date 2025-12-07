@@ -47,9 +47,15 @@ pub const MESSAGE_SENDER_EMPTY: &str = "メッセージ送信者を空にする�
 pub const MESSAGE_DLC_TOO_SMALL: &str = "メッセージDLCは少なくとも1バイトである必要があります";
 pub const MESSAGE_DLC_TOO_LARGE: &str =
     "メッセージDLCは64バイト（CAN FD最大値）を超えることはできません";
+pub const FORMAT_MESSAGE_DLC_TOO_SMALL: &str = "メッセージ '{}' (ID {}) のDLCは {} で、少なくとも1バイトである必要があります。1〜64バイトのDLCを使用してください";
+pub const FORMAT_MESSAGE_DLC_TOO_LARGE: &str = "メッセージ '{}' (ID {}) のDLCは {} で、64バイト（CAN FD最大値）を超えることはできません。1〜64バイトのDLCを使用してください";
 pub const MESSAGE_INVALID_FORMAT: &str = "無効なメッセージ形式";
 pub const MESSAGE_INVALID_ID: &str = "無効なメッセージID";
 pub const MESSAGE_INVALID_DLC: &str = "無効なDLC";
+pub const FORMAT_MESSAGE_INVALID_ID: &str =
+    "無効なメッセージID '{}'。有効な数値が期待されました（拡張IDの場合は0-536,870,911）";
+pub const FORMAT_MESSAGE_INVALID_DLC: &str =
+    "メッセージ '{}' (ID {}) の無効なDLC '{}'。1〜64の数値が期待されました";
 pub const MESSAGE_ID_OUT_OF_RANGE: &str = "メッセージIDが有効範囲外です";
 
 // ============================================================================
@@ -62,6 +68,8 @@ pub const SIGNAL_LENGTH_REQUIRED: &str = "lengthが必要です";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "信号長は少なくとも1ビットである必要があります";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str =
     "信号長は512ビット（CAN FD最大値）を超えることはできません";
+pub const FORMAT_SIGNAL_LENGTH_TOO_SMALL: &str = "信号 '{}' の長さは {} ビットで、少なくとも1ビットである必要があります。1〜512ビットの長さを使用してください";
+pub const FORMAT_SIGNAL_LENGTH_TOO_LARGE: &str = "信号 '{}' の長さは {} ビットで、512ビット（CAN FD最大値）を超えることはできません。1〜512ビットの長さを使用してください";
 pub const SIGNAL_OVERLAP: &str = "信号がメッセージ内で重複しています";
 
 // ============================================================================
@@ -76,6 +84,9 @@ pub const SIGNAL_PARSE_EXPECTED_AT: &str = "startbit|length@...に'@'が必要�
 pub const SIGNAL_PARSE_EXPECTED_PIPE: &str = "startbit|lengthに'|'が必要です";
 pub const SIGNAL_PARSE_INVALID_START_BIT: &str = "無効なstart_bit";
 pub const SIGNAL_PARSE_INVALID_LENGTH: &str = "無効な長さ";
+pub const FORMAT_SIGNAL_PARSE_INVALID_START_BIT: &str = "信号 '{}' のstart_bitは {} で、0〜511の間である必要があります。0〜511のstart_bitを使用してください";
+pub const FORMAT_SIGNAL_PARSE_INVALID_LENGTH: &str =
+    "信号 '{}' の無効な長さ '{}'。1〜512の数値が期待されました";
 pub const SIGNAL_PARSE_MISSING_BYTE_ORDER: &str = "バイト順序がありません";
 pub const SIGNAL_PARSE_MISSING_SIGN: &str = "符号がありません";
 pub const SIGNAL_PARSE_MISSING_CLOSING_PAREN: &str = "factor,offsetの')'がありません";
@@ -99,8 +110,10 @@ pub const FORMAT_DUPLICATE_MESSAGE_ID: &str = "重複するメッセージID: {}
 pub const FORMAT_DUPLICATE_NODE_NAME: &str = "重複するノード名: '{}'";
 pub const FORMAT_SENDER_NOT_IN_NODES: &str =
     "メッセージ'{}'には送信者'{}'がありますが、ノードリストにありません";
-pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str =
-    "信号'{}'がメッセージ境界を超えています: start_bit {} + length {} = {} > {}（DLC {}バイト）";
+pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "信号'{}'がメッセージ境界を超えています: start_bit {} + length {} = {} > {}（DLC {}バイト）。 {}";
+pub const SUGGEST_CAN_FD: &str =
+    "DLC {} 以上のCAN FDの使用を検討してください（DLC > 8バイトが必要）";
+pub const SUGGEST_INCREASE_DLC: &str = "DLCを {} バイトに増やすことを検討してください";
 pub const FORMAT_INVALID_RANGE: &str = "無効な範囲: min {} > max {}";
 pub const FORMAT_UNKNOWN_BYTE_ORDER: &str = "不明なバイト順序'{}'";
 pub const FORMAT_UNKNOWN_SIGN: &str = "不明な符号'{}'";

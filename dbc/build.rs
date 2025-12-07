@@ -1,6 +1,35 @@
 use std::env;
 
 fn main() {
+    // Validate language feature selection - only one language feature should be enabled
+    let lang_features = [
+        ("lang-en", "English"),
+        ("lang-de", "German"),
+        ("lang-es", "Spanish"),
+        ("lang-fr", "French"),
+        ("lang-ja", "Japanese"),
+    ];
+
+    let enabled_langs: Vec<_> = lang_features
+        .iter()
+        .filter(|(feature, _)| {
+            env::var(format!(
+                "CARGO_FEATURE_{}",
+                feature.to_uppercase().replace('-', "_")
+            ))
+            .is_ok()
+        })
+        .collect();
+
+    if enabled_langs.len() > 1 {
+        let enabled_names: Vec<_> = enabled_langs.iter().map(|(_, name)| *name).collect();
+        panic!(
+            "ERROR: Multiple language features enabled: {}. Only one language feature can be enabled at a time.\n\
+            Please enable only one of: lang-en, lang-de, lang-es, lang-fr, lang-ja",
+            enabled_names.join(", ")
+        );
+    }
+
     // Allow override of MAX_SIGNALS_PER_MESSAGE via environment variable
     let max_signals = env::var("DBC_MAX_SIGNALS_PER_MESSAGE")
         .ok()
