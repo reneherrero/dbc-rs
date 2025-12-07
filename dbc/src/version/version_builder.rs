@@ -1,5 +1,5 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::compat::{Box, String, display_to_string, format_two, str_to_string};
+use crate::compat::{Box, String, display_to_string, format_two};
 use crate::{Error, Result, Version, error::messages};
 
 /// Builder for creating `Version` programmatically.
@@ -86,7 +86,7 @@ impl VersionBuilder {
         }
         #[cfg(all(feature = "alloc", not(feature = "kernel")))]
         {
-            self.version = Some(str_to_string(version));
+            self.version = Some(crate::compat::str_to_string(version));
         }
         self
     }

@@ -822,6 +822,7 @@ mod tests {
     // Tests that require alloc or kernel (for to_dbc_string)
     #[cfg(any(feature = "alloc", feature = "kernel"))]
     mod tests_with_alloc {
+        #[cfg(feature = "alloc")]
         use super::*;
 
         #[test]

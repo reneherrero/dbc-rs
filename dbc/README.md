@@ -69,7 +69,7 @@ The `kernel` feature enables compatibility with Linux kernel's `kernel::alloc` A
 **Usage:**
 ```toml
 [dependencies]
-dbc-rs = { version = "0.1.0-beta.1", default-features = false, features = ["kernel"] }
+dbc-rs = { version = "0.1.0-beta.2", default-features = false, features = ["kernel"] }
 ```
 
 For more details, see [KERNEL_FEATURE_ANALYSIS.md](../KERNEL_FEATURE_ANALYSIS.md).

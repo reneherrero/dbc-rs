@@ -13,14 +13,19 @@ This checklist ensures all steps are completed before publishing a new release o
 
 - [ ] **Clippy checks pass (all targets)**
   ```bash
-  # Default target (with std)
-  cargo clippy --all-targets --all-features -- -D warnings
+  # Default target (with std) - matches CI workflow
+  cargo clippy --all-targets -p dbc-rs -- -D warnings
   
   # no_std target (clippy only checks, doesn't build, so debug build issues don't apply)
   cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
   
   # dbc-cli
   cargo clippy --all-targets -p dbc-cli -- -D warnings
+  
+  # Optional: Check kernel feature separately (if kernel support is being tested)
+  # Note: --all-features fails because alloc and kernel are mutually exclusive
+  # WARNING: Kernel feature is experimental and may have clippy warnings
+  # cargo clippy --no-default-features --features kernel --all-targets -p dbc-rs -- -D warnings
   ```
 
 - [ ] **Code formatting is consistent**
@@ -36,7 +41,7 @@ This checklist ensures all steps are completed before publishing a new release o
 
 - [ ] **Code coverage meets threshold (80%)**
   ```bash
-  cargo llvm-cov --all-features --workspace --fail-under-lines 80
+  cargo llvm-cov --workspace --tests --lib --ignore-filename-regex "^(tests|examples|benches)/" --fail-under-lines 80
   ```
 
 ### 2. Build Verification
@@ -242,11 +247,11 @@ For pre-releases:
 # 2. Update CHANGELOG.md
 # 3. Run all checks locally (matches CI workflows)
 cargo test --workspace
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --all-targets -p dbc-rs -- -D warnings
 cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
 cargo clippy --all-targets -p dbc-cli -- -D warnings
 cargo fmt -- --check
-cargo llvm-cov --all-features --workspace --fail-under-lines 80
+cargo llvm-cov --workspace --fail-under-lines 80
 cargo package --dry-run -p dbc-rs
 
 # 4. Push changes and wait for CI workflows to pass

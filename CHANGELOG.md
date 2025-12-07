@@ -10,6 +10,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Future changes will be listed here)
 
+## [0.1.0-beta.2] - 2025-12-07
+
+### Changed
+
+- **Compatibility Layer Refactoring**: Improved `compat` module structure
+  - Split into separate `alloc.rs` and `kernel.rs` modules
+  - Reduced conditional compilation complexity
+  - Better separation of concerns between alloc and kernel implementations
+
+- **Code Quality Improvements**: Enhanced code maintainability
+  - Combined use statements where possible
+  - Removed unused imports across all modules
+  - Fixed all clippy warnings with `-D warnings`
+  - Optimized import organization
+
+- **Test Organization**: Reorganized tests by feature
+  - Tests split by feature flags (no_std, alloc, std, kernel)
+  - Better test isolation and maintainability
+  - All tests pass with `--no-default-features`, `--features alloc`, and `--features kernel`
+
+- **Documentation Improvements**: Enhanced doctest compatibility
+  - Fixed all doctests to work in no_std environments
+  - Removed `println!` calls from doctests
+  - Added `rust,no_run` markers for doctests requiring alloc features
+  - Improved error reporting examples
+
+### Fixed
+
+- **Parser Line Number Tracking**: Added line number tracking to parser
+  - `Parser` now tracks current line number for better error reporting
+  - Public `line()` getter method available for future error reporting enhancements
+
+- **Builder Usage in Tests**: Cleaned up test organization
+  - Removed builder usage from object test modules
+  - Builders only used in their respective builder test modules
+  - Improved test clarity and maintainability
+
+- **Error Handling**: Improved error message helpers
+  - Centralized error string conversion in `error` module
+  - Reduced code duplication in error handling
+
+- **Release Checklist**: Verified and corrected all commands
+  - Fixed clippy commands to match CI workflow
+  - Updated code coverage command to match CI
+  - Verified all build and test commands
+
+### Documentation
+
+- **Release Checklist**: Updated `RELEASE_CHECKLIST.md`
+  - Verified all commands work correctly
+  - Fixed clippy check commands
+  - Updated code coverage command
+  - Added notes about experimental kernel feature
+
 ## [0.1.0-beta.1] - 2024-12-06
 
 **Note**: This is the first beta release. The API is now stable and ready for wider testing.
@@ -200,6 +254,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.1.0-beta.2** (2025-12-07): Code quality improvements, test reorganization, doctest fixes
 - **0.1.0-beta.1** (2024-12-06): First beta release - API stable, ready for wider testing
 - **0.1.0-alpha** (2024-11-25): Initial alpha release
 
@@ -214,6 +269,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed** for any bug fixes
 - **Security** for vulnerability fixes
 
+[0.1.0-beta.2]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-beta.2
 [0.1.0-beta.1]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-beta.1
 [0.1.0-alpha]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-alpha
 
