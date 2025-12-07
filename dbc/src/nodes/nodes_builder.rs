@@ -1,5 +1,7 @@
+#[cfg(feature = "alloc")]
+use crate::compat::ToString;
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::alloc_compat::{Box, String, Vec};
+use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{error::Error, error::Result, nodes::Nodes};
 
 /// Builder for creating `Nodes` programmatically.
@@ -74,14 +76,7 @@ impl NodesBuilder {
     /// ```
     #[must_use]
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.nodes.push(String::from(node.as_ref()));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.nodes.push(node.as_ref().to_string());
-        }
+        self.nodes.push(str_to_string(node));
         self
     }
 
@@ -116,14 +111,7 @@ impl NodesBuilder {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.nodes.extend(nodes.into_iter().map(|s| String::from(s.as_ref())));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.nodes.extend(nodes.into_iter().map(|s| s.as_ref().to_string()));
-        }
+        self.nodes.extend(nodes.into_iter().map(str_to_string));
         self
     }
 
@@ -152,10 +140,16 @@ impl NodesBuilder {
     }
 
     fn extract_and_validate_nodes(self) -> Result<Vec<String>> {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        let node_strs: Vec<String> = self.nodes.into_iter().collect();
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        let node_strs: Vec<String> = self.nodes.into_iter().map(|s| s.to_string()).collect();
+        let node_strs: Vec<String> = {
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                self.nodes.into_iter().collect()
+            }
+            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+            {
+                self.nodes.into_iter().map(|s| s.to_string()).collect()
+            }
+        };
         let node_refs: Vec<&str> = node_strs.iter().map(|s| s.as_str()).collect();
         super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
             crate::error::ParseError::Version(msg) => {
@@ -273,6 +267,8 @@ mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
     use crate::{error::Error, error::lang};
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    use alloc::format;
 
     #[test]
     fn test_nodes_builder_duplicate() {

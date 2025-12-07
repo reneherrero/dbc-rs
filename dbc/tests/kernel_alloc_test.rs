@@ -19,7 +19,7 @@ use dbc_rs::kernel::alloc::{string::String, vec::Vec};
 #[test]
 fn test_kernel_alloc_basic() {
     // Test basic String allocation
-    let s = String::try_from("Hello").unwrap();
+    let s = String::from_str("Hello");
     assert_eq!(s.as_str(), "Hello");
 }
 
@@ -27,17 +27,17 @@ fn test_kernel_alloc_basic() {
 fn test_kernel_alloc_vec() {
     // Test Vec allocation
     let mut v = Vec::new();
-    v.try_push(1).unwrap();
-    v.try_push(2).unwrap();
-    v.try_push(3).unwrap();
+    v.push(1);
+    v.push(2);
+    v.push(3);
     assert_eq!(v.len(), 3);
 }
 
 #[test]
 fn test_kernel_alloc_string_operations() {
     // Test String operations that might be used in dbc-rs
-    let mut s = String::try_from("test").unwrap();
-    s.try_push_str("ing").unwrap();
+    let mut s = String::from_str("test");
+    s.push_str("ing");
     assert_eq!(s.as_str(), "testing");
 }
 
@@ -46,13 +46,13 @@ fn test_kernel_alloc_collections() {
     // Test Vec operations that might be used
     let mut vec = Vec::new();
     for i in 0..10 {
-        vec.try_push(i).unwrap();
+        vec.push(i);
     }
     assert_eq!(vec.len(), 10);
 
     // Test extend
     let mut vec2 = Vec::new();
-    vec2.try_extend_from_slice(&[1, 2, 3]).unwrap();
+    vec2.extend_from_slice(&[1, 2, 3]);
     assert_eq!(vec2.len(), 3);
 }
 
@@ -78,16 +78,16 @@ BO_ 256 Engine : 8 ECM
 // Test what happens when we try to use alloc-dependent features
 #[test]
 fn test_kernel_alloc_error_handling() {
-    // In kernel mode, alloc operations return Result
-    // This test shows the pattern we'd need to follow
+    // In kernel mode, basic alloc operations are infallible
+    // (try_reserve methods exist for fallible allocation)
     use dbc_rs::kernel::alloc::string::String;
 
-    let result = String::try_from("test");
-    assert!(result.is_ok());
+    let s = String::from_str("test");
+    assert_eq!(s.as_str(), "test");
 
-    let mut s = result.unwrap();
-    let push_result = s.try_push_str("ing");
-    assert!(push_result.is_ok());
+    let mut s2 = String::from_str("test");
+    s2.push_str("ing");
+    assert_eq!(s2.as_str(), "testing");
 }
 
 // Test builders with kernel feature

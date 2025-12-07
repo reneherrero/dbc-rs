@@ -226,8 +226,11 @@ impl<'a> Nodes<'a> {
     /// "#)?;
     ///
     /// // Iterate over nodes
-    /// let nodes: Vec<&str> = dbc.nodes().iter().collect();
-    /// assert_eq!(nodes, vec!["ECM", "TCM", "BCM"]);
+    /// let mut iter = dbc.nodes().iter();
+    /// assert_eq!(iter.next(), Some("ECM"));
+    /// assert_eq!(iter.next(), Some("TCM"));
+    /// assert_eq!(iter.next(), Some("BCM"));
+    /// assert_eq!(iter.next(), None);
     ///
     /// // Or use in a loop
     /// for node in dbc.nodes().iter() {
@@ -395,7 +398,8 @@ impl<'a> Nodes<'a> {
     /// This method requires the `alloc` feature to be enabled.
     #[cfg(feature = "alloc")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> String {
+    pub fn to_dbc_string(&self) -> alloc::string::String {
+        use alloc::string::String;
         let mut result = String::from(crate::BU_);
         result.push(':');
         let nodes_str = alloc::format!("{}", self);
@@ -437,8 +441,12 @@ mod tests {
         let line = b"BU_: ECM TCM BCM ABS";
         let mut parser = Parser::new(line).unwrap();
         let nodes = Nodes::parse(&mut parser).unwrap();
-        let node_vec: alloc::vec::Vec<&str> = nodes.iter().collect();
-        assert_eq!(node_vec, &["ECM", "TCM", "BCM", "ABS"]);
+        let mut iter = nodes.iter();
+        assert_eq!(iter.next(), Some("ECM"));
+        assert_eq!(iter.next(), Some("TCM"));
+        assert_eq!(iter.next(), Some("BCM"));
+        assert_eq!(iter.next(), Some("ABS"));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -446,8 +454,9 @@ mod tests {
         let line = b"BU_: ONLYONE";
         let mut parser = Parser::new(line).unwrap();
         let nodes = Nodes::parse(&mut parser).unwrap();
-        let node_vec: alloc::vec::Vec<&str> = nodes.iter().collect();
-        assert_eq!(node_vec, &["ONLYONE"]);
+        let mut iter = nodes.iter();
+        assert_eq!(iter.next(), Some("ONLYONE"));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -455,8 +464,10 @@ mod tests {
         let line = b"BU_:   Node1   Node2   ";
         let mut parser = Parser::new(line).unwrap();
         let nodes = Nodes::parse(&mut parser).unwrap();
-        let node_vec: alloc::vec::Vec<&str> = nodes.iter().collect();
-        assert_eq!(node_vec, &["Node1", "Node2"]);
+        let mut iter = nodes.iter();
+        assert_eq!(iter.next(), Some("Node1"));
+        assert_eq!(iter.next(), Some("Node2"));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -467,97 +478,8 @@ mod tests {
         assert!(nodes.is_empty());
     }
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_new() {
-        use crate::nodes::NodesBuilder;
-        let nodes = NodesBuilder::new()
-            .add_node("ECM")
-            .add_node("TCM")
-            .add_node("BCM")
-            .build()
-            .unwrap();
-        assert!(nodes.contains("ECM"));
-        assert!(nodes.contains("TCM"));
-        assert!(nodes.contains("BCM"));
-        assert!(!nodes.contains("ABS"));
-        assert_eq!(nodes.iter().count(), 3);
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_new_from_vec() {
-        use crate::nodes::NodesBuilder;
-        let nodes = NodesBuilder::new()
-            .add_node("Node1")
-            .add_node("Node2")
-            .add_node("Node3")
-            .build()
-            .unwrap();
-        assert!(nodes.contains("Node1"));
-        assert_eq!(nodes.iter().count(), 3);
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_new_from_slice() {
-        use crate::nodes::NodesBuilder;
-        let nodes = NodesBuilder::new().add_node("A").add_node("B").add_node("C").build().unwrap();
-        assert!(nodes.contains("A"));
-        assert_eq!(nodes.iter().count(), 3);
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_new_duplicate() {
-        use crate::nodes::NodesBuilder;
-        let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
-        assert!(result.is_err());
-        use crate::Error;
-        match result.unwrap_err() {
-            Error::Nodes(msg) => {
-                assert!(msg.contains(lang::NODES_DUPLICATE_NAME))
-            }
-            _ => panic!("Expected Error::Nodes with NODES_DUPLICATE_NAME"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_to_string_single() {
-        use crate::nodes::NodesBuilder;
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        assert_eq!(alloc::format!("{}", nodes), "ECM");
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_to_string_multiple() {
-        use crate::nodes::NodesBuilder;
-        let nodes = NodesBuilder::new()
-            .add_node("ECM")
-            .add_node("TCM")
-            .add_node("BCM")
-            .build()
-            .unwrap();
-        assert_eq!(alloc::format!("{}", nodes), "ECM TCM BCM");
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_to_dbc_string() {
-        use crate::nodes::NodesBuilder;
-        let nodes_single = NodesBuilder::new().add_node("ECM").build().unwrap();
-        assert_eq!(nodes_single.to_dbc_string(), "BU_: ECM");
-
-        let nodes_multiple = NodesBuilder::new()
-            .add_node("ECM")
-            .add_node("TCM")
-            .add_node("BCM")
-            .build()
-            .unwrap();
-        assert_eq!(nodes_multiple.to_dbc_string(), "BU_: ECM TCM BCM");
-    }
+    // Note: Builder tests have been moved to nodes_builder.rs
+    // This module only tests Nodes parsing and direct API usage
 
     #[test]
     fn test_nodes_parse_duplicate() {
@@ -571,37 +493,5 @@ mod tests {
         }
     }
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_too_many() {
-        use crate::nodes::NodesBuilder;
-        // Create a builder with 257 nodes (exceeds limit of 256)
-        let mut builder = NodesBuilder::new();
-        for i in 0..257 {
-            builder = builder.add_node(format!("Node{i}"));
-        }
-        let result = builder.build();
-        assert!(result.is_err());
-        use crate::Error;
-        match result.unwrap_err() {
-            Error::Nodes(msg) => {
-                assert!(msg.contains(lang::NODES_TOO_MANY));
-            }
-            _ => panic!("Expected Error::Nodes"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_nodes_at_limit() {
-        use crate::nodes::NodesBuilder;
-        // Create a builder with exactly 256 nodes (at the limit)
-        let mut builder = NodesBuilder::new();
-        for i in 0..256 {
-            builder = builder.add_node(format!("Node{i}"));
-        }
-        let result = builder.build();
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 256);
-    }
+    // Note: Builder limit tests have been moved to nodes_builder.rs
 }

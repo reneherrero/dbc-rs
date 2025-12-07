@@ -1,8 +1,6 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::alloc_compat::{Box, String};
+use crate::compat::{Box, String, display_to_string, format_two, str_to_string};
 use crate::{Error, Result, Version, error::messages};
-#[cfg(all(feature = "alloc", not(feature = "kernel")))]
-use alloc::format;
 
 /// Builder for creating `Version` programmatically.
 ///
@@ -88,7 +86,7 @@ impl VersionBuilder {
         }
         #[cfg(all(feature = "alloc", not(feature = "kernel")))]
         {
-            self.version = Some(version.to_string());
+            self.version = Some(str_to_string(version));
         }
         self
     }
@@ -123,15 +121,7 @@ impl VersionBuilder {
     /// ```
     #[must_use]
     pub fn major(mut self, major: u8) -> Self {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            let formatted = alloc::format!("{}", major);
-            self.version = Some(String::from_str(&formatted));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.version = Some(major.to_string());
-        }
+        self.version = Some(display_to_string(major));
         self
     }
 
@@ -166,26 +156,10 @@ impl VersionBuilder {
     #[must_use]
     pub fn minor(mut self, minor: u8) -> Self {
         if let Some(ref mut v) = self.version {
-            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-            {
-                let formatted = alloc::format!("{}.{}", v, minor);
-                *v = String::from_str(&formatted);
-            }
-            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-            {
-                *v = format!("{}.{}", v, minor);
-            }
+            *v = format_two(v.as_str(), ".", minor);
         } else {
             // If major wasn't called, treat this as just the version string
-            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-            {
-                let formatted = alloc::format!("{}", minor);
-                self.version = Some(String::from_str(&formatted));
-            }
-            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-            {
-                self.version = Some(minor.to_string());
-            }
+            self.version = Some(display_to_string(minor));
         }
         self
     }
@@ -223,26 +197,10 @@ impl VersionBuilder {
     #[must_use]
     pub fn patch(mut self, patch: u8) -> Self {
         if let Some(ref mut v) = self.version {
-            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-            {
-                let formatted = alloc::format!("{}.{}", v, patch);
-                *v = String::from_str(&formatted);
-            }
-            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-            {
-                *v = format!("{}.{}", v, patch);
-            }
+            *v = format_two(v.as_str(), ".", patch);
         } else {
             // If major/minor weren't called, treat this as just the version string
-            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-            {
-                let formatted = alloc::format!("{}", patch);
-                self.version = Some(String::from_str(&formatted));
-            }
-            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-            {
-                self.version = Some(patch.to_string());
-            }
+            self.version = Some(display_to_string(patch));
         }
         self
     }
@@ -307,7 +265,7 @@ impl VersionBuilder {
 #[cfg(all(test, feature = "alloc"))]
 mod tests {
     use super::VersionBuilder;
-    use crate::error::lang;
+    use crate::{compat::ToString, error::lang};
 
     #[test]
     fn test_version_builder_version_string() {

@@ -32,9 +32,9 @@ impl<'a> Signal<'a> {
         if length == 0 {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::messages;
+                use crate::error::{messages, version_error_from_string};
                 let msg = messages::signal_length_too_small(name, length);
-                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                return Err(version_error_from_string(msg));
             }
             #[cfg(not(feature = "alloc"))]
             {
@@ -46,9 +46,9 @@ impl<'a> Signal<'a> {
         if length > 512 {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::messages;
+                use crate::error::{messages, version_error_from_string};
                 let msg = messages::signal_length_too_large(name, length);
-                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                return Err(version_error_from_string(msg));
             }
             #[cfg(not(feature = "alloc"))]
             {
@@ -116,9 +116,9 @@ impl<'a> Signal<'a> {
             Err(_) => {
                 #[cfg(feature = "alloc")]
                 {
-                    use crate::error::messages;
+                    use crate::error::{messages, version_error_from_string};
                     let msg = messages::signal_start_bit_invalid(signal_name, 0);
-                    return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                    return Err(version_error_from_string(msg));
                 }
                 #[cfg(not(feature = "alloc"))]
                 {
@@ -133,9 +133,9 @@ impl<'a> Signal<'a> {
         if start_bit > 511 {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::messages;
+                use crate::error::{messages, version_error_from_string};
                 let msg = messages::signal_start_bit_invalid(signal_name, start_bit);
-                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                return Err(version_error_from_string(msg));
             }
             #[cfg(not(feature = "alloc"))]
             {
@@ -507,7 +507,11 @@ impl<'a> Signal<'a> {
 
     #[cfg(feature = "alloc")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> String {
+    pub fn to_dbc_string(&self) -> alloc::string::String {
+        use alloc::{
+            format,
+            string::{String, ToString},
+        };
         let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
 
         result.push_str(" SG_ ");
@@ -615,234 +619,12 @@ mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
     use crate::{
-        Error, Parser,
+        Parser,
         error::{ParseError, lang},
     };
-    #[cfg(feature = "alloc")]
-    use crate::{MessageBuilder, ReceiversBuilder, SignalBuilder};
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_valid() {
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(ReceiversBuilder::new().broadcast().build().unwrap())
-            .build()
-            .unwrap();
-        assert_eq!(signal.name(), "RPM");
-        assert_eq!(signal.start_bit(), 0);
-        assert_eq!(signal.length(), 16);
-        assert_eq!(signal.byte_order(), ByteOrder::BigEndian);
-        assert!(signal.is_unsigned());
-        assert_eq!(signal.factor(), 0.25);
-        assert_eq!(signal.offset(), 0.0);
-        assert_eq!(signal.min(), 0.0);
-        assert_eq!(signal.max(), 8000.0);
-        assert_eq!(signal.unit(), Some("rpm"));
-        assert_eq!(signal.receivers(), &Receivers::Broadcast);
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_empty_name() {
-        let result = SignalBuilder::new()
-            .name("")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_NAME_EMPTY)),
-            _ => panic!("Expected Error::Signal"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_zero_length() {
-        let result = SignalBuilder::new()
-            .name("Test")
-            .start_bit(0)
-            .length(0)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Signal(msg) => {
-                // Check for either the old constant or the new formatted message
-                assert!(
-                    msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)
-                        || msg.contains("Signal 'Test'")
-                        || msg.contains("0 bits")
-                );
-            }
-            _ => panic!("Expected Error::Signal"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_length_too_large() {
-        // length > 512 should fail validation (CAN FD maximum is 512 bits)
-        let result = SignalBuilder::new()
-            .name("Test")
-            .start_bit(0)
-            .length(513)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Signal(msg) => {
-                // Check for either the old constant or the new formatted message
-                assert!(
-                    msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)
-                        || msg.contains("Signal 'Test'")
-                        || msg.contains("513")
-                );
-            }
-            _ => panic!("Expected Error::Signal"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_overflow() {
-        // Signal with start_bit + length > 64 should be created successfully
-        // (validation against message DLC happens in Message::validate)
-        // This signal would fit in a CAN FD message (64 bytes = 512 bits)
-        let signal = SignalBuilder::new()
-            .name("Test")
-            .start_bit(60)
-            .length(10) // 60 + 10 = 70, fits in CAN FD (512 bits)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
-
-        // But it should fail when added to a message with DLC < 9 bytes
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("TestMessage")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text =
-                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_invalid_range() {
-        let result = SignalBuilder::new()
-            .name("Test")
-            .start_bit(0)
-            .length(8)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(100.0)
-            .max(50.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Signal(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_INVALID_RANGE.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
-            }
-            _ => panic!("Expected Error::Signal"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_max_boundary() {
-        // Test that 64 bits at position 0 is valid
-        let signal = SignalBuilder::new()
-            .name("FullMessage")
-            .start_bit(0)
-            .length(64)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
-        assert_eq!(signal.length(), 64);
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_new_with_receivers() {
-        let signal = SignalBuilder::new()
-            .name("TestSignal")
-            .start_bit(8)
-            .length(16)
-            .byte_order(ByteOrder::LittleEndian)
-            .unsigned(false)
-            .factor(0.1)
-            .offset(-40.0)
-            .min(-40.0)
-            .max(215.0)
-            .unit("°C")
-            .receivers(ReceiversBuilder::new().add_node("ECM").add_node("TCM").build().unwrap())
-            .build()
-            .unwrap();
-        assert_eq!(signal.name(), "TestSignal");
-        assert!(!signal.is_unsigned());
-        assert_eq!(signal.unit(), Some("°C"));
-        match signal.receivers() {
-            Receivers::Nodes(_, count) => assert_eq!(*count, 2),
-            _ => panic!("Expected Nodes variant"),
-        }
-    }
+    // Note: Builder tests have been moved to signal_builder.rs
+    // This module only tests Signal parsing and direct API usage
 
     #[test]
     fn test_parse_valid_signal() {
@@ -860,9 +642,9 @@ mod tests {
         assert_eq!(sig.max(), 8000.);
         assert_eq!(sig.unit(), Some("rpm"));
         // Check receivers using iter_nodes
-        let nodes: Vec<&str> = sig.receivers().iter().collect();
-        assert_eq!(nodes.len(), 1);
-        assert_eq!(nodes[0], "TCM");
+        let mut receivers_iter = sig.receivers().iter();
+        assert_eq!(receivers_iter.next(), Some("TCM"));
+        assert_eq!(receivers_iter.next(), None);
     }
 
     #[test]
@@ -899,10 +681,10 @@ mod tests {
         assert_eq!(sig.max(), 215.);
         assert_eq!(sig.unit(), Some("°C"));
         // Check receivers using iter_nodes
-        let nodes: Vec<&str> = sig.receivers().iter().collect();
-        assert_eq!(nodes.len(), 2);
-        assert_eq!(nodes[0], "TCM");
-        assert_eq!(nodes[1], "BCM");
+        let mut receivers_iter = sig.receivers().iter();
+        assert_eq!(receivers_iter.next(), Some("TCM"));
+        assert_eq!(receivers_iter.next(), Some("BCM"));
+        assert_eq!(receivers_iter.next(), None);
     }
 
     #[test]
@@ -976,7 +758,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
     fn test_parse_signal_overflow() {
         // Signal with start_bit + length > 64 should parse successfully
         // (validation against message DLC happens in Message::validate)
@@ -986,25 +767,7 @@ mod tests {
         let signal = Signal::parse(&mut parser).unwrap();
         assert_eq!(signal.start_bit(), 60);
         assert_eq!(signal.length(), 10);
-
-        // But it should fail when added to a message with DLC < 9 bytes
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("TestMessage")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text =
-                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
+        // Note: Message validation tests are in message.rs and message_builder.rs
     }
 
     #[test]
@@ -1056,67 +819,59 @@ mod tests {
         }
     }
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signal_to_dbc_string() {
-        // Test with Broadcast receiver
-        let signal1 = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(ReceiversBuilder::new().broadcast().build().unwrap())
-            .build()
-            .unwrap();
-        assert_eq!(
-            signal1.to_dbc_string(),
-            " SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *"
-        );
+    // Tests that require alloc or kernel (for to_dbc_string)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    mod tests_with_alloc {
+        use super::*;
 
-        // Test with Nodes receiver
-        let signal2 = SignalBuilder::new()
-            .name("Temperature")
-            .start_bit(16)
-            .length(8)
-            .byte_order(ByteOrder::LittleEndian)
-            .unsigned(false)
-            .factor(1.0)
-            .offset(-40.0)
-            .min(-40.0)
-            .max(215.0)
-            .unit("°C")
-            .receivers(ReceiversBuilder::new().add_node("TCM").add_node("BCM").build().unwrap())
-            .build()
-            .unwrap();
-        assert_eq!(
-            signal2.to_dbc_string(),
-            " SG_ Temperature : 16|8@1- (1,-40) [-40|215] \"°C\" TCM BCM"
-        );
+        #[test]
+        #[cfg(feature = "alloc")] // to_dbc_string is only available with alloc
+        fn test_signal_to_dbc_string_round_trip() {
+            use alloc::vec;
+            // Test round-trip: parse -> to_dbc_string -> parse
+            let test_cases = vec![
+                (
+                    r#"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *"#,
+                    " SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *",
+                ),
+                (
+                    r#"SG_ Temperature : 16|8@1- (1,-40) [-40|215] "°C" TCM BCM"#,
+                    " SG_ Temperature : 16|8@1- (1,-40) [-40|215] \"°C\" TCM BCM",
+                ),
+                (
+                    r#"SG_ Flag : 24|1@0+ (1,0) [0|1] "" *"#,
+                    " SG_ Flag : 24|1@0+ (1,0) [0|1] \"\" *",
+                ),
+            ];
 
-        // Test with None receiver and empty unit
-        let signal3 = SignalBuilder::new()
-            .name("Flag")
-            .start_bit(24)
-            .length(1)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(1.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
-        assert_eq!(
-            signal3.to_dbc_string(),
-            " SG_ Flag : 24|1@0+ (1,0) [0|1] \"\""
-        );
+            for (input_line, expected_output) in test_cases {
+                // Parse the signal
+                let mut parser = Parser::new(input_line.as_bytes()).unwrap();
+                let signal = Signal::parse(&mut parser).unwrap();
+
+                // Convert to DBC string
+                let dbc_string = signal.to_dbc_string();
+                assert_eq!(dbc_string, expected_output);
+
+                // Round-trip: parse the output
+                let mut parser2 = Parser::new(dbc_string.as_bytes()).unwrap();
+                // Skip the leading " SG_ " prefix
+                parser2.expect(b" SG_ ").unwrap();
+                let signal2 = Signal::parse(&mut parser2).unwrap();
+
+                // Verify round-trip
+                assert_eq!(signal.name(), signal2.name());
+                assert_eq!(signal.start_bit(), signal2.start_bit());
+                assert_eq!(signal.length(), signal2.length());
+                assert_eq!(signal.byte_order(), signal2.byte_order());
+                assert_eq!(signal.is_unsigned(), signal2.is_unsigned());
+                assert_eq!(signal.factor(), signal2.factor());
+                assert_eq!(signal.offset(), signal2.offset());
+                assert_eq!(signal.min(), signal2.min());
+                assert_eq!(signal.max(), signal2.max());
+                assert_eq!(signal.unit(), signal2.unit());
+            }
+        }
     }
 
     // Note: Helper parsing functions (parse_name_and_prefix, parse_position, etc.) are now internal

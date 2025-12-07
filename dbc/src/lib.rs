@@ -55,7 +55,7 @@ pub use kernel_mock as kernel;
 
 // Compatibility layer for alloc vs kernel::alloc
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-mod alloc_compat;
+mod compat;
 
 mod byte_order;
 mod dbc;

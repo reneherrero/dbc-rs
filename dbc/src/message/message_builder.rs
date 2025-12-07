@@ -1,5 +1,5 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::alloc_compat::{Box, String, Vec};
+use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{
     error::messages,
     {Error, Message, ParseOptions, Result, Signal},
@@ -29,14 +29,7 @@ impl MessageBuilder {
 
     #[must_use]
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.name = Some(String::from(name.as_ref()));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.name = Some(name.as_ref().to_string());
-        }
+        self.name = Some(str_to_string(name));
         self
     }
 
@@ -48,14 +41,7 @@ impl MessageBuilder {
 
     #[must_use]
     pub fn sender(mut self, sender: impl AsRef<str>) -> Self {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.sender = Some(String::from(sender.as_ref()));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.sender = Some(sender.as_ref().to_string());
-        }
+        self.sender = Some(str_to_string(sender));
         self
     }
 

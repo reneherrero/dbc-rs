@@ -20,16 +20,9 @@ pub(crate) use lang::{NODES_TOO_MANY, SIGNAL_RECEIVERS_TOO_MANY};
 // Helper function to create String from &str (abstracts alloc vs kernel)
 // ============================================================================
 
-/// Helper function to convert &str to String, abstracting over alloc vs kernel features
-#[cfg(all(feature = "alloc", not(feature = "kernel")))]
-fn str_to_string(s: &str) -> String {
-    s.to_string()
-}
-
-#[cfg(all(feature = "kernel", not(feature = "alloc")))]
-fn str_to_string(s: &str) -> String {
-    String::from_str(s)
-}
+// Use the str_to_string helper from compat
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+use crate::compat::str_to_string;
 
 // ============================================================================
 // Formatting functions - Separate implementations for alloc vs kernel

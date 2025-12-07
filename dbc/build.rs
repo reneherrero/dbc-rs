@@ -11,7 +11,7 @@ fn main() {
     let max_messages = env::var("DBC_MAX_MESSAGES")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(10_000); // Default to 10000
+        .unwrap_or(10_000); // Default to 1000
 
     // Write the constants to a file in OUT_DIR
     let out_dir = env::var("OUT_DIR").unwrap();

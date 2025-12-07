@@ -12,6 +12,7 @@ mod err {
 pub struct Parser<'a> {
     input: &'a [u8],
     pos: usize,
+    line: usize,
 }
 
 impl<'a> Parser<'a> {
@@ -19,13 +20,24 @@ impl<'a> Parser<'a> {
         if input.is_empty() {
             return Err(ParseError::UnexpectedEof);
         }
-        Ok(Self { input, pos: 0 })
+        Ok(Self {
+            input,
+            pos: 0,
+            line: 1,
+        })
     }
 
     #[inline]
     #[must_use]
     pub fn pos(&self) -> usize {
         self.pos
+    }
+
+    #[inline]
+    #[must_use]
+    #[allow(dead_code)] // Public API for error reporting - will be used in future error messages
+    pub fn line(&self) -> usize {
+        self.line
     }
 
     #[inline]
@@ -52,7 +64,19 @@ impl<'a> Parser<'a> {
     pub fn skip_newlines_and_spaces(&mut self) {
         while self.pos < self.input.len() {
             match self.input[self.pos] {
-                b'\n' | b'\r' | b' ' | b'\t' => {
+                b'\n' => {
+                    self.pos += 1;
+                    self.line += 1;
+                }
+                b'\r' => {
+                    self.pos += 1;
+                    // Handle \r\n as a single newline
+                    if self.pos < self.input.len() && self.input[self.pos] == b'\n' {
+                        self.pos += 1;
+                    }
+                    self.line += 1;
+                }
+                b' ' | b'\t' => {
                     self.pos += 1;
                 }
                 _ => break,
@@ -106,7 +130,34 @@ impl<'a> Parser<'a> {
         }
 
         if self.starts_with(expected) {
-            self.pos += expected.len();
+            // Count newlines in the bytes we're about to skip
+            let end_pos = self.pos + expected.len();
+            let scan_end = end_pos.min(self.input.len());
+            let mut i = self.pos;
+            while i < scan_end {
+                match self.input[i] {
+                    b'\n' => {
+                        self.line += 1;
+                        i += 1;
+                    }
+                    b'\r' => {
+                        // Check if followed by \n within the range
+                        if i + 1 < scan_end && self.input[i + 1] == b'\n' {
+                            // \r\n sequence - count as one newline when we see the \n
+                            i += 2;
+                            self.line += 1;
+                        } else {
+                            // Standalone \r
+                            self.line += 1;
+                            i += 1;
+                        }
+                    }
+                    _ => {
+                        i += 1;
+                    }
+                }
+            }
+            self.pos = end_pos;
             Ok(self)
         } else {
             Err(ParseError::Expected(err::EXPECTED_PATTERN))
@@ -210,6 +261,7 @@ impl<'a> Parser<'a> {
             let byte = self.input[self.pos];
             if byte == b'\n' {
                 self.pos += 1;
+                self.line += 1;
                 break;
             } else if byte == b'\r' {
                 self.pos += 1;
@@ -217,6 +269,7 @@ impl<'a> Parser<'a> {
                 if self.pos < self.input.len() && self.input[self.pos] == b'\n' {
                     self.pos += 1;
                 }
+                self.line += 1;
                 break;
             }
             self.pos += 1;
@@ -357,6 +410,8 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
+    // All parser tests work in all configurations (no_std, alloc, std, kernel)
+    // Parser only uses core functionality and doesn't require alloc
     use super::*;
 
     mod new {
@@ -395,6 +450,95 @@ mod tests {
             let input = b" ";
             let result = Parser::new(input);
             assert!(result.is_ok());
+        }
+
+        #[test]
+        fn initializes_line_to_one() {
+            let input = b"test";
+            let parser = Parser::new(input).unwrap();
+            assert_eq!(parser.line(), 1);
+        }
+    }
+
+    mod line_number {
+        use super::*;
+
+        #[test]
+        fn increments_on_newline() {
+            let input = b"line1\nline2";
+            let mut parser = Parser::new(input).unwrap();
+            assert_eq!(parser.line(), 1);
+
+            // Advance past "line1" to reach the newline
+            parser.expect(b"line1").unwrap();
+            assert_eq!(parser.line(), 1);
+
+            // Now skip the newline
+            parser.skip_newlines_and_spaces();
+            assert_eq!(parser.line(), 2);
+        }
+
+        #[test]
+        fn increments_on_carriage_return() {
+            let input = b"line1\rline2";
+            let mut parser = Parser::new(input).unwrap();
+            assert_eq!(parser.line(), 1);
+
+            // Advance past "line1" to reach the carriage return
+            parser.expect(b"line1").unwrap();
+            assert_eq!(parser.line(), 1);
+
+            parser.skip_newlines_and_spaces();
+            assert_eq!(parser.line(), 2);
+        }
+
+        #[test]
+        fn treats_crlf_as_single_newline() {
+            let input = b"line1\r\nline2";
+            let mut parser = Parser::new(input).unwrap();
+            assert_eq!(parser.line(), 1);
+
+            // Advance past "line1" to reach the \r\n
+            parser.expect(b"line1").unwrap();
+            assert_eq!(parser.line(), 1);
+
+            parser.skip_newlines_and_spaces();
+            assert_eq!(parser.line(), 2);
+        }
+
+        #[test]
+        fn counts_multiple_newlines() {
+            let input = b"line1\n\n\nline4";
+            let mut parser = Parser::new(input).unwrap();
+            assert_eq!(parser.line(), 1);
+
+            // Advance past "line1" to reach the newlines
+            parser.expect(b"line1").unwrap();
+            assert_eq!(parser.line(), 1);
+
+            parser.skip_newlines_and_spaces();
+            assert_eq!(parser.line(), 4);
+        }
+
+        #[test]
+        fn skip_to_end_of_line_increments_line() {
+            let input = b"line1\nline2";
+            let mut parser = Parser::new(input).unwrap();
+            assert_eq!(parser.line(), 1);
+
+            parser.skip_to_end_of_line();
+            assert_eq!(parser.line(), 2);
+        }
+
+        #[test]
+        fn expect_increments_line_when_skipping_newlines() {
+            let input = b"test\nrest";
+            let mut parser = Parser::new(input).unwrap();
+            assert_eq!(parser.line(), 1);
+
+            // expect will skip "test\n" which contains a newline
+            parser.expect(b"test\n").unwrap();
+            assert_eq!(parser.line(), 2);
         }
     }
 

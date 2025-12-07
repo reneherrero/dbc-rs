@@ -42,9 +42,9 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 /// - `alloc`: Uses heap-allocated `Box<[Option<Message>]>` for dynamic sizing
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Messages<'a> {
-    #[cfg(not(feature = "alloc"))]
+    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
     messages: [Option<Message<'a>>; MAX_MESSAGES],
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     messages: alloc::boxed::Box<[Option<Message<'a>>]>,
     message_count: usize,
 }
@@ -55,7 +55,7 @@ impl<'a> Messages<'a> {
     pub(crate) fn from_messages_slice(messages: &[Message<'a>]) -> Self {
         let count = messages.len().min(MAX_MESSAGES);
 
-        #[cfg(not(feature = "alloc"))]
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
         {
             let mut messages_array: [Option<Message<'a>>; MAX_MESSAGES] =
                 [const { None }; MAX_MESSAGES];
@@ -68,10 +68,11 @@ impl<'a> Messages<'a> {
             }
         }
 
-        #[cfg(feature = "alloc")]
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
+            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut messages_vec = Vec::with_capacity(count);
+            let mut messages_vec: Vec<Option<Message<'a>>> = vec_with_capacity(count);
             for message in messages.iter().take(count) {
                 messages_vec.push(Some(message.clone()));
             }
@@ -89,7 +90,7 @@ impl<'a> Messages<'a> {
     ) -> Self {
         let count = message_count.min(MAX_MESSAGES).min(messages.len());
 
-        #[cfg(not(feature = "alloc"))]
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
         {
             let mut messages_array: [Option<Message<'a>>; MAX_MESSAGES] =
                 [const { None }; MAX_MESSAGES];
@@ -102,10 +103,11 @@ impl<'a> Messages<'a> {
             }
         }
 
-        #[cfg(feature = "alloc")]
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
+            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut messages_vec = Vec::with_capacity(count);
+            let mut messages_vec: Vec<Option<Message<'a>>> = vec_with_capacity(count);
             for message_opt in messages.iter().take(count) {
                 messages_vec.push(message_opt.clone());
             }
@@ -120,13 +122,15 @@ impl<'a> Messages<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
-    /// for message in dbc.messages().iter() {
-    ///     println!("Message: {} (ID: {})", message.name(), message.id());
-    /// }
+    /// let mut iter = dbc.messages().iter();
+    /// let message = iter.next().unwrap();
+    /// assert_eq!(message.name(), "Engine");
+    /// assert_eq!(message.id(), 256);
+    /// assert!(iter.next().is_none());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
@@ -144,7 +148,7 @@ impl<'a> Messages<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
@@ -161,7 +165,7 @@ impl<'a> Messages<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM")?;
@@ -178,12 +182,12 @@ impl<'a> Messages<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
     /// if let Some(message) = dbc.messages().at(0) {
-    ///     println!("First message: {}", message.name());
+    ///     assert_eq!(message.name(), "Engine");
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -200,12 +204,13 @@ impl<'a> Messages<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
     /// if let Some(message) = dbc.messages().find("Engine") {
-    ///     println!("Found message: {} (ID: {})", message.name(), message.id());
+    ///     assert_eq!(message.name(), "Engine");
+    ///     assert_eq!(message.id(), 256);
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -221,7 +226,7 @@ impl<'a> Messages<'a> {
 
     /// Create a temporary buffer for parsing (no alloc in no_std)
     /// Returns a buffer that can hold up to MAX_MESSAGES messages
-    #[cfg(not(feature = "alloc"))]
+    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
     pub(crate) fn new_parse_buffer<'b>() -> [Option<Message<'b>>; MAX_MESSAGES] {
         [const { None }; MAX_MESSAGES]
     }

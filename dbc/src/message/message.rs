@@ -132,9 +132,9 @@ impl<'a> Message<'a> {
         if dlc == 0 {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::messages;
+                use crate::error::{messages, version_error_from_string};
                 let msg = messages::message_dlc_too_small(name, id, dlc);
-                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                return Err(version_error_from_string(msg));
             }
             #[cfg(not(feature = "alloc"))]
             {
@@ -146,9 +146,9 @@ impl<'a> Message<'a> {
         if dlc > 64 {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::messages;
+                use crate::error::{messages, version_error_from_string};
                 let msg = messages::message_dlc_too_large(name, id, dlc);
-                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                return Err(version_error_from_string(msg));
             }
             #[cfg(not(feature = "alloc"))]
             {
@@ -164,9 +164,9 @@ impl<'a> Message<'a> {
         if id > MAX_EXTENDED_ID {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::messages;
+                use crate::error::{messages, version_error_from_string};
                 let msg = messages::message_id_out_of_range(id);
-                return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                return Err(version_error_from_string(msg));
             }
             #[cfg(not(feature = "alloc"))]
             {
@@ -203,7 +203,8 @@ impl<'a> Message<'a> {
                             max_bits,
                             dlc,
                         );
-                        return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                        use crate::error::version_error_from_string;
+                        return Err(version_error_from_string(msg));
                     }
                     #[cfg(not(feature = "alloc"))]
                     {
@@ -244,9 +245,9 @@ impl<'a> Message<'a> {
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
                     #[cfg(feature = "alloc")]
                     {
-                        use crate::error::messages;
+                        use crate::error::{messages, version_error_from_string};
                         let msg = messages::signal_overlap(sig1.name(), sig2.name(), name);
-                        return Err(ParseError::Version(Box::leak(msg.into_boxed_str())));
+                        return Err(version_error_from_string(msg));
                     }
                     #[cfg(not(feature = "alloc"))]
                     {
@@ -449,7 +450,8 @@ impl<'a> Message<'a> {
 
     #[cfg(feature = "alloc")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> String {
+    pub fn to_dbc_string(&self) -> alloc::string::String {
+        use alloc::format;
         format!(
             "BO_ {} {} : {} {}",
             self.id(),
@@ -461,7 +463,8 @@ impl<'a> Message<'a> {
 
     #[cfg(feature = "alloc")]
     #[must_use]
-    pub fn to_dbc_string_with_signals(&self) -> String {
+    pub fn to_dbc_string_with_signals(&self) -> alloc::string::String {
+        use alloc::string::String;
         let mut result = String::with_capacity(200 + (self.signals.len() * 100));
         result.push_str(&self.to_dbc_string());
         result.push('\n');
@@ -486,346 +489,14 @@ impl<'a> core::fmt::Display for Message<'a> {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{
-        ByteOrder, Error, Parser, Receivers,
-        error::{ParseError, lang},
-    };
-    #[cfg(feature = "alloc")]
-    use crate::{MessageBuilder, SignalBuilder};
+    use crate::{Parser, error::ParseError};
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    use alloc::{format, vec};
+    // Note: Builder tests have been moved to message_builder.rs
+    // This module only tests Message parsing and direct API usage
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_valid() {
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(Receivers::Broadcast)
-            .build()
-            .unwrap();
-
-        let message = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
-        assert_eq!(message.id(), 256);
-        assert_eq!(message.name(), "EngineData");
-        assert_eq!(message.dlc(), 8);
-        assert_eq!(message.sender(), "ECM");
-        assert_eq!(message.signals().len(), 1);
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_empty_name() {
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                assert!(msg.contains(lang::MESSAGE_NAME_EMPTY));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_empty_sender() {
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                assert!(msg.contains(lang::MESSAGE_SENDER_EMPTY));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_dlc_too_large() {
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(65) // DLC > 64 is invalid
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for either the old constant or the new formatted message
-                assert!(
-                    msg.contains(lang::MESSAGE_DLC_TOO_LARGE)
-                        || msg.contains("Message 'EngineData'")
-                        || msg.contains("DLC 65")
-                );
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_dlc_zero() {
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(0) // DLC == 0 is invalid
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for either the old constant or the new formatted message
-                assert!(
-                    msg.contains(lang::MESSAGE_DLC_TOO_SMALL)
-                        || msg.contains("Message 'EngineData'")
-                        || msg.contains("DLC 0")
-                );
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_id_out_of_range() {
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        // Extended CAN ID max is 0x1FFFFFFF (536870911)
-        let result = MessageBuilder::new()
-            .id(0x2000_0000) // Exceeds max extended ID
-            .name("EngineData")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text =
-                    lang::FORMAT_MESSAGE_ID_OUT_OF_RANGE.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_signal_overlap() {
-        let signal1 = SignalBuilder::new()
-            .name("Signal1")
-            .start_bit(0)
-            .length(8)
-            .byte_order(ByteOrder::LittleEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(255.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let signal2 = SignalBuilder::new()
-            .name("Signal2")
-            .start_bit(4) // Overlaps with Signal1 (bits 0-7)
-            .length(8)
-            .byte_order(ByteOrder::LittleEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(255.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal1)
-            .add_signal(signal2)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_SIGNAL_OVERLAP.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_signal_extends_beyond_message() {
-        let signal = SignalBuilder::new()
-            .name("Signal1")
-            .start_bit(0)
-            .length(72) // Exceeds 8-byte DLC (64 bits)
-            .byte_order(ByteOrder::LittleEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(255.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8) // 8 bytes = 64 bits max
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text =
-                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_new_too_many_signals() {
-        let mut builder = MessageBuilder::new().id(256).name("EngineData").dlc(8).sender("ECM");
-
-        // Add 65 signals (exceeds limit of 64)
-        for i in 0..65 {
-            // Create unique signal names to avoid conflicts
-            let sig_name = format!("Signal{i}");
-            builder = builder.add_signal(
-                SignalBuilder::new()
-                    .name(&sig_name)
-                    .start_bit(i as u16)
-                    .length(1)
-                    .byte_order(ByteOrder::LittleEndian)
-                    .unsigned(true)
-                    .factor(1.0)
-                    .offset(0.0)
-                    .min(0.0)
-                    .max(1.0)
-                    .receivers(Receivers::None)
-                    .build()
-                    .unwrap(),
-            );
-        }
-
-        let result = builder.build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                assert!(msg.contains(lang::MESSAGE_TOO_MANY_SIGNALS));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
+    // Note: All test_message_new_* tests have been removed - they belong in message_builder.rs
+    // This module only tests Message parsing and direct API usage
 
     #[test]
     fn test_message_parse_valid() {
@@ -1075,7 +746,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_message_can_2_0a_dlc_limits() {
+        use alloc::format;
         // CAN 2.0A: DLC can be 1-8 bytes (8-64 bits)
         // Test valid DLC values
         for dlc in 1..=8 {
@@ -1090,7 +763,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_message_can_2_0b_dlc_limits() {
+        use alloc::format;
         // CAN 2.0B: DLC can be 1-8 bytes (8-64 bits)
         // Test valid DLC values
         for dlc in 1..=8 {
@@ -1105,7 +780,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_message_can_fd_dlc_limits() {
+        use alloc::format;
         // CAN FD: DLC can be 1-64 bytes (8-512 bits)
         // Test valid DLC values up to 64
         for dlc in [1, 8, 12, 16, 20, 24, 32, 48, 64] {
@@ -1202,93 +879,7 @@ mod tests {
         assert_eq!(message.signals().len(), 1);
     }
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_signal_overlap_big_endian() {
-        // Test signal overlap detection with big-endian signals
-        let signal1 = SignalBuilder::new()
-            .name("Signal1")
-            .start_bit(0) // BE bit 0 -> physical bit 7, extends to physical bit 0
-            .length(8)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(255.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let signal2 = SignalBuilder::new()
-            .name("Signal2")
-            .start_bit(4) // BE bit 4 -> overlaps with Signal1
-            .length(8)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(255.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal1)
-            .add_signal(signal2)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_SIGNAL_OVERLAP.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_message_signal_extends_beyond_message_big_endian() {
-        // Test that big-endian signals extending beyond message boundary are detected
-        let signal = SignalBuilder::new()
-            .name("Signal1")
-            .start_bit(56) // BE bit 56 -> near end of 8-byte message
-            .length(16) // Extends beyond 64-bit boundary
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(65535.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let result = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8) // 8 bytes = 64 bits max
-            .sender("ECM")
-            .add_signal(signal)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text =
-                    lang::FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
+    // Note: Big-endian signal overlap and boundary tests have been moved to message_builder.rs
 
     #[test]
     fn test_parse_with_lenient_boundary_check() {
@@ -1472,23 +1063,15 @@ mod tests {
     #[test]
     #[cfg(feature = "alloc")]
     fn test_message_display_trait() {
+        use alloc::format;
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
 
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
+        // Parse signal from DBC string instead of using builder
+        let signal = Signal::parse(
+            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
+        )
+        .unwrap();
 
         const MAX_CAP: usize = crate::Signals::max_capacity();
         let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
@@ -1507,35 +1090,16 @@ mod tests {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
 
-        let signal1 = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
+        // Parse signals from DBC strings instead of using builders
+        let signal1 = Signal::parse(
+            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
+        )
+        .unwrap();
 
-        let signal2 = SignalBuilder::new()
-            .name("Temp")
-            .start_bit(16)
-            .length(8)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(false)
-            .factor(1.0)
-            .offset(-40.0)
-            .min(-40.0)
-            .max(215.0)
-            .unit("°C")
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
+        let signal2 = Signal::parse(
+            &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\" *").unwrap(),
+        )
+        .unwrap();
 
         const MAX_CAP: usize = crate::Signals::max_capacity();
         let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
@@ -1549,6 +1113,8 @@ mod tests {
         assert!(dbc_string.contains("SG_ RPM"));
         assert!(dbc_string.contains("SG_ Temp"));
         // Should have newlines between signals
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        use crate::compat::Vec;
         let lines: Vec<&str> = dbc_string.lines().collect();
         assert!(lines.len() >= 3); // Message line + at least 2 signal lines
     }
@@ -1610,7 +1176,15 @@ mod tests {
         assert!(iter.next().is_none());
 
         // Test that iterator can be used multiple times
-        let names: Vec<&str> = message.signals().iter().map(|s| s.name()).collect();
-        assert_eq!(names, vec!["Signal1", "Signal2", "Signal3"]);
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        {
+            use crate::compat::Vec;
+            use alloc::vec;
+            let names: Vec<&str> = message.signals().iter().map(|s| s.name()).collect();
+            // Convert kernel Vec to alloc Vec for comparison
+            #[cfg(feature = "kernel")]
+            let names: alloc::vec::Vec<&str> = names.into();
+            assert_eq!(names, vec!["Signal1", "Signal2", "Signal3"]);
+        }
     }
 }

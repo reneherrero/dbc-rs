@@ -205,8 +205,9 @@ impl<'a> Version<'a> {
     /// This method requires the `alloc` feature to be enabled.
     #[must_use]
     #[cfg(feature = "alloc")]
-    pub fn to_dbc_string(&self) -> String {
+    pub fn to_dbc_string(&self) -> alloc::string::String {
         use crate::VERSION;
+        use alloc::format;
         if self.version.is_empty() {
             format!("{} \"\"", VERSION)
         } else {
@@ -232,7 +233,8 @@ impl<'a> Version<'a> {
 /// if let Some(version) = dbc.version() {
 ///     // Display trait formats as just the version string
 ///     assert_eq!(format!("{}", version), "1.2.3");
-///     // Use to_dbc_string() for full DBC format
+///     // Use to_dbc_string() for full DBC format (requires alloc feature)
+///     #[cfg(feature = "alloc")]
 ///     assert_eq!(version.to_dbc_string(), "VERSION \"1.2.3\"");
 /// }
 /// # Ok::<(), dbc_rs::Error>(())
@@ -249,17 +251,32 @@ mod tests {
     use crate::Parser;
     use crate::error::ParseError;
 
+    // Helper function to assert version string (works in all configurations)
+    fn assert_version_str(version: &Version, expected: &str) {
+        assert_eq!(version.as_str(), expected);
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        {
+            #[cfg(feature = "alloc")]
+            use alloc::string::ToString;
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                // In kernel mode, Display works but to_string() requires alloc
+                use alloc::format;
+                let formatted = format!("{}", version);
+                assert_eq!(formatted, expected);
+            }
+            #[cfg(feature = "alloc")]
+            assert_eq!(version.to_string(), expected);
+        }
+    }
+
+    // Tests that work in all configurations
     #[test]
     fn test_read_version() {
         let line = b"VERSION \"1.0\"";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap();
-        #[cfg(feature = "alloc")]
-        assert_eq!(version.to_string(), "1.0");
-        #[cfg(not(feature = "alloc"))]
-        assert_eq!(version.as_str(), "1.0");
-        #[cfg(not(feature = "alloc"))]
-        assert_eq!(version.as_str(), "1.0");
+        assert_version_str(&version, "1.0");
     }
 
     #[test]
@@ -267,11 +284,8 @@ mod tests {
         let line = b"VERSION 1.0";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap_err();
-        // When there's no quote after VERSION, we get Expected error
         match version {
-            ParseError::Expected(_) => {
-                // This is expected - we're looking for a quote but found space/1
-            }
+            ParseError::Expected(_) => {}
             _ => panic!("Expected Expected error, got {:?}", version),
         }
     }
@@ -282,9 +296,7 @@ mod tests {
         let result = Parser::new(line);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::UnexpectedEof => {
-                // Empty input results in UnexpectedEof
-            }
+            ParseError::UnexpectedEof => {}
             _ => panic!("Expected UnexpectedEof"),
         }
     }
@@ -296,9 +308,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Expected(_) => {
-                // Expected "VERSION" but got quote
-            }
+            ParseError::Expected(_) => {}
             _ => panic!("Expected Expected error"),
         }
     }
@@ -310,9 +320,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Expected(_) => {
-                // Expected quote but got space/1
-            }
+            ParseError::Expected(_) => {}
             _ => panic!("Expected Expected error"),
         }
     }
@@ -324,10 +332,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_ok());
         let version = result.unwrap();
-        #[cfg(feature = "alloc")]
-        assert_eq!(version.to_string(), "1");
-        #[cfg(not(feature = "alloc"))]
-        assert_eq!(version.as_str(), "1");
+        assert_version_str(&version, "1");
     }
 
     #[test]
@@ -337,10 +342,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_ok());
         let version = result.unwrap();
-        #[cfg(feature = "std")]
-        assert_eq!(version.to_string(), "1.2.3");
-        #[cfg(not(feature = "alloc"))]
-        assert_eq!(version.as_str(), "1.2.3");
+        assert_version_str(&version, "1.2.3");
     }
 
     #[test]
@@ -350,10 +352,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_ok());
         let version = result.unwrap();
-        #[cfg(feature = "std")]
-        assert_eq!(version.to_string(), "1.0");
-        #[cfg(not(feature = "alloc"))]
-        assert_eq!(version.as_str(), "1.0");
+        assert_version_str(&version, "1.0");
     }
 
     #[test]
@@ -361,10 +360,7 @@ mod tests {
         let line = b"VERSION \"\"";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap();
-        #[cfg(feature = "std")]
-        assert_eq!(version.to_string(), "");
-        #[cfg(not(feature = "alloc"))]
-        assert_eq!(version.as_str(), "");
+        assert_version_str(&version, "");
     }
 
     #[test]
@@ -374,9 +370,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::UnexpectedEof => {
-                // Reached EOF without finding closing quote
-            }
+            ParseError::UnexpectedEof => {}
             _ => panic!("Expected UnexpectedEof"),
         }
     }
@@ -388,39 +382,9 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Expected(_) => {
-                // Expected quote but got space/1
-            }
+            ParseError::Expected(_) => {}
             _ => panic!("Expected Expected error"),
         }
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_version_to_dbc_string() {
-        let line1 = b"VERSION \"1\"";
-        let mut parser1 = Parser::new(line1).unwrap();
-        let v1 = Version::parse(&mut parser1).unwrap();
-        assert_eq!(v1.to_dbc_string(), "VERSION \"1\"");
-
-        let line2 = b"VERSION \"1.0\"";
-        let mut parser2 = Parser::new(line2).unwrap();
-        let v2 = Version::parse(&mut parser2).unwrap();
-        assert_eq!(v2.to_dbc_string(), "VERSION \"1.0\"");
-
-        let line3 = b"VERSION \"2.3.4\"";
-        let mut parser3 = Parser::new(line3).unwrap();
-        let v3 = Version::parse(&mut parser3).unwrap();
-        assert_eq!(v3.to_dbc_string(), "VERSION \"2.3.4\"");
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_version_empty_round_trip() {
-        let line = b"VERSION \"\"";
-        let mut parser = Parser::new(line).unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        assert_eq!(version.to_dbc_string(), "VERSION \"\"");
     }
 
     #[test]
@@ -428,9 +392,38 @@ mod tests {
         let line = b"VERSION \"1.0-beta\"";
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap();
-        #[cfg(feature = "std")]
-        assert_eq!(version.to_string(), "1.0-beta");
-        #[cfg(not(feature = "alloc"))]
-        assert_eq!(version.as_str(), "1.0-beta");
+        assert_version_str(&version, "1.0-beta");
+    }
+
+    // Tests that require alloc (to_dbc_string is only available with alloc)
+    #[cfg(feature = "alloc")]
+    mod tests_with_alloc {
+        use super::*;
+
+        #[test]
+        fn test_version_to_dbc_string() {
+            let line1 = b"VERSION \"1\"";
+            let mut parser1 = Parser::new(line1).unwrap();
+            let v1 = Version::parse(&mut parser1).unwrap();
+            assert_eq!(v1.to_dbc_string(), "VERSION \"1\"");
+
+            let line2 = b"VERSION \"1.0\"";
+            let mut parser2 = Parser::new(line2).unwrap();
+            let v2 = Version::parse(&mut parser2).unwrap();
+            assert_eq!(v2.to_dbc_string(), "VERSION \"1.0\"");
+
+            let line3 = b"VERSION \"2.3.4\"";
+            let mut parser3 = Parser::new(line3).unwrap();
+            let v3 = Version::parse(&mut parser3).unwrap();
+            assert_eq!(v3.to_dbc_string(), "VERSION \"2.3.4\"");
+        }
+
+        #[test]
+        fn test_version_empty_round_trip() {
+            let line = b"VERSION \"\"";
+            let mut parser = Parser::new(line).unwrap();
+            let version = Version::parse(&mut parser).unwrap();
+            assert_eq!(version.to_dbc_string(), "VERSION \"\"");
+        }
     }
 }

@@ -2,7 +2,7 @@
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,no_run
 /// use dbc_rs::{Dbc, ParseOptions};
 ///
 /// let dbc_content = r#"VERSION "1.0"
@@ -67,6 +67,7 @@ impl ParseOptions {
 mod tests {
     use super::ParseOptions;
 
+    // Tests that work in all configurations
     #[test]
     fn test_parse_options_default() {
         let options = ParseOptions::default();
@@ -99,13 +100,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_options_debug() {
-        let options = ParseOptions::default();
-        let debug_str = format!("{:?}", options);
-        assert!(debug_str.contains("ParseOptions"));
-    }
-
-    #[test]
     fn test_parse_options_clone() {
         let original = ParseOptions::lenient();
         let cloned = original;
@@ -119,5 +113,20 @@ mod tests {
         let copied = options; // Copy, not move
         assert_eq!(options, copied); // Original still valid
         assert!(options.strict_boundary_check);
+    }
+
+    // Tests that require alloc or kernel (for format! macro)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    mod tests_with_format {
+        use super::*;
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        use alloc::format;
+
+        #[test]
+        fn test_parse_options_debug() {
+            let options = ParseOptions::default();
+            let debug_str = format!("{:?}", options);
+            assert!(debug_str.contains("ParseOptions"));
+        }
     }
 }

@@ -178,8 +178,10 @@ impl<'a> Receivers<'a> {
     /// let signal = message.signals().at(0).unwrap();
     ///
     /// // Iterate over receiver nodes
-    /// let receivers: Vec<&str> = signal.receivers().iter().collect();
-    /// assert_eq!(receivers, vec!["TCM", "BCM"]);
+    /// let mut iter = signal.receivers().iter();
+    /// assert_eq!(iter.next(), Some("TCM"));
+    /// assert_eq!(iter.next(), Some("BCM"));
+    /// assert_eq!(iter.next(), None);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     ///
@@ -385,7 +387,11 @@ impl<'a> Receivers<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Parser, error::ParseError, error::lang};
+    use crate::Parser;
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    use crate::error::{ParseError, lang};
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    use alloc::format;
 
     #[test]
     fn test_parse_receivers_broadcast() {
@@ -431,10 +437,11 @@ mod tests {
         {
             let node_count = result.len();
             assert_eq!(node_count, 3);
-            let nodes: Vec<&str> = result.iter().collect();
-            assert_eq!(nodes[0], "TCM");
-            assert_eq!(nodes[1], "BCM");
-            assert_eq!(nodes[2], "ECM");
+            let mut iter = result.iter();
+            assert_eq!(iter.next().unwrap(), "TCM");
+            assert_eq!(iter.next().unwrap(), "BCM");
+            assert_eq!(iter.next().unwrap(), "ECM");
+            assert!(iter.next().is_none());
         }
     }
 
@@ -451,19 +458,21 @@ mod tests {
         let input = "  TCM   BCM  ";
         let mut parser = Parser::new(input.as_bytes()).unwrap();
         let result = Receivers::parse(&mut parser).unwrap();
-        {
-            let node_count = result.len();
-            assert_eq!(node_count, 2);
-            let nodes: Vec<&str> = result.iter().collect();
-            assert_eq!(nodes[0], "TCM");
-            assert_eq!(nodes[1], "BCM");
-        }
+        let node_count = result.len();
+        assert_eq!(node_count, 2);
+        let mut iter = result.iter();
+        assert_eq!(iter.next(), Some("TCM"));
+        assert_eq!(iter.next(), Some("BCM"));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_parse_receivers_too_many() {
         // Create a string with 65 receiver nodes (exceeds limit of 64)
         // Use a simple approach: create byte array directly
+        use crate::compat::Vec;
+        use alloc::format;
         let mut receivers_bytes = Vec::new();
         for i in 0..65 {
             if i > 0 {
@@ -484,9 +493,12 @@ mod tests {
     }
 
     #[test]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_parse_receivers_at_limit() {
         // Create a string with exactly 64 receiver nodes (at the limit)
         // Use a simple approach: create byte array directly
+        use crate::compat::Vec;
+        use alloc::format;
         let mut receivers_bytes = Vec::new();
         for i in 0..64 {
             if i > 0 {

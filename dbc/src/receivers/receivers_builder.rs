@@ -1,6 +1,6 @@
 use super::Receivers;
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::alloc_compat::{Box, String, Vec};
+use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{Error, Result};
 
 /// Builder for creating `Receivers` programmatically.
@@ -141,14 +141,7 @@ impl ReceiversBuilder {
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
         self.is_broadcast = false;
         self.is_none = false;
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.nodes.push(String::from(node.as_ref()));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.nodes.push(node.as_ref().to_string());
-        }
+        self.nodes.push(str_to_string(node));
         self
     }
 
@@ -187,14 +180,7 @@ impl ReceiversBuilder {
     {
         self.is_broadcast = false;
         self.is_none = false;
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.nodes.extend(nodes.into_iter().map(|s| String::from(s.as_ref())));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.nodes.extend(nodes.into_iter().map(|s| s.as_ref().to_string()));
-        }
+        self.nodes.extend(nodes.into_iter().map(str_to_string));
         self
     }
 
@@ -289,7 +275,10 @@ impl ReceiversBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     use crate::error::Error;
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    use alloc::format;
 
     #[test]
     fn test_receivers_builder_broadcast() {
@@ -334,6 +323,8 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_too_many() {
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        use alloc::format;
         let mut builder = ReceiversBuilder::new();
         for i in 0..65 {
             builder = builder.add_node(format!("Node{i}"));
@@ -427,6 +418,8 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_at_limit() {
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        use alloc::format;
         let mut builder = ReceiversBuilder::new();
         for i in 0..64 {
             builder = builder.add_node(format!("Node{i}"));

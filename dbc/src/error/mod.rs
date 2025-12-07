@@ -100,6 +100,35 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Result type alias for low-level parsing operations that can return a `ParseError`.
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
+// ============================================================================
+// Helper function to convert String to ParseError::Version(&'static str)
+// ============================================================================
+
+/// Converts a String error message to a `ParseError::Version` with a static lifetime.
+///
+/// This function takes ownership of the String, boxes it, and leaks it to create
+/// a `&'static str` that can be used in `ParseError::Version`.
+///
+/// # Safety
+///
+/// This function leaks memory. The leaked memory will live for the duration of
+/// the program. This is acceptable for error messages that are typically displayed
+/// once and then the program exits or handles the error.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use crate::error::{messages, version_error_from_string};
+///
+/// let msg = messages::message_id_out_of_range(0x20000000);
+/// return Err(version_error_from_string(msg));
+/// ```
+#[cfg(feature = "alloc")]
+pub(crate) fn version_error_from_string(msg: ErrorString) -> ParseError {
+    use alloc::boxed::Box;
+    ParseError::Version(Box::leak(msg.into_boxed_str()))
+}
+
 // Separate Display implementations for alloc and kernel (Strategy 4)
 #[cfg(all(feature = "alloc", not(feature = "kernel")))]
 impl fmt::Display for Error {
@@ -192,14 +221,11 @@ impl std::error::Error for Error {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]
-    use super::Error;
 
-    // Tests that require alloc feature (not kernel)
-    #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-    mod alloc_tests {
-        use super::*;
-        use crate::error::lang;
-        use alloc::string::ToString;
+    // Tests that require alloc or kernel feature (for Display/ToString)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    mod tests_with_alloc {
+        use crate::error::{Error, lang};
 
         #[test]
         fn test_from_parse_int_error() {
@@ -219,27 +245,30 @@ mod tests {
 
         #[test]
         fn test_display_invalid_data() {
-            let error = Error::InvalidData("Test error message".to_string());
-            let display = error.to_string();
+            use crate::compat::{display_to_string, str_to_string};
+            let error = Error::InvalidData(str_to_string("Test error message"));
+            let display = display_to_string(error);
             assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
             assert!(display.contains("Test error message"));
         }
 
         #[test]
         fn test_display_signal_error() {
-            let error = Error::Signal("Test signal error".to_string());
-            let display = error.to_string();
+            use crate::compat::{display_to_string, str_to_string};
+            let error = Error::Signal(str_to_string("Test signal error"));
+            let display = display_to_string(error);
             assert!(display.starts_with(lang::SIGNAL_ERROR_CATEGORY));
             assert!(display.contains("Test signal error"));
         }
 
         #[test]
         fn test_display_formatting() {
+            use crate::compat::{display_to_string, str_to_string};
             // Test that Display properly formats complex error messages
-            let error = Error::InvalidData(
-                "Duplicate message ID: 256 (messages 'EngineData' and 'BrakeData')".to_string(),
-            );
-            let display = error.to_string();
+            let error = Error::InvalidData(str_to_string(
+                "Duplicate message ID: 256 (messages 'EngineData' and 'BrakeData')",
+            ));
+            let display = display_to_string(error);
             assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
             assert!(display.contains("256"));
             assert!(display.contains("EngineData"));
@@ -248,23 +277,26 @@ mod tests {
 
         #[test]
         fn test_display_parse_error() {
+            use crate::compat::display_to_string;
             let parse_error = "not_a_number".parse::<u32>().unwrap_err();
             let error: Error = parse_error.into();
-            let display = error.to_string();
+            let display = display_to_string(error);
 
             assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
             assert!(display.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()));
         }
     }
 
-    #[cfg(all(feature = "std", feature = "alloc", not(feature = "kernel")))]
-    mod std_tests {
-        use super::*;
+    // Tests that require std feature (for std::error::Error trait)
+    #[cfg(feature = "std")]
+    mod tests_std {
+        use crate::error::Error;
         use std::error::Error as StdError;
 
         #[test]
         fn test_std_error_trait() {
-            let error = Error::InvalidData("Test".to_string());
+            use crate::compat::str_to_string;
+            let error = Error::InvalidData(str_to_string("Test"));
             // Verify it implements std::error::Error
             let _: &dyn StdError = &error;
 

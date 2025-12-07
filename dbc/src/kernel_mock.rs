@@ -231,5 +231,11 @@ pub mod alloc {
                 &mut self.inner
             }
         }
+
+        impl<T> core::convert::Into<crate::alloc::vec::Vec<T>> for Vec<T> {
+            fn into(self) -> crate::alloc::vec::Vec<T> {
+                self.inner
+            }
+        }
     }
 }

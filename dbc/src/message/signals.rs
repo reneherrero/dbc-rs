@@ -39,12 +39,12 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 ///
 /// Storage strategy:
 /// - `no_std`: Uses fixed-size array `[Option<Signal>; MAX_SIGNALS_PER_MESSAGE]`
-/// - `alloc`: Uses heap-allocated `Box<[Option<Signal>]>` for dynamic sizing
+/// - `alloc` or `kernel`: Uses heap-allocated `Box<[Option<Signal>]>` for dynamic sizing
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Signals<'a> {
-    #[cfg(not(feature = "alloc"))]
+    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
     signals: [Option<Signal<'a>>; MAX_SIGNALS_PER_MESSAGE],
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     signals: alloc::boxed::Box<[Option<Signal<'a>>]>,
     signal_count: usize,
 }
@@ -55,7 +55,7 @@ impl<'a> Signals<'a> {
     pub(crate) fn from_signals_slice(signals: &[Signal<'a>]) -> Self {
         let count = signals.len().min(MAX_SIGNALS_PER_MESSAGE);
 
-        #[cfg(not(feature = "alloc"))]
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
         {
             let mut signals_array: [Option<Signal<'a>>; MAX_SIGNALS_PER_MESSAGE] =
                 [const { None }; MAX_SIGNALS_PER_MESSAGE];
@@ -68,10 +68,11 @@ impl<'a> Signals<'a> {
             }
         }
 
-        #[cfg(feature = "alloc")]
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
+            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut signals_vec = Vec::with_capacity(count);
+            let mut signals_vec: Vec<Option<Signal<'a>>> = vec_with_capacity(count);
             for signal in signals.iter().take(count) {
                 signals_vec.push(Some(signal.clone()));
             }
@@ -86,7 +87,7 @@ impl<'a> Signals<'a> {
     pub(crate) fn from_options_slice(signals: &[Option<Signal<'a>>], signal_count: usize) -> Self {
         let count = signal_count.min(MAX_SIGNALS_PER_MESSAGE).min(signals.len());
 
-        #[cfg(not(feature = "alloc"))]
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
         {
             let mut signals_array: [Option<Signal<'a>>; MAX_SIGNALS_PER_MESSAGE] =
                 [const { None }; MAX_SIGNALS_PER_MESSAGE];
@@ -99,10 +100,11 @@ impl<'a> Signals<'a> {
             }
         }
 
-        #[cfg(feature = "alloc")]
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
+            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut signals_vec = Vec::with_capacity(count);
+            let mut signals_vec: Vec<Option<Signal<'a>>> = vec_with_capacity(count);
             for signal_opt in signals.iter().take(count) {
                 signals_vec.push(signal_opt.clone());
             }
@@ -117,7 +119,7 @@ impl<'a> Signals<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
@@ -142,7 +144,7 @@ impl<'a> Signals<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
@@ -160,7 +162,7 @@ impl<'a> Signals<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
@@ -178,13 +180,13 @@ impl<'a> Signals<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
     /// let message = dbc.messages().at(0).unwrap();
     /// if let Some(signal) = message.signals().at(0) {
-    ///     println!("First signal: {}", signal.name());
+    ///     assert_eq!(signal.name(), "RPM");
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -201,13 +203,14 @@ impl<'a> Signals<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"")?;
     /// let message = dbc.messages().at(0).unwrap();
     /// if let Some(signal) = message.signals().find("RPM") {
-    ///     println!("Found RPM signal with factor: {}", signal.factor());
+    ///     assert_eq!(signal.name(), "RPM");
+    ///     assert_eq!(signal.factor(), 0.25);
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -223,7 +226,7 @@ impl<'a> Signals<'a> {
 
     /// Create a temporary buffer for parsing (no alloc in no_std)
     /// Returns a buffer that can hold up to MAX_SIGNALS_PER_MESSAGE signals
-    #[cfg(not(feature = "alloc"))]
+    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
     pub(crate) fn new_parse_buffer<'b>() -> [Option<Signal<'b>>; MAX_SIGNALS_PER_MESSAGE] {
         [const { None }; MAX_SIGNALS_PER_MESSAGE]
     }
@@ -234,51 +237,59 @@ mod tests {
     use super::Signals;
     use crate::{Parser, Signal};
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signals_from_signals_slice() {
-        let signal1 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
-                .unwrap();
-        let signal2 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
-                .unwrap();
+    // Tests that require alloc or kernel feature (for from_signals_slice)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    mod tests_with_alloc {
+        use super::*;
 
-        let signals = Signals::from_signals_slice(&[signal1, signal2]);
-        assert_eq!(signals.len(), 2);
-        assert!(!signals.is_empty());
-        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
-        assert_eq!(signals.at(1).unwrap().name(), "Signal2");
-    }
+        #[test]
+        fn test_signals_from_signals_slice() {
+            let signal1 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
+            let signal2 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signals_from_signals_slice_empty() {
-        let signals = Signals::from_signals_slice(&[]);
-        assert_eq!(signals.len(), 0);
-        assert!(signals.is_empty());
-        assert!(signals.at(0).is_none());
-    }
+            let signals = Signals::from_signals_slice(&[signal1, signal2]);
+            assert_eq!(signals.len(), 2);
+            assert!(!signals.is_empty());
+            assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+            assert_eq!(signals.at(1).unwrap().name(), "Signal2");
+        }
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_signals_from_signals_slice_multiple() {
-        // Test with multiple signals to verify capacity handling
-        let signal1 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
-                .unwrap();
-        let signal2 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
-                .unwrap();
-        let signal3 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap())
-                .unwrap();
+        #[test]
+        fn test_signals_from_signals_slice_empty() {
+            let signals = Signals::from_signals_slice(&[]);
+            assert_eq!(signals.len(), 0);
+            assert!(signals.is_empty());
+            assert!(signals.at(0).is_none());
+        }
 
-        let signals = Signals::from_signals_slice(&[signal1, signal2, signal3]);
-        assert_eq!(signals.len(), 3);
-        assert_eq!(signals.at(0).unwrap().name(), "Signal1");
-        assert_eq!(signals.at(1).unwrap().name(), "Signal2");
-        assert_eq!(signals.at(2).unwrap().name(), "Signal3");
+        #[test]
+        fn test_signals_from_signals_slice_multiple() {
+            // Test with multiple signals to verify capacity handling
+            let signal1 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
+            let signal2 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
+            let signal3 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
+
+            let signals = Signals::from_signals_slice(&[signal1, signal2, signal3]);
+            assert_eq!(signals.len(), 3);
+            assert_eq!(signals.at(0).unwrap().name(), "Signal1");
+            assert_eq!(signals.at(1).unwrap().name(), "Signal2");
+            assert_eq!(signals.at(2).unwrap().name(), "Signal3");
+        }
     }
 
     #[test]
@@ -409,8 +420,10 @@ mod tests {
         options[2] = Some(signal2);
 
         let signals = Signals::from_options_slice(&options, 3);
-        let names: Vec<&str> = signals.iter().map(|s| s.name()).collect();
-        assert_eq!(names, vec!["Signal1", "Signal2"]);
+        let mut iter = signals.iter();
+        assert_eq!(iter.next().unwrap().name(), "Signal1");
+        assert_eq!(iter.next().unwrap().name(), "Signal2");
+        assert!(iter.next().is_none());
     }
 
     #[test]
@@ -429,14 +442,19 @@ mod tests {
         assert!(signals.at(1).is_none()); // None is returned
     }
 
-    #[test]
-    #[cfg(not(feature = "alloc"))]
-    fn test_signals_new_parse_buffer() {
-        let buffer = Signals::new_parse_buffer();
-        assert_eq!(buffer.len(), Signals::max_capacity());
-        // All should be None
-        for opt in buffer.iter() {
-            assert!(opt.is_none());
+    // Tests that require no_std (not alloc or kernel) - for new_parse_buffer
+    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
+    mod tests_no_alloc {
+        use super::*;
+
+        #[test]
+        fn test_signals_new_parse_buffer() {
+            let buffer = Signals::new_parse_buffer();
+            assert_eq!(buffer.len(), Signals::max_capacity());
+            // All should be None
+            for opt in buffer.iter() {
+                assert!(opt.is_none());
+            }
         }
     }
 }

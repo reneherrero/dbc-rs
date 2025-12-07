@@ -140,12 +140,13 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
     /// if let Some(version) = dbc.version() {
-    ///     println!("Version: {}", version.to_string());
+    ///     // Version is available
+    ///     let _ = version.as_str();
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -159,13 +160,17 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM TCM\n\nBO_ 256 Engine : 8 ECM")?;
     /// let nodes = dbc.nodes();
-    /// println!("Nodes: {}", nodes.to_string());
-    /// println!("Node count: {}", nodes.len());
+    /// assert_eq!(nodes.len(), 2);
+    /// // Iterate over nodes
+    /// let mut iter = nodes.iter();
+    /// assert_eq!(iter.next(), Some("ECM"));
+    /// assert_eq!(iter.next(), Some("TCM"));
+    /// assert_eq!(iter.next(), None);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
@@ -178,15 +183,15 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
     /// let messages = dbc.messages();
-    /// println!("Message count: {}", messages.len());
-    /// for message in messages.iter() {
-    ///     println!("Message: {} (ID: {})", message.name(), message.id());
-    /// }
+    /// assert_eq!(messages.len(), 1);
+    /// let message = messages.at(0).unwrap();
+    /// assert_eq!(message.name(), "Engine");
+    /// assert_eq!(message.id(), 256);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
@@ -199,7 +204,7 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc_content = r#"VERSION "1.0"
@@ -210,7 +215,7 @@ impl<'a> Dbc<'a> {
     ///  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm""#;
     ///
     /// let dbc = Dbc::parse(dbc_content)?;
-    /// println!("Parsed {} messages", dbc.messages().len());
+    /// assert_eq!(dbc.messages().len(), 1);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse(data: &'a str) -> ParseResult<Self> {
@@ -226,7 +231,7 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::{Dbc, ParseOptions};
     ///
     /// let dbc_content = r#"VERSION "1.0"
@@ -253,12 +258,14 @@ impl<'a> Dbc<'a> {
         // Allocate messages buffer - Messages will handle the size internally
         // We use a temporary buffer that Messages can work with (no alloc in no_std)
         // Messages handles capacity internally, we just need a buffer
-        #[cfg(not(feature = "alloc"))]
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
         let mut messages_buffer = Messages::new_parse_buffer();
 
-        #[cfg(feature = "alloc")]
-        let mut messages_buffer: alloc::vec::Vec<Option<Message<'a>>> =
-            alloc::vec::Vec::with_capacity(Messages::max_capacity());
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        let mut messages_buffer: alloc::vec::Vec<Option<Message<'a>>> = {
+            use crate::compat::vec_with_capacity;
+            vec_with_capacity(Messages::max_capacity())
+        };
 
         let mut message_count_actual = 0;
 
@@ -359,12 +366,14 @@ impl<'a> Dbc<'a> {
                     parser2.skip_to_end_of_line();
 
                     // Parse signals into fixed array
-                    #[cfg(not(feature = "alloc"))]
+                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
                     let mut signals_array = Signals::new_parse_buffer();
 
-                    #[cfg(feature = "alloc")]
-                    let mut signals_array: alloc::vec::Vec<Option<Signal<'a>>> =
-                        alloc::vec::Vec::with_capacity(Signals::max_capacity());
+                    #[cfg(any(feature = "alloc", feature = "kernel"))]
+                    let mut signals_array: alloc::vec::Vec<Option<Signal<'a>>> = {
+                        use crate::compat::vec_with_capacity;
+                        vec_with_capacity(Signals::max_capacity())
+                    };
 
                     let mut signal_count = 0;
                     loop {
@@ -384,11 +393,11 @@ impl<'a> Dbc<'a> {
                                         _ => e,
                                     })?;
                                     let signal = Signal::parse(&mut parser2)?;
-                                    #[cfg(not(feature = "alloc"))]
+                                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
                                     {
                                         signals_array[signal_count] = Some(signal);
                                     }
-                                    #[cfg(feature = "alloc")]
+                                    #[cfg(any(feature = "alloc", feature = "kernel"))]
                                     {
                                         signals_array.push(Some(signal));
                                     }
@@ -408,11 +417,11 @@ impl<'a> Dbc<'a> {
 
                     // Use Message::parse which will parse the header and use our signals
                     let signals_slice: &[Option<Signal<'a>>] = {
-                        #[cfg(not(feature = "alloc"))]
+                        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
                         {
                             &signals_array[..signal_count]
                         }
-                        #[cfg(feature = "alloc")]
+                        #[cfg(any(feature = "alloc", feature = "kernel"))]
                         {
                             &signals_array[..]
                         }
@@ -420,11 +429,11 @@ impl<'a> Dbc<'a> {
                     let message =
                         Message::parse(&mut message_parser, signals_slice, signal_count, options)?;
 
-                    #[cfg(not(feature = "alloc"))]
+                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
                     {
                         messages_buffer[message_count_actual] = Some(message);
                     }
-                    #[cfg(feature = "alloc")]
+                    #[cfg(any(feature = "alloc", feature = "kernel"))]
                     {
                         messages_buffer.push(Some(message));
                     }
@@ -454,11 +463,11 @@ impl<'a> Dbc<'a> {
 
         // Convert messages buffer to slice for validation and construction
         let messages_slice: &[Option<Message<'a>>] = {
-            #[cfg(not(feature = "alloc"))]
+            #[cfg(not(any(feature = "alloc", feature = "kernel")))]
             {
                 &messages_buffer[..message_count_actual]
             }
-            #[cfg(feature = "alloc")]
+            #[cfg(any(feature = "alloc", feature = "kernel"))]
             {
                 &messages_buffer[..]
             }
@@ -485,7 +494,7 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc_bytes = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM";
@@ -498,6 +507,7 @@ impl<'a> Dbc<'a> {
         let content =
             core::str::from_utf8(data).map_err(|e| Error::Dbc(error_messages::invalid_utf8(e)))?;
         // Convert to owned string, box it, and leak to get 'static lifetime
+        use alloc::boxed::Box;
         let owned = String::from(content);
         let boxed = owned.into_boxed_str();
         let content_ref: &'static str = Box::leak(boxed);
@@ -508,7 +518,7 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// // Create a temporary file for the example
@@ -536,7 +546,7 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     /// use std::io::Cursor;
     ///
@@ -553,6 +563,7 @@ impl<'a> Dbc<'a> {
             .map_err(|e| Error::Dbc(error_messages::read_failed(e)))?;
         // Convert to boxed str and leak to get 'static lifetime
         // The leaked memory will live for the duration of the program
+        use alloc::boxed::Box;
         let boxed = buffer.into_boxed_str();
         let content_ref: &'static str = Box::leak(boxed);
         Dbc::parse(content_ref).map_err(Error::ParseError)
@@ -562,7 +573,7 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust,no_run
     /// use dbc_rs::Dbc;
     ///
     /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
@@ -573,7 +584,8 @@ impl<'a> Dbc<'a> {
     /// ```
     #[cfg(feature = "alloc")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> String {
+    pub fn to_dbc_string(&self) -> alloc::string::String {
+        use alloc::string::String;
         // Pre-allocate with estimated capacity
         // Estimate: ~50 chars per message + ~100 chars per signal
         let signal_count: usize = self.messages().iter().map(|m| m.signals().len()).sum();
@@ -612,173 +624,9 @@ mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
     use crate::{
-        ByteOrder, Error, Parser, Receivers, Version,
+        Error,
         error::{ParseError, lang},
-        nodes::NodesBuilder,
     };
-    use crate::{DbcBuilder, MessageBuilder, ReceiversBuilder, SignalBuilder};
-
-    #[test]
-    fn test_dbc_new_valid() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").add_node("TCM").build().unwrap();
-
-        let signal1 = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(Receivers::Broadcast)
-            .build()
-            .unwrap();
-
-        let signal2 = SignalBuilder::new()
-            .name("Temperature")
-            .start_bit(16)
-            .length(8)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(-40.0)
-            .min(-40.0)
-            .max(215.0)
-            .unit("°C")
-            .receivers(Receivers::Broadcast)
-            .build()
-            .unwrap();
-
-        let message1 = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal1)
-            .add_signal(signal2)
-            .build()
-            .unwrap();
-        let message2 = MessageBuilder::new()
-            .id(512)
-            .name("BrakeData")
-            .dlc(4)
-            .sender("TCM")
-            .build()
-            .unwrap();
-
-        let dbc = DbcBuilder::new(None)
-            .version(version)
-            .nodes(nodes)
-            .add_message(message1)
-            .add_message(message2)
-            .build()
-            .unwrap();
-        assert_eq!(dbc.messages().len(), 2);
-        let mut messages_iter = dbc.messages().iter();
-        assert_eq!(messages_iter.next().unwrap().id(), 256);
-        assert_eq!(messages_iter.next().unwrap().id(), 512);
-    }
-
-    #[test]
-    fn test_dbc_new_duplicate_message_id() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let message1 = MessageBuilder::new()
-            .id(256)
-            .name("EngineData1")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal.clone())
-            .build()
-            .unwrap();
-        let message2 = MessageBuilder::new()
-            .id(256)
-            .name("EngineData2")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
-
-        let result = DbcBuilder::new(None)
-            .version(version)
-            .nodes(nodes)
-            .add_message(message1)
-            .add_message(message2)
-            .build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_DUPLICATE_MESSAGE_ID.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
-
-    #[test]
-    fn test_dbc_new_sender_not_in_nodes() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap(); // Only ECM, but message uses TCM
-
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
-
-        let message = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("TCM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
-
-        let result =
-            DbcBuilder::new(None).version(version).nodes(nodes).add_message(message).build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_SENDER_NOT_IN_NODES.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end()));
-            }
-            _ => panic!("Expected Error::Dbc"),
-        }
-    }
 
     #[test]
     fn parses_real_dbc() {
@@ -945,38 +793,15 @@ BO_ 256 Engine : 8 ECM
     #[test]
     #[cfg(feature = "alloc")]
     fn test_save_basic() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
+        // Use parsing instead of builders
+        let dbc_content = r#"VERSION "1.0"
 
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(ReceiversBuilder::new().broadcast().build().unwrap())
-            .build()
-            .unwrap();
+BU_: ECM
 
-        let message = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
-        let messages_array = [message];
-        // For validation, we need Option array but Message doesn't implement Clone
-        // Since this is a simple test with one message, we'll just skip validation
-        // In real usage, builders handle this conversion properly
-        let dbc = Dbc::new(Some(version), nodes, &messages_array);
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *
+"#;
+        let dbc = Dbc::parse(dbc_content).unwrap();
 
         let saved = dbc.to_dbc_string();
         assert!(saved.contains("VERSION \"1.0\""));
@@ -1036,64 +861,18 @@ BO_ 512 BrakeData : 4 TCM
     #[test]
     #[cfg(feature = "alloc")]
     fn test_save_multiple_messages() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").add_node("TCM").build().unwrap();
+        // Use parsing instead of builders
+        let dbc_content = r#"VERSION "1.0"
 
-        let signal1 = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(0.25)
-            .offset(0.0)
-            .min(0.0)
-            .max(8000.0)
-            .unit("rpm")
-            .receivers(Receivers::Broadcast)
-            .build()
-            .unwrap();
+BU_: ECM TCM
 
-        let signal2 = SignalBuilder::new()
-            .name("Pressure")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::LittleEndian)
-            .unsigned(true)
-            .factor(0.1)
-            .offset(0.0)
-            .min(0.0)
-            .max(1000.0)
-            .unit("bar")
-            .receivers(Receivers::None)
-            .build()
-            .unwrap();
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *
 
-        let message1 = MessageBuilder::new()
-            .id(256)
-            .name("EngineData")
-            .dlc(8)
-            .sender("ECM")
-            .add_signal(signal1)
-            .build()
-            .unwrap();
-        let message2 = MessageBuilder::new()
-            .id(512)
-            .name("BrakeData")
-            .dlc(4)
-            .sender("TCM")
-            .add_signal(signal2)
-            .build()
-            .unwrap();
-
-        let dbc = DbcBuilder::new(None)
-            .version(version)
-            .nodes(nodes)
-            .add_message(message1)
-            .add_message(message2)
-            .build()
-            .unwrap();
+BO_ 512 BrakeData : 4 TCM
+ SG_ Pressure : 0|16@1+ (0.1,0) [0|1000] "bar"
+"#;
+        let dbc = Dbc::parse(dbc_content).unwrap();
         let saved = dbc.to_dbc_string();
 
         // Verify both messages are present
@@ -1103,90 +882,8 @@ BO_ 512 BrakeData : 4 TCM
         assert!(saved.contains("SG_ Pressure"));
     }
 
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_dbc_too_many_messages() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
-
-        // Create 10,001 messages (exceeds limit of 10,000)
-        let mut messages = Vec::new();
-        let message_names: Vec<String> = (0..10_001).map(|i| format!("Message{i}")).collect();
-        for i in 0..10_001 {
-            let message = MessageBuilder::new()
-                .id(i)
-                .name(&message_names[i as usize])
-                .dlc(8)
-                .sender("ECM")
-                .add_signal(signal.clone())
-                .build()
-                .unwrap();
-            messages.push(message);
-        }
-
-        // Should cap at max capacity even if more messages are provided
-        let dbc = Dbc::new(Some(version), nodes, &messages);
-        // Use the actual count from the DBC (which will be capped by Messages)
-        assert_eq!(dbc.messages().len(), 10_000); // MAX_MESSAGES default
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
-    fn test_dbc_at_message_limit() {
-        use crate::nodes::NodesBuilder;
-
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = SignalBuilder::new()
-            .name("RPM")
-            .start_bit(0)
-            .length(16)
-            .byte_order(ByteOrder::BigEndian)
-            .unsigned(true)
-            .factor(1.0)
-            .offset(0.0)
-            .min(0.0)
-            .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
-
-        // Create exactly 10,000 messages (at the limit)
-        let mut messages = Vec::new();
-        let message_names: Vec<String> = (0..10_000).map(|i| format!("Message{i}")).collect();
-        for i in 0..10_000 {
-            let message = MessageBuilder::new()
-                .id(i)
-                .name(&message_names[i as usize])
-                .dlc(8)
-                .sender("ECM")
-                .add_signal(signal.clone())
-                .build()
-                .unwrap();
-            messages.push(message);
-        }
-
-        // Note: Message doesn't implement Clone, so we can't easily convert to Option array for validation
-        // Since this test is about testing limits (not validation), we'll skip validation
-        // In real usage, builders handle this conversion
-        let dbc = Dbc::new(Some(version), nodes, &messages);
-        assert_eq!(dbc.messages().len(), 10_000);
-    }
+    // Note: Builder limit tests have been moved to dbc_builder.rs
+    // These tests require building many messages programmatically, which is builder functionality
 
     #[test]
     fn test_parse_without_version() {

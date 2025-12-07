@@ -1,5 +1,5 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::alloc_compat::{Box, Vec};
+use crate::compat::{Box, Vec};
 use crate::{
     Dbc, Message, Nodes, Version,
     error::{Error, Result, messages},
@@ -254,13 +254,12 @@ impl DbcBuilder {
     /// ```rust,no_run
     /// use dbc_rs::{DbcBuilder, MessageBuilder};
     ///
-    /// let messages = vec![
-    ///     MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?,
-    ///     MessageBuilder::new().id(512).name("Msg2").dlc(4).sender("TCM").build()?,
-    /// ];
+    /// let msg1 = MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?;
+    /// let msg2 = MessageBuilder::new().id(512).name("Msg2").dlc(4).sender("TCM").build()?;
     ///
     /// let builder = DbcBuilder::new(None)
-    ///     .add_messages(messages);
+    ///     .add_message(msg1)
+    ///     .add_message(msg2);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
@@ -276,12 +275,10 @@ impl DbcBuilder {
     /// ```rust,no_run
     /// use dbc_rs::{DbcBuilder, MessageBuilder};
     ///
-    /// let messages = vec![
-    ///     MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?,
-    /// ];
+    /// let msg = MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?;
     ///
     /// let builder = DbcBuilder::new(None)
-    ///     .messages(messages);
+    ///     .add_message(msg);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
@@ -408,8 +405,11 @@ impl DbcBuilder {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::DbcBuilder;
-    use crate::{ByteOrder, Dbc, Error, Parser, Version, error::lang, nodes::NodesBuilder};
-    use crate::{MessageBuilder, ReceiversBuilder, SignalBuilder};
+    use crate::{ByteOrder, Dbc, Error, Parser, Version, error::lang};
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    use crate::{MessageBuilder, NodesBuilder, ReceiversBuilder, SignalBuilder};
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    use alloc::vec;
 
     #[test]
     fn test_dbc_builder_valid() {
@@ -600,7 +600,8 @@ mod tests {
         let dbc = DbcBuilder::new(None)
             .version(version)
             .nodes(nodes)
-            .messages(vec![message1, message2])
+            .add_message(message1)
+            .add_message(message2)
             .build()
             .unwrap();
 

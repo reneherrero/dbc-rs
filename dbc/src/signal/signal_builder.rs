@@ -1,5 +1,5 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::alloc_compat::{Box, String};
+use crate::compat::{Box, String, str_to_string};
 use crate::{
     ByteOrder, Receivers, ReceiversBuilder,
     error::{Error, Result, messages},
@@ -60,14 +60,7 @@ impl SignalBuilder {
 
     #[must_use]
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.name = Some(String::from(name.as_ref()));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.name = Some(name.as_ref().to_string());
-        }
+        self.name = Some(str_to_string(name));
         self
     }
 
@@ -121,14 +114,7 @@ impl SignalBuilder {
 
     #[must_use]
     pub fn unit(mut self, unit: impl AsRef<str>) -> Self {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.unit = Some(String::from(unit.as_ref()));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.unit = Some(unit.as_ref().to_string());
-        }
+        self.unit = Some(str_to_string(unit));
         self
     }
 

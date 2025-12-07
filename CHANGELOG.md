@@ -124,12 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Error::Version` - Version parsing errors
   - `Error::Nodes` - Node-related errors
   - `Error::InvalidData` - General parsing errors
-- **Internationalized Error Messages**: Build-time language selection
-  - English (default)
-  - French (`lang-fr` feature)
-  - Spanish (`lang-es` feature)
-  - German (`lang-de` feature)
-  - Japanese (`lang-ja` feature)
 
 #### no_std Support
 - **Full `no_std` + `alloc` support** for embedded systems
