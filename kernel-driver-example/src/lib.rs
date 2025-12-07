@@ -11,7 +11,6 @@
 //! EXPERIMENTAL: This is a skeleton implementation. Not production-ready.
 
 #![no_std]
-#![feature(allocator_api)]
 
 use kernel::prelude::*;
 
@@ -29,7 +28,7 @@ struct DbcDriver {
 }
 
 impl kernel::Module for DbcDriver {
-    fn init(_module: &'static ThisModule) -> Result<Self> {
+    fn init(_module: &'static ThisModule) -> kernel::error::Result<Self> {
         pr_info!("dbc-kernel-example: Initializing DBC kernel driver\n");
 
         // Register character device
@@ -55,13 +54,15 @@ impl Drop for DbcDriver {
 ///
 /// # Errors
 /// Returns kernel error code if DBC parsing fails
-fn example_parse_dbc(dbc_data: &[u8]) -> Result {
+fn example_parse_dbc(dbc_data: &[u8]) -> kernel::error::Result {
     use dbc_rs::Dbc;
 
     // Parse DBC data
     // Note: In kernel context, error handling must use Result types
     // The dbc-rs crate with kernel feature handles kernel::alloc Result types
-    let dbc = Dbc::parse_bytes(dbc_data).map_err(|_e| {
+    // Convert bytes to str (kernel alloc String)
+    let dbc_str = core::str::from_utf8(dbc_data).map_err(|_| kernel::error::code::EINVAL)?;
+    let dbc = Dbc::parse(dbc_str).map_err(|_e| {
         pr_err!("dbc-kernel-example: Failed to parse DBC\n");
         kernel::error::code::EINVAL
     })?;
