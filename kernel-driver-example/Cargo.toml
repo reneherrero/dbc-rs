@@ -14,40 +14,30 @@ crate-type = ["rlib"]
 dbc-rs = { path = "../dbc", default-features = false, features = ["kernel"] }
 
 # ============================================================================
-# TI Kernel Setup for Testing
+# IMPORTANT: Kernel Modules are Built via Makefile, NOT Cargo
 # ============================================================================
 #
-# To test against the TI kernel, follow these steps:
+# Linux kernel modules (including Rust modules) are built through the kernel's
+# Makefile system, not through Cargo. The kernel does NOT generate a Cargo.toml
+# file for external modules to use as a dependency.
 #
-# 1. Set up TI kernel source (from repository root):
-#    ./setup-ti-kernel.sh
+# To build this kernel module:
+#   1. Use the Makefile: `make KDIR=/path/to/kernel`
+#   2. Do NOT use `cargo check` or `cargo build` - they won't work
 #
-#    This will:
-#    - Clone TI kernel as a git submodule at ti-linux-kernel/
-#    - Checkout the appropriate branch (ti-linux-6.12.y by default)
-#    - Verify Rust support configuration
+# The kernel dependency below is commented out because:
+# - The kernel doesn't expose itself as a Cargo crate
+# - Kernel modules must be built through the kernel build system
+# - The Makefile handles kernel integration automatically
 #
-# 2. Configure kernel with Rust support:
-#    cd ti-linux-kernel
-#    make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
-#    echo "CONFIG_RUST=y" >> .config
-#    make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
-#
-# 3. Prepare kernel (generates rust/Cargo.toml and bindings):
-#    make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- prepare
-#
-# 4. Uncomment the kernel dependency below (REQUIRED - this is always a kernel driver):
-#    - Path points to ../ti-linux-kernel/rust (relative to this directory)
-#    - Update the path if your kernel source is in a different location
-#
-# 5. Test compilation:
-#    cd kernel-driver-example
-#    cargo check
-#
+# See README.md for complete build instructions.
 # ============================================================================
 
-[dependencies.kernel]
-path = "../ti-linux-kernel/rust" # Update this if kernel source is elsewhere
+# NOTE: This dependency is NOT used for kernel module builds.
+# Kernel modules are built via Makefile, which integrates with the kernel
+# build system directly. This is only here for reference/documentation.
+# [dependencies.kernel]
+# path = "../ti-linux-kernel/rust" # This path doesn't contain Cargo.toml
 
 [profile.release]
 opt-level = 3

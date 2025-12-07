@@ -1,3 +1,5 @@
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+use crate::alloc_compat::{Box, Vec};
 use crate::{
     Dbc, Message, Nodes, Version,
     error::{Error, Result, messages},

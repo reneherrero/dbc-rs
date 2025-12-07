@@ -14,8 +14,12 @@
 
 obj-m += dbc_kernel_example.o
 
+# The kernel build system will compile src/lib.rs directly
+# We only need to link against the dbc-rs static library
+dbc_kernel_example-rusty-objs := src/lib.o
+# Hardcode path since RUST_TARGET may not be available when kernel build system runs
 dbc_kernel_example-objs := \
-    target/$(ARCH)/release/libdbc_kernel_example.a \
+    target/aarch64-unknown-none/release/libdbc_rs.a \
     kernel_module.o
 
 # Kernel source directory (override with KDIR=...)
@@ -52,7 +56,8 @@ all:
 	@echo "RUST_TARGET: $(RUST_TARGET)"
 	@echo ""
 	@# Check if kernel has Rust support
-	@if [ ! -f "$(KDIR)/scripts/rust/rust_target.sh" ] && [ ! -f "$(KDIR)/rust/Cargo.toml" ]; then \
+	@# Note: Kernel doesn't generate Cargo.toml, so we check for rust/kernel directory instead
+	@if [ ! -f "$(KDIR)/scripts/rust/rust_target.sh" ] && [ ! -d "$(KDIR)/rust/kernel" ]; then \
 		echo "ERROR: Kernel Rust support not found!"; \
 		echo "  KDIR: $(KDIR)"; \
 		echo ""; \
@@ -67,12 +72,21 @@ all:
 		echo ""; \
 		exit 1; \
 	fi
-	@echo "Step 1: Building Rust library..."
+	@echo "Step 1: Building Rust library (dbc-rs only)..."
 	@if [ -n "$(CROSS_COMPILE)" ]; then \
 		echo "Cross-compiling for $(ARCH)"; \
-		cargo build --release --target $(RUST_TARGET) --target-dir target; \
+		cargo build --release --target $(RUST_TARGET) --target-dir target -p dbc-rs; \
 	else \
-		cargo build --release --target $(RUST_TARGET) --target-dir target; \
+		cargo build --release --target $(RUST_TARGET) --target-dir target -p dbc-rs; \
+	fi
+	@echo "Converting rlib to static library..."
+	@# rlib files are actually .a files, just rename it
+	@if [ -f "target/$(RUST_TARGET)/release/libdbc_rs.rlib" ]; then \
+		cp target/$(RUST_TARGET)/release/libdbc_rs.rlib target/$(RUST_TARGET)/release/libdbc_rs.a; \
+		echo "Created libdbc_rs.a from rlib"; \
+	else \
+		echo "ERROR: libdbc_rs.rlib not found!"; \
+		exit 1; \
 	fi
 	@echo ""
 	@echo "Step 2: Building kernel module..."

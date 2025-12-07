@@ -6,6 +6,8 @@ Example Linux kernel driver demonstrating `dbc-rs` usage in a Rust kernel module
 
 **EXPERIMENTAL**: This is a skeleton implementation. Not production-ready.
 
+**IMPORTANT**: Kernel modules are built via Makefile, NOT Cargo. The kernel doesn't generate `rust/Cargo.toml` for external modules. Use `make` to build, not `cargo check` or `cargo build`.
+
 ## Platform
 
 - **Development Board**: PocketBeagle 2 Rev A1
@@ -49,6 +51,8 @@ See [yocto/README.md](yocto/README.md) for details.
 
 ### Standalone Build
 
+**IMPORTANT**: Kernel modules are built via Makefile, NOT Cargo. The kernel does not generate `rust/Cargo.toml` for external modules. Use the Makefile to build.
+
 1. **Get TI Kernel Sources**:
    ```bash
    git clone https://git.ti.com/git/ti-linux-kernel/ti-linux-kernel.git
@@ -64,23 +68,22 @@ See [yocto/README.md](yocto/README.md) for details.
    make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
    ```
 
-3. **Build Kernel** (optional, for full kernel build):
+3. **Prepare Kernel** (required for module building):
    ```bash
-   # Full build (takes 30+ minutes)
-   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
-   
-   # Or just prepare headers (faster, for module building)
+   # Prepare kernel headers and build system (generates Rust bindings)
    make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- prepare
    ```
 
-4. **Build Module**:
+4. **Build Module** (via Makefile, NOT Cargo):
    ```bash
-   export KDIR=/path/to/ti-linux-kernel
+   export KDIR=/home/rene/Source/dbc-rs/ti-linux-kernel
    export ARCH=arm64
    export CROSS_COMPILE=aarch64-linux-gnu-
    cd kernel-driver-example
-   make
+   make  # Uses Makefile, not cargo
    ```
+
+**Note**: `cargo check` and `cargo build` will NOT work for kernel modules. The kernel doesn't expose itself as a Cargo crate. Always use `make` to build kernel modules.
 
 5. **Load/Unload**:
    ```bash
@@ -103,6 +106,27 @@ kernel-driver-example/
 ├── src/lib.rs          # Rust kernel module
 └── test-*.sh           # Test scripts
 ```
+
+## Building Kernel Modules
+
+**Critical**: Kernel modules are built through the kernel's Makefile system, NOT through Cargo.
+
+```bash
+# Set environment variables
+export KDIR=/path/to/ti-linux-kernel
+export ARCH=arm64
+export CROSS_COMPILE=aarch64-linux-gnu-
+
+# Build via Makefile (NOT cargo)
+cd kernel-driver-example
+make
+```
+
+**Why not Cargo?**
+- The kernel doesn't generate `rust/Cargo.toml` for external modules
+- Kernel modules must integrate with the kernel build system
+- The Makefile handles kernel bindings and integration automatically
+- `cargo check` will fail - this is expected and normal
 
 ## Testing
 
@@ -137,25 +161,26 @@ This compares our mock implementation with the real kernel API.
 - **test-runtime.sh**: Tests module loading, verification, and unloading
 - **test-integration.sh**: Runs both compilation and runtime tests
 
-### Testing with Real Kernel Crate
+### Testing with Real Kernel
+
+**Note**: The kernel does NOT expose itself as a Cargo crate. Build through Makefile instead.
 
 1. **Set up kernel source**:
    ```bash
    ./setup-ti-kernel.sh  # Or set KDIR manually
    ```
 
-2. **Update Cargo.toml** (uncomment or add):
-   ```toml
-   [dependencies]
-   kernel = { path = "/path/to/kernel/rust" }
-   # Or use git:
-   # kernel = { git = "https://github.com/Rust-for-Linux/linux.git", package = "kernel", branch = "rust" }
+2. **Build via Makefile** (NOT Cargo):
+   ```bash
+   export KDIR=/path/to/ti-linux-kernel
+   export ARCH=arm64
+   export CROSS_COMPILE=aarch64-linux-gnu-
+   make
    ```
 
-3. **Test compilation**:
-   ```bash
-   cargo check --features kernel
-   ```
+3. **For testing dbc-rs kernel feature** (without full kernel):
+   - Use the mock alloc API (default when kernel dependency is commented out)
+   - Or use `test-compilation.sh` which uses the mock
 
 ### Known Differences (Mock vs Real API)
 
@@ -202,7 +227,9 @@ export CROSS_COMPILE=aarch64-linux-gnu-
 
 **"flex: not found"**: Install dependencies: `sudo apt-get install -y flex bison libelf-dev libncurses-dev`
 
-**"can't find crate `kernel`"**: Use mock for testing, or configure kernel crate in `Cargo.toml`
+**"failed to read rust/Cargo.toml"**: This is EXPECTED - the kernel doesn't generate Cargo.toml. Build via Makefile instead: `make KDIR=...`
+
+**"can't find crate `kernel`"**: This is EXPECTED - kernel modules don't use Cargo. Use `make` to build, not `cargo check`
 
 **"Kernel directory not found"**: Set `KDIR` environment variable or use `setup-ti-kernel.sh`
 
@@ -215,6 +242,8 @@ export CROSS_COMPILE=aarch64-linux-gnu-
 **"Operation not permitted"**: Run with root privileges: `sudo ./test-runtime.sh`
 
 **"Cross-compiler not found"**: Install: `sudo apt-get install -y gcc-aarch64-linux-gnu`
+
+**"cargo check fails"**: This is NORMAL - kernel modules must be built via Makefile, not Cargo
 
 ## TI Kernel Sources
 

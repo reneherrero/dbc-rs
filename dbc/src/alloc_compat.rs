@@ -7,7 +7,15 @@
 
 #![cfg(any(feature = "alloc", feature = "kernel"))]
 
-// Type aliases
+// Direct re-exports for simplified imports
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub use crate::kernel::alloc::{string::String, vec::Vec};
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+pub use alloc::boxed::Box;
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+pub use alloc::{boxed::Box, string::String, vec::Vec};
+
+// Type aliases (for backward compatibility)
 #[cfg(all(feature = "alloc", not(feature = "kernel")))]
 pub use alloc::string::String as AllocString;
 #[cfg(all(feature = "alloc", not(feature = "kernel")))]

@@ -1,5 +1,7 @@
 use super::Receivers;
-use crate::{error::Error, error::Result};
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+use crate::alloc_compat::{Box, String, Vec};
+use crate::{Error, Result};
 
 /// Builder for creating `Receivers` programmatically.
 ///
@@ -139,7 +141,14 @@ impl ReceiversBuilder {
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
         self.is_broadcast = false;
         self.is_none = false;
-        self.nodes.push(node.as_ref().to_string());
+        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+        {
+            self.nodes.push(String::from(node.as_ref()));
+        }
+        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+        {
+            self.nodes.push(node.as_ref().to_string());
+        }
         self
     }
 
@@ -178,7 +187,14 @@ impl ReceiversBuilder {
     {
         self.is_broadcast = false;
         self.is_none = false;
-        self.nodes.extend(nodes.into_iter().map(|s| s.as_ref().to_string()));
+        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+        {
+            self.nodes.extend(nodes.into_iter().map(|s| String::from(s.as_ref())));
+        }
+        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+        {
+            self.nodes.extend(nodes.into_iter().map(|s| s.as_ref().to_string()));
+        }
         self
     }
 

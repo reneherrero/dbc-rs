@@ -1,4 +1,8 @@
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+use crate::alloc_compat::{Box, String};
 use crate::{Error, Result, Version, error::messages};
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+use alloc::format;
 
 /// Builder for creating `Version` programmatically.
 ///
@@ -78,7 +82,14 @@ impl VersionBuilder {
     /// ```
     #[must_use]
     pub fn version(mut self, version: &str) -> Self {
-        self.version = Some(version.to_string());
+        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+        {
+            self.version = Some(String::from(version));
+        }
+        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+        {
+            self.version = Some(version.to_string());
+        }
         self
     }
 
@@ -112,7 +123,16 @@ impl VersionBuilder {
     /// ```
     #[must_use]
     pub fn major(mut self, major: u8) -> Self {
-        self.version = Some(major.to_string());
+        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+        {
+            let formatted = alloc::format!("{}", major);
+            self.version =
+                Some(String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!()));
+        }
+        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+        {
+            self.version = Some(major.to_string());
+        }
         self
     }
 
@@ -147,10 +167,27 @@ impl VersionBuilder {
     #[must_use]
     pub fn minor(mut self, minor: u8) -> Self {
         if let Some(ref mut v) = self.version {
-            *v = format!("{}.{}", v, minor);
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                let formatted = alloc::format!("{}.{}", v, minor);
+                *v = String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!());
+            }
+            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+            {
+                *v = format!("{}.{}", v, minor);
+            }
         } else {
             // If major wasn't called, treat this as just the version string
-            self.version = Some(minor.to_string());
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                let formatted = alloc::format!("{}", minor);
+                self.version =
+                    Some(String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!()));
+            }
+            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+            {
+                self.version = Some(minor.to_string());
+            }
         }
         self
     }
@@ -188,10 +225,27 @@ impl VersionBuilder {
     #[must_use]
     pub fn patch(mut self, patch: u8) -> Self {
         if let Some(ref mut v) = self.version {
-            *v = format!("{}.{}", v, patch);
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                let formatted = alloc::format!("{}.{}", v, patch);
+                *v = String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!());
+            }
+            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+            {
+                *v = format!("{}.{}", v, patch);
+            }
         } else {
             // If major/minor weren't called, treat this as just the version string
-            self.version = Some(patch.to_string());
+            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
+            {
+                let formatted = alloc::format!("{}", patch);
+                self.version =
+                    Some(String::try_from(formatted.as_str()).unwrap_or_else(|_| unreachable!()));
+            }
+            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
+            {
+                self.version = Some(patch.to_string());
+            }
         }
         self
     }

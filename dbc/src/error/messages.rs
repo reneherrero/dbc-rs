@@ -1,8 +1,6 @@
 use super::lang;
 #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-use crate::kernel::alloc::{string::String, vec::Vec};
-#[cfg(all(feature = "kernel", not(feature = "alloc")))]
-use alloc::format;
+use crate::kernel::alloc::string::String;
 #[cfg(all(feature = "alloc", not(feature = "kernel")))]
 use alloc::{format, string::String, vec::Vec};
 #[cfg(all(feature = "alloc", not(feature = "kernel")))]

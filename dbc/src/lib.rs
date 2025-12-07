@@ -38,7 +38,7 @@
 //! # Ok::<(), dbc_rs::Error>(())
 //! ```
 
-#![cfg_attr(not(any(feature = "alloc", feature = "kernel")), no_std)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 extern crate alloc;
