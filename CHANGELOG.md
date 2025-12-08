@@ -281,6 +281,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **0.1.0-beta.3** (2025-12-08): Added VAL support, fixed no_std build compatibility, improved kernel mock API
 - **0.1.0-beta.2** (2025-12-07): Code quality improvements, test reorganization, doctest fixes
 - **0.1.0-beta.1** (2024-12-06): First beta release - API stable, ready for wider testing
 - **0.1.0-alpha** (2024-11-25): Initial alpha release
@@ -296,6 +297,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed** for any bug fixes
 - **Security** for vulnerability fixes
 
+[0.1.0-beta.3]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-beta.3
 [0.1.0-beta.2]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-beta.2
 [0.1.0-beta.1]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-beta.1
 [0.1.0-alpha]: https://github.com/reneherrero/dbc-rs/releases/tag/v0.1.0-alpha
