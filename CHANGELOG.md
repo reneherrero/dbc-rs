@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **no_std Build Compatibility**: Fixed compilation errors in no_std mode
+  - Split `validate` function into feature-specific versions (alloc/kernel vs no_std)
+  - Removed conditional parameter that caused compilation errors
+  - All builds now compile successfully in no_std mode
+
 - **Parser Line Number Tracking**: Added line number tracking to parser
   - `Parser` now tracks current line number for better error reporting
   - Public `line()` getter method available for future error reporting enhancements

@@ -46,51 +46,19 @@ pub struct Dbc<'a> {
 }
 
 impl<'a> Dbc<'a> {
+    // Validate function for alloc/kernel features (with value_descriptions)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub(crate) fn validate(
         nodes: &Nodes<'_>,
         messages: &[Option<Message<'_>>],
         message_count: usize,
-        #[cfg(any(feature = "alloc", feature = "kernel"))] value_descriptions: Option<
-            &crate::dbc::ValueDescriptionsList<'_>,
-        >,
+        value_descriptions: Option<&crate::dbc::ValueDescriptionsList<'_>>,
     ) -> ParseResult<()> {
-        // Check for duplicate message IDs
-        let messages_slice = &messages[..message_count];
-        for (i, msg1_opt) in messages_slice.iter().enumerate() {
-            let msg1 = match msg1_opt {
-                Some(m) => m,
-                None => continue, // Should not happen, but be safe
-            };
-            for msg2_opt in messages_slice.iter().skip(i + 1) {
-                let msg2 = match msg2_opt {
-                    Some(m) => m,
-                    None => continue, // Should not happen, but be safe
-                };
-                if msg1.id() == msg2.id() {
-                    return Err(ParseError::Message(
-                        crate::error::lang::DUPLICATE_MESSAGE_ID,
-                    ));
-                }
-            }
-        }
-
-        // Validate that all message senders are in the nodes list
-        // Skip validation if nodes list is empty (empty nodes allowed per DBC spec)
-        if !nodes.is_empty() {
-            for msg_opt in messages_slice {
-                let msg = match msg_opt {
-                    Some(m) => m,
-                    None => continue, // Should not happen, but be safe
-                };
-                if !nodes.contains(msg.sender()) {
-                    return Err(ParseError::Message(crate::error::lang::SENDER_NOT_IN_NODES));
-                }
-            }
-        }
+        Self::validate_common(nodes, messages, message_count)?;
 
         // Validate value descriptions if provided
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
         if let Some(value_descriptions) = value_descriptions {
+            let messages_slice = &messages[..message_count];
             // Validate that all value descriptions reference existing messages and signals
             for ((message_id_opt, signal_name), _) in value_descriptions.iter() {
                 // Check if message exists (for message-specific value descriptions)
@@ -131,9 +99,57 @@ impl<'a> Dbc<'a> {
             }
         }
 
-        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-        {
-            let _ = value_descriptions; // Suppress unused parameter warning
+        Ok(())
+    }
+
+    // Validate function for no_std mode (without value_descriptions)
+    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
+    pub(crate) fn validate(
+        nodes: &Nodes<'_>,
+        messages: &[Option<Message<'_>>],
+        message_count: usize,
+    ) -> ParseResult<()> {
+        Self::validate_common(nodes, messages, message_count)
+    }
+
+    // Common validation logic shared by both versions
+    fn validate_common(
+        nodes: &Nodes<'_>,
+        messages: &[Option<Message<'_>>],
+        message_count: usize,
+    ) -> ParseResult<()> {
+        // Check for duplicate message IDs
+        let messages_slice = &messages[..message_count];
+        for (i, msg1_opt) in messages_slice.iter().enumerate() {
+            let msg1 = match msg1_opt {
+                Some(m) => m,
+                None => continue, // Should not happen, but be safe
+            };
+            for msg2_opt in messages_slice.iter().skip(i + 1) {
+                let msg2 = match msg2_opt {
+                    Some(m) => m,
+                    None => continue, // Should not happen, but be safe
+                };
+                if msg1.id() == msg2.id() {
+                    return Err(ParseError::Message(
+                        crate::error::lang::DUPLICATE_MESSAGE_ID,
+                    ));
+                }
+            }
+        }
+
+        // Validate that all message senders are in the nodes list
+        // Skip validation if nodes list is empty (empty nodes allowed per DBC spec)
+        if !nodes.is_empty() {
+            for msg_opt in messages_slice {
+                let msg = match msg_opt {
+                    Some(m) => m,
+                    None => continue, // Should not happen, but be safe
+                };
+                if !nodes.contains(msg.sender()) {
+                    return Err(ParseError::Message(crate::error::lang::SENDER_NOT_IN_NODES));
+                }
+            }
         }
 
         Ok(())
@@ -727,7 +743,7 @@ impl<'a> Dbc<'a> {
         }
         #[cfg(not(any(feature = "alloc", feature = "kernel")))]
         {
-            Self::validate(&nodes, messages_slice, message_count_actual, None)?;
+            Self::validate(&nodes, messages_slice, message_count_actual)?;
         }
 
         // Construct directly (validation already done)
