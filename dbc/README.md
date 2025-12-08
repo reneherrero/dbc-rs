@@ -126,6 +126,7 @@ dbc-rs = { version = "1", features = ["lang-fr"] }
 | **Bus Nodes** | `BU_` | ✅ | ✅ | List of ECUs on the bus |
 | **Messages** | `BO_` | ✅ | ✅ | CAN message definitions |
 | **Signals** | `SG_` | ✅ | ✅ | Signal definitions |
+| **Value Descriptions** | `VAL_` | ✅ | ✅ | Value descriptions for signals and messages |
 | **Comments** | `//` | ✅ | ❌ | Single-line comments parsed but not preserved |
 
 ### Signal Features ✅
@@ -134,7 +135,7 @@ All signal features are fully supported: name, start bit, length, byte order (`@
 
 ### Extended Features ❌
 
-Not yet implemented: Value tables (`VAL_TABLE_`, `VAL_`), structured comments (`CM_`), attributes (`BA_DEF_`, `BA_DEF_DEF_`, `BA_`), signal groups (`SIG_GROUP_`), environment variables (`EV_`), signal multiplexing, and advanced node relationships.
+Not yet implemented: Value tables (`VAL_TABLE_`), structured comments (`CM_`), attributes (`BA_DEF_`, `BA_DEF_DEF_`, `BA_`), signal groups (`SIG_GROUP_`), environment variables (`EV_`), signal multiplexing, and advanced node relationships.
 
 ### Advanced Features
 
@@ -434,7 +435,7 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 
 Contributions are welcome! Areas that need work:
 
-- Value tables and enumerations (VAL_TABLE_, VAL_)
+- Value tables (VAL_TABLE_) - Note: VAL_ (value descriptions) is now supported
 - Structured comments (CM_)
 - Attributes (BA_DEF_, BA_, etc.)
 - Environment variables (EV_)
