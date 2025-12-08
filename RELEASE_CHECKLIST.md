@@ -27,6 +27,8 @@ This checklist ensures all steps are completed before publishing a new release o
   # WARNING: Kernel feature is experimental and may have clippy warnings
   # cargo clippy --no-default-features --features kernel --all-targets -p dbc-rs -- -D warnings
   ```
+  
+  **Note**: The CI workflow runs clippy checks for both std and no_std modes.
 
 - [ ] **Code formatting is consistent**
   ```bash
@@ -140,7 +142,9 @@ This checklist ensures all steps are completed before publishing a new release o
     - [ ] `test-no-std` job passes (tests no_std on latest stable)
     - [ ] `test-std-msrv` job passes (tests with std on MSRV 1.85.0)
     - [ ] `test-no-std-msrv` job passes (tests no_std on MSRV 1.85.0)
-    - [ ] `lint` job passes (clippy checks)
+    - [ ] `test-alloc` job passes (tests with alloc feature on latest stable)
+    - [ ] `test-kernel` job passes (tests with kernel feature on latest stable)
+    - [ ] `lint` job passes (clippy checks for std and no_std modes)
     - [ ] `fmt` job passes (formatting check)
     - [ ] `doc` job passes (documentation builds)
     - [ ] `coverage` job passes (code coverage ≥80%)
@@ -247,12 +251,15 @@ For pre-releases:
 # 2. Update CHANGELOG.md
 # 3. Run all checks locally (matches CI workflows)
 cargo test --workspace
+# Note: The following may fail if there are compilation errors - fix before release
+cargo test --features alloc --no-default-features -p dbc-rs
+cargo test --features kernel --no-default-features -p dbc-rs
 cargo clippy --all-targets -p dbc-rs -- -D warnings
 cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
 cargo clippy --all-targets -p dbc-cli -- -D warnings
 cargo fmt -- --check
 cargo llvm-cov --workspace --fail-under-lines 80
-cargo package --dry-run -p dbc-rs
+cargo publish --dry-run -p dbc-rs
 
 # 4. Push changes and wait for CI workflows to pass
 git add .
@@ -298,7 +305,13 @@ cargo publish -p dbc-rs
 - **Keep SECURITY.md updated**: Review and update for each release
 - **Verify CI passes**: Don't publish if CI is failing
 - **CI Workflows**: The project uses two separate workflows:
-  - `dbc-rs.yml`: Tests the library with multiple configurations (std/no_std, latest/MSRV)
+  - `dbc-rs.yml`: Tests the library with multiple configurations:
+    - `std` feature (default) on latest stable and MSRV
+    - `no_std` mode on latest stable and MSRV
+    - `alloc` feature (without std) on latest stable
+    - `kernel` feature (without std) on latest stable
+    - Clippy checks for both std and no_std modes
+    - Formatting, documentation, and coverage checks
   - `dbc-cli.yml`: Tests the CLI application
   - Both workflows run automatically on pushes and PRs to `main`
   - Workflows use path-based triggers to only run when relevant files change

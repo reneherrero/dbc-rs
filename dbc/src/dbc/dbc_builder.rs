@@ -1,5 +1,5 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::compat::{Box, Vec};
+use crate::compat::{Box, Vec, str_to_string};
 use crate::{
     Dbc, Message, Nodes, Version,
     error::{Error, Result},
@@ -187,12 +187,12 @@ impl DbcBuilder {
         let mut value_descriptions = crate::dbc::ValueDescriptionsList::new();
         for ((message_id, signal_name), vd) in dbc.value_descriptions().iter() {
             // Convert &'a str to &'static str by leaking
-            let static_signal_name: &'static str = Box::leak(Box::from(signal_name.to_string()));
+            let static_signal_name: &'static str = Box::leak(Box::from(str_to_string(signal_name)));
             // Convert ValueDescriptions<'a> to ValueDescriptions<'static>
             use crate::ValueDescriptionsBuilder;
             let mut builder = ValueDescriptionsBuilder::new();
             for (value, desc) in vd.iter() {
-                let static_desc: &'static str = Box::leak(Box::from(desc.to_string()));
+                let static_desc: &'static str = Box::leak(Box::from(str_to_string(desc)));
                 builder = builder.add_entry(value, static_desc);
             }
             let static_vd =
