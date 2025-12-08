@@ -114,6 +114,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - name: Install target standard library
+        run: rustup target add thumbv7m-none-eabi
       - name: Run clippy linter (std feature)
         run: rustup run stable cargo clippy --verbose --all-targets -p dbc-rs -- -D warnings
       - name: Run clippy linter (no_std mode)
