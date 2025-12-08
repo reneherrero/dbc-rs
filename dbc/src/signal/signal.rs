@@ -298,11 +298,10 @@ impl<'a> Signal<'a> {
     }
 
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        // When called from Dbc::parse, find_next_keyword already consumed "SG_" and advanced past it
-        // So the parser is now at the space after "SG_". We just need to skip that whitespace.
-        // But if "SG_" wasn't consumed (standalone call), we need to expect it first.
-        // Try to expect "SG_" - if it fails, we're already past it from find_next_keyword
-        let _ = parser.expect(crate::SG_.as_bytes()).ok(); // Ignore error if already past "SG_"
+        // Signal parsing must always start with "SG_" keyword
+        parser
+            .expect(crate::SG_.as_bytes())
+            .map_err(|_| ParseError::Expected("Expected SG_ keyword"))?;
 
         // Skip whitespace after "SG_"
         parser.skip_newlines_and_spaces();
@@ -382,6 +381,7 @@ impl<'a> Signal<'a> {
         // Validate before construction
         Self::validate(name, length, min, max)?;
         // Construct directly (validation already done)
+        // Value descriptions are stored in Dbc, not in Signal
         Ok(Self {
             name,
             start_bit,
@@ -812,8 +812,8 @@ mod tests {
 
                 // Round-trip: parse the output
                 let mut parser2 = Parser::new(dbc_string.as_bytes()).unwrap();
-                // Skip the leading " SG_ " prefix
-                parser2.expect(b" SG_ ").unwrap();
+                // Skip only the leading space, Signal::parse will handle SG_ keyword
+                parser2.skip_newlines_and_spaces();
                 let signal2 = Signal::parse(&mut parser2).unwrap();
 
                 // Verify round-trip

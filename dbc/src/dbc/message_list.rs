@@ -1,13 +1,13 @@
 use crate::Message;
 
-/// Iterator over messages in a Messages collection
-struct MessagesIter<'a, 'b> {
+/// Iterator over messages in a MessageList collection
+struct MessageListIter<'a, 'b> {
     messages: &'b [Option<Message<'a>>],
     count: usize,
     pos: usize,
 }
 
-impl<'a, 'b> Iterator for MessagesIter<'a, 'b> {
+impl<'a, 'b> Iterator for MessageListIter<'a, 'b> {
     type Item = &'b Message<'a>;
 
     #[inline]
@@ -41,7 +41,7 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 /// - `no_std`: Uses fixed-size array `[Option<Message>; MAX_MESSAGES]`
 /// - `alloc`: Uses heap-allocated `Box<[Option<Message>]>` for dynamic sizing
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Messages<'a> {
+pub struct MessageList<'a> {
     #[cfg(not(any(feature = "alloc", feature = "kernel")))]
     messages: [Option<Message<'a>>; MAX_MESSAGES],
     #[cfg(any(feature = "alloc", feature = "kernel"))]
@@ -49,7 +49,7 @@ pub struct Messages<'a> {
     message_count: usize,
 }
 
-impl<'a> Messages<'a> {
+impl<'a> MessageList<'a> {
     /// Create Messages from a slice of messages by cloning them
     #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub(crate) fn from_messages_slice(messages: &[Message<'a>]) -> Self {
@@ -80,7 +80,7 @@ impl<'a> Messages<'a> {
         }
     }
 
-    /// Create Messages from a slice of `Option<Message>` and count
+    /// Create MessageList from a slice of `Option<Message>` and count
     pub(crate) fn from_options_slice(
         messages: &[Option<Message<'a>>],
         message_count: usize,
@@ -131,7 +131,7 @@ impl<'a> Messages<'a> {
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &Message<'a>> + '_ {
         let messages_slice: &[Option<Message<'a>>] = &self.messages;
-        MessagesIter {
+        MessageListIter {
             messages: messages_slice,
             count: self.message_count,
             pos: 0,
@@ -245,7 +245,7 @@ impl<'a> Messages<'a> {
                 continue;
             }
 
-            let keyword_result = parser.find_next_keyword();
+            let keyword_result = parser.peek_next_keyword();
             let keyword = match keyword_result {
                 Ok(kw) => kw,
                 Err(crate::error::ParseError::UnexpectedEof) => break,
@@ -258,6 +258,11 @@ impl<'a> Messages<'a> {
                 }
                 Err(e) => return Err(e),
             };
+
+            // Consume the keyword (peek_next_keyword only peeks at it, doesn't consume it)
+            parser
+                .expect(keyword.as_bytes())
+                .map_err(|_| crate::error::ParseError::Expected("Failed to consume keyword"))?;
 
             match keyword {
                 NS_ => {
@@ -332,8 +337,10 @@ impl<'a> Messages<'a> {
                                         ));
                                     }
                                     signal_count += 1;
-                                    let _ = parser.find_next_keyword().ok();
-                                    // Skip the signal line
+                                    // Peek and consume keyword, then skip the signal line
+                                    if let Ok(kw) = parser.peek_next_keyword() {
+                                        let _ = parser.expect(kw.as_bytes()).ok();
+                                    }
                                     parser.skip_to_end_of_line();
                                     continue;
                                 }

@@ -1,5 +1,3 @@
-#[cfg(feature = "alloc")]
-use crate::compat::ToString;
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{error::Error, error::Result, nodes::Nodes};
@@ -140,16 +138,7 @@ impl NodesBuilder {
     }
 
     fn extract_and_validate_nodes(self) -> Result<Vec<String>> {
-        let node_strs: Vec<String> = {
-            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-            {
-                self.nodes.into_iter().collect()
-            }
-            #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-            {
-                self.nodes.into_iter().map(|s| s.to_string()).collect()
-            }
-        };
+        let node_strs: Vec<String> = crate::compat::strings_from_iter(self.nodes);
         let node_refs: Vec<&str> = node_strs.iter().map(|s| s.as_str()).collect();
         super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
             crate::error::ParseError::Nodes(msg) => Error::nodes(msg),

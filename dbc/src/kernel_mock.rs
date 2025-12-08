@@ -18,8 +18,7 @@ pub mod alloc {
     }
 
     #[derive(Debug, Clone, PartialEq, Eq)]
-    enum TryReserveErrorKind {
-        CapacityOverflow,
+    pub enum TryReserveErrorKind {
         AllocError { layout: core::alloc::Layout },
     }
 
@@ -32,9 +31,6 @@ pub mod alloc {
     impl core::fmt::Display for TryReserveError {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             match &self.kind {
-                TryReserveErrorKind::CapacityOverflow => {
-                    write!(f, "capacity overflow")
-                }
                 TryReserveErrorKind::AllocError { .. } => {
                     write!(f, "memory allocation failed")
                 }
@@ -52,6 +48,7 @@ pub mod alloc {
 
         impl String {
             /// Create a String from a string slice (infallible, matches real API)
+            #[allow(clippy::should_implement_trait)] // This is a mock API that matches kernel::alloc::string::String
             pub fn from_str(s: &str) -> Self {
                 Self {
                     inner: crate::alloc::string::String::from(s),
@@ -232,9 +229,9 @@ pub mod alloc {
             }
         }
 
-        impl<T> core::convert::Into<crate::alloc::vec::Vec<T>> for Vec<T> {
-            fn into(self) -> crate::alloc::vec::Vec<T> {
-                self.inner
+        impl<T> core::convert::From<Vec<T>> for crate::alloc::vec::Vec<T> {
+            fn from(vec: Vec<T>) -> Self {
+                vec.inner
             }
         }
     }

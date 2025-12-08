@@ -225,7 +225,7 @@ impl<'a> Message<'a> {
         }
     }
 
-    fn new_from_options(
+    pub(crate) fn new_from_options(
         id: u32,
         name: &'a str,
         dlc: u8,
@@ -249,10 +249,10 @@ impl<'a> Message<'a> {
         signal_count: usize,
         options: crate::ParseOptions,
     ) -> ParseResult<Self> {
-        // Expect "BO_" keyword (should already be consumed by find_next_keyword, but handle both cases)
-        if parser.expect(crate::BO_.as_bytes()).is_err() {
-            // Already past "BO_" from find_next_keyword, continue
-        }
+        // Message parsing must always start with "BO_" keyword
+        parser
+            .expect(crate::BO_.as_bytes())
+            .map_err(|_| ParseError::Expected("Expected BO_ keyword"))?;
 
         // Skip whitespace
         let _ = parser.skip_whitespace();

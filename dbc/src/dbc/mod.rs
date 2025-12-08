@@ -1,6 +1,8 @@
 #[path = "dbc.rs"]
 mod dbc_impl;
-mod messages;
+mod message_list;
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+mod value_descriptions_list;
 
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 mod dbc_builder;
@@ -9,4 +11,6 @@ mod dbc_builder;
 pub use dbc_builder::DbcBuilder;
 
 pub use dbc_impl::Dbc;
-pub use messages::Messages;
+pub use message_list::MessageList;
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+pub use value_descriptions_list::ValueDescriptionsList;

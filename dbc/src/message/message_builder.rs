@@ -123,6 +123,7 @@ impl MessageBuilder {
             _ => Error::ParseError(e),
         })?;
         // Convert owned strings to static references by leaking Box<str>
+        // name and sender are already String types, so convert directly
         let name_boxed: Box<str> = name.into_boxed_str();
         let name_static: &'static str = Box::leak(name_boxed);
         let sender_boxed: Box<str> = sender.into_boxed_str();

@@ -329,7 +329,16 @@ BO_ 200 EngineData : 8 Engine
 BO_ 300 UnknownMsg : 4 Vector__XXX
 ```
 
-### 8.5 Pseudo-Message
+### 8.5 Message Components
+
+| Component | Description | Example |
+|-----------|-------------|---------|
+| `message_id` | Unique CAN identifier | `100`, `2147484148` |
+| `message_name` | Unique message name | `EngineData`, `SpeedData` |
+| `message_size` | Data Length Code (DLC) in bytes | `0`, `4`, `8` |
+| `transmitter` | Sending node | `ECM`, `Vector__XXX` |
+
+### 8.6 Pseudo-Message
 
 Special message for signals not associated with any CAN message:
 

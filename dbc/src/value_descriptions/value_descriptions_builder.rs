@@ -1,0 +1,117 @@
+use crate::compat::{Box, String, Vec, str_to_string};
+use crate::value_descriptions::{MAX_VALUE_DESCRIPTIONS, ValueDescriptions};
+use crate::{Error, Result};
+
+/// Builder for creating `ValueDescriptions` programmatically.
+///
+/// This builder allows you to construct value descriptions when building DBC files
+/// programmatically. It validates that entries are within limits.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::ValueDescriptionsBuilder;
+///
+/// let value_descriptions = ValueDescriptionsBuilder::new()
+///     .add_entry(0, "Park")
+///     .add_entry(1, "Reverse")
+///     .add_entry(2, "Neutral")
+///     .add_entry(3, "Drive")
+///     .build()?;
+///
+/// assert_eq!(value_descriptions.get(0), Some("Park"));
+/// assert_eq!(value_descriptions.get(1), Some("Reverse"));
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+///
+/// # Validation
+///
+/// The builder validates:
+/// - Maximum of 64 value descriptions (MAX_VALUE_DESCRIPTIONS)
+///
+/// # Feature Requirements
+///
+/// This builder requires the `alloc` or `kernel` feature to be enabled.
+#[derive(Debug, Clone, Default)]
+pub struct ValueDescriptionsBuilder {
+    entries: Vec<(u64, String)>,
+}
+
+impl ValueDescriptionsBuilder {
+    /// Creates a new `ValueDescriptionsBuilder` with an empty entry list.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::ValueDescriptionsBuilder;
+    ///
+    /// let builder = ValueDescriptionsBuilder::new();
+    /// let value_descriptions = builder.build()?;
+    /// assert!(value_descriptions.is_empty());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a value-description pair to the builder.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The numeric value (u64)
+    /// * `description` - The human-readable description
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::ValueDescriptionsBuilder;
+    ///
+    /// let builder = ValueDescriptionsBuilder::new()
+    ///     .add_entry(0, "Off")
+    ///     .add_entry(1, "On");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use]
+    pub fn add_entry(mut self, value: u64, description: impl AsRef<str>) -> Self {
+        if self.entries.len() < MAX_VALUE_DESCRIPTIONS {
+            self.entries.push((value, str_to_string(description)));
+        }
+        self
+    }
+
+    /// Builds the `ValueDescriptions` from the builder.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the number of entries exceeds the maximum allowed.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::ValueDescriptionsBuilder;
+    ///
+    /// let value_descriptions = ValueDescriptionsBuilder::new()
+    ///     .add_entry(0, "Park")
+    ///     .add_entry(1, "Drive")
+    ///     .build()?;
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn build(self) -> Result<ValueDescriptions<'static>> {
+        if self.entries.len() > MAX_VALUE_DESCRIPTIONS {
+            return Err(Error::InvalidData(crate::error::str_to_error_string(
+                "Too many value descriptions",
+            )));
+        }
+
+        // Convert Vec<(u64, String)> to Vec<(u64, &'static str)>
+        // We need to leak the strings to get 'static lifetime
+        let mut static_entries: Vec<(u64, &'static str)> = Vec::new();
+        for (value, description) in self.entries {
+            let boxed: Box<str> = description.into_boxed_str();
+            let leaked: &'static str = Box::leak(boxed);
+            static_entries.push((value, leaked));
+        }
+
+        Ok(ValueDescriptions::from_slice(&static_entries))
+    }
+}

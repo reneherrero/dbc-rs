@@ -46,6 +46,7 @@ pub struct DbcBuilder {
     version: Option<Version<'static>>,
     nodes: Option<Nodes<'static>>,
     messages: Vec<Message<'static>>,
+    value_descriptions: crate::dbc::ValueDescriptionsList<'static>,
 }
 
 impl DbcBuilder {
@@ -182,10 +183,28 @@ impl DbcBuilder {
             })
             .collect();
 
+        // Convert value descriptions from Dbc to builder format
+        let mut value_descriptions = crate::dbc::ValueDescriptionsList::new();
+        for ((message_id, signal_name), vd) in dbc.value_descriptions().iter() {
+            // Convert &'a str to &'static str by leaking
+            let static_signal_name: &'static str = Box::leak(Box::from(signal_name.to_string()));
+            // Convert ValueDescriptions<'a> to ValueDescriptions<'static>
+            use crate::ValueDescriptionsBuilder;
+            let mut builder = ValueDescriptionsBuilder::new();
+            for (value, desc) in vd.iter() {
+                let static_desc: &'static str = Box::leak(Box::from(desc.to_string()));
+                builder = builder.add_entry(value, static_desc);
+            }
+            let static_vd =
+                builder.build().expect("ValueDescriptions conversion should always succeed");
+            value_descriptions.insert((message_id, static_signal_name), static_vd);
+        }
+
         Self {
             version,
             nodes: Some(nodes),
             messages,
+            value_descriptions,
         }
     }
 
@@ -303,11 +322,18 @@ impl DbcBuilder {
         self
     }
 
-    fn extract_fields(self) -> Result<(Version<'static>, Nodes<'static>, Vec<Message<'static>>)> {
+    fn extract_fields(
+        self,
+    ) -> Result<(
+        Version<'static>,
+        Nodes<'static>,
+        Vec<Message<'static>>,
+        crate::dbc::ValueDescriptionsList<'static>,
+    )> {
         let version = self.version.ok_or(Error::dbc(crate::error::lang::DBC_VERSION_REQUIRED))?;
         // Allow empty nodes (DBC spec allows empty BU_: line)
         let nodes = self.nodes.unwrap_or_default();
-        Ok((version, nodes, self.messages))
+        Ok((version, nodes, self.messages, self.value_descriptions))
     }
 
     /// Validates the builder without constructing the `Dbc`.
@@ -327,17 +353,19 @@ impl DbcBuilder {
     /// }
     /// ```
     #[must_use = "validation result should be checked"]
-    pub fn validate(self) -> Result<Self> {
-        let (version, nodes, messages) = self.extract_fields()?;
+    pub fn validate(mut self) -> Result<Self> {
+        // Extract value_descriptions before consuming self
+        let value_descriptions = core::mem::take(&mut self.value_descriptions);
+        let (version, nodes, messages, _) = self.extract_fields()?;
         // Convert Vec to Option array for validation (all Some)
         let messages_options: Vec<Option<Message<'static>>> =
             messages.into_iter().map(Some).collect();
         let messages_options_slice: &[Option<Message<'static>>] = &messages_options;
         Dbc::validate(
-            Some(&version),
             &nodes,
             messages_options_slice,
             messages_options_slice.len(),
+            Some(&value_descriptions),
         )
         .map_err(|e| {
             // Dbc::validate only returns ParseError::Message (duplicate IDs or sender not in nodes)
@@ -348,10 +376,12 @@ impl DbcBuilder {
                 _ => Error::from(e),
             }
         })?;
+        // Reconstruct builder with validated fields
         Ok(Self {
             version: Some(version),
             nodes: Some(nodes),
             messages: messages_options.into_iter().map(|opt| opt.unwrap()).collect(),
+            value_descriptions,
         })
     }
 
@@ -371,18 +401,20 @@ impl DbcBuilder {
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(self) -> Result<Dbc<'static>> {
-        let (version, nodes, messages) = self.extract_fields()?;
+    pub fn build(mut self) -> Result<Dbc<'static>> {
+        // Extract value_descriptions before consuming self
+        let value_descriptions = core::mem::take(&mut self.value_descriptions);
+        let (version, nodes, messages, _value_descriptions) = self.extract_fields()?;
         // Convert Vec to Option array for validation (all Some)
         let messages_options: Vec<Option<Message<'static>>> =
             messages.into_iter().map(Some).collect();
         let messages_options_slice: &[Option<Message<'static>>] = &messages_options;
         // Validate before construction
         Dbc::validate(
-            Some(&version),
             &nodes,
             messages_options_slice,
             messages_options_slice.len(),
+            Some(&value_descriptions),
         )
         .map_err(|e| {
             // Dbc::validate only returns ParseError::Message (duplicate IDs or sender not in nodes)
@@ -399,7 +431,12 @@ impl DbcBuilder {
         // Convert Vec to slice by leaking the boxed slice to get 'static lifetime
         let messages_boxed: Box<[Message<'static>]> = messages.into_boxed_slice();
         let messages_slice: &'static [Message<'static>] = Box::leak(messages_boxed);
-        Ok(Dbc::new(Some(version), nodes, messages_slice))
+        Ok(Dbc::new(
+            Some(version),
+            nodes,
+            messages_slice,
+            value_descriptions,
+        ))
     }
 }
 

@@ -1,6 +1,27 @@
 use std::env;
 
 fn main() {
+    // Validate that alloc and kernel features are not both explicitly enabled
+    // These features are mutually exclusive, but alloc may be transitively enabled
+    // by dependencies (e.g., std feature or dev-dependencies), which is allowed
+    let has_alloc = env::var("CARGO_FEATURE_ALLOC").is_ok();
+    let has_kernel = env::var("CARGO_FEATURE_KERNEL").is_ok();
+    let has_std = env::var("CARGO_FEATURE_STD").is_ok();
+
+    // Only error if both are explicitly enabled AND std is not enabled
+    // (std transitively enables alloc, which is expected and allowed)
+    // If kernel is enabled, it takes priority over alloc in the code
+    if has_alloc && has_kernel && !has_std {
+        // Check if alloc was explicitly enabled (not just transitively)
+        // We can't perfectly detect this, but if std is not enabled and both are enabled,
+        // it's likely both were explicitly selected
+        panic!(
+            "ERROR: The `alloc` and `kernel` features are mutually exclusive and cannot be explicitly enabled at the same time.\n\
+            Please enable only one of: alloc, kernel\n\
+            Note: If `alloc` is transitively enabled by dependencies (e.g., via `std`), this is allowed when using `kernel`."
+        );
+    }
+
     // Validate language feature selection - only one language feature should be enabled
     let lang_features = [
         ("lang-en", "English"),

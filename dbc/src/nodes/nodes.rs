@@ -133,26 +133,15 @@ impl<'a> Nodes<'a> {
 
     #[must_use = "parse result should be checked"]
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        // Expect "BU_:" keyword
-        // Note: When called from Dbc::parse, find_next_keyword already advanced past "BU_",
-        // so we try to expect "BU_" first, and if that fails, we're already past it and just expect ":"
-        if parser.expect(crate::BU_.as_bytes()).is_ok() {
-            // Successfully consumed "BU_", now expect ":"
-            parser
-                .expect(b":")
-                .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
-        } else {
-            // Already past "BU_" from find_next_keyword
-            // find_next_keyword advances to right after "BU_", which should be at ":" or whitespace
-            // Try to expect ":" - if it fails, skip whitespace and try again
-            if parser.expect(b":").is_err() {
-                // Not at ":", skip whitespace and try again
-                parser.skip_newlines_and_spaces();
-                parser
-                    .expect(b":")
-                    .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
-            }
-        }
+        // Nodes parsing must always start with "BU_" keyword
+        parser
+            .expect(crate::BU_.as_bytes())
+            .map_err(|_| ParseError::Expected("Expected BU_ keyword"))?;
+
+        // Expect ":" after "BU_"
+        parser
+            .expect(b":")
+            .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
 
         // Skip optional whitespace after ":"
         parser.skip_newlines_and_spaces();

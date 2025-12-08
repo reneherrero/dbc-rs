@@ -5,15 +5,21 @@ use core::{convert::From, fmt};
 use core::num::ParseIntError;
 
 // Type alias for String based on feature flags
-#[cfg(all(feature = "kernel", not(feature = "alloc")))]
+// Kernel takes priority when both are enabled
+#[cfg(feature = "kernel")]
 use crate::kernel::alloc::string::String as ErrorString;
 #[cfg(all(feature = "alloc", not(feature = "kernel")))]
 use alloc::string::String as ErrorString;
 
 // Helper function to convert &str to ErrorString
-#[cfg(any(feature = "alloc", feature = "kernel"))]
+#[cfg(feature = "kernel")]
 pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
-    ErrorString::from(s)
+    crate::kernel::alloc::string::String::from_str(s)
+}
+
+#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
+    alloc::string::String::from(s)
 }
 
 pub mod lang;
@@ -247,7 +253,8 @@ mod tests {
     }
 
     // Tests that require std feature (for std::error::Error trait)
-    #[cfg(feature = "std")]
+    // Only available when std and alloc are enabled, but kernel is not
+    #[cfg(all(feature = "std", feature = "alloc", not(feature = "kernel")))]
     mod tests_std {
         use crate::error::Error;
         use std::error::Error as StdError;

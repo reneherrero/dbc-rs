@@ -26,3 +26,13 @@ pub fn format_two(a: impl core::fmt::Display, sep: &str, b: impl core::fmt::Disp
 pub fn vec_with_capacity<T>(capacity: usize) -> alloc::vec::Vec<T> {
     alloc::vec::Vec::with_capacity(capacity)
 }
+
+/// Convert an iterator of items to Vec<String>
+/// Each item must implement ToString
+pub fn strings_from_iter<I, T>(iter: I) -> Vec<String>
+where
+    I: IntoIterator<Item = T>,
+    T: ToString,
+{
+    iter.into_iter().map(|s| s.to_string()).collect()
+}

@@ -100,30 +100,16 @@ impl<'a> Version<'a> {
     #[must_use = "parse result should be checked"]
     pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
         use crate::VERSION;
-        // Note: When called from Dbc::parse, find_next_keyword already consumed "VERSION"
-        // So we try to expect "VERSION" first, and if that fails, we're already past it
-        if parser.expect(VERSION.as_bytes()).is_ok() {
-            // Successfully consumed "VERSION", now skip whitespace and expect quote
-            parser
-                .skip_whitespace()?
-                .expect(b"\"")
-                .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
-        } else {
-            // Check if we're at the start of input and input doesn't start with "VERSION"
-            // If so, "VERSION" is required
-            // Note: expect() doesn't change position on failure, so we can check is_at_start() here
-            if parser.is_at_start() && !parser.starts_with(VERSION.as_bytes()) {
-                // Use the constant in the error message (VERSION is "VERSION")
-                return Err(ParseError::Expected("Expected 'VERSION' keyword"));
-            }
-            // Already past "VERSION" from find_next_keyword
-            // find_next_keyword advances to right after "VERSION", which should be at whitespace or quote
-            // Skip whitespace if present, then expect quote
-            let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
-            parser
-                .expect(b"\"")
-                .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
-        }
+        // Version parsing must always start with "VERSION" keyword
+        parser
+            .expect(VERSION.as_bytes())
+            .map_err(|_| ParseError::Expected("Expected 'VERSION' keyword"))?;
+
+        // Skip whitespace and expect quote
+        parser
+            .skip_whitespace()?
+            .expect(b"\"")
+            .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
 
         // Read version content until closing quote (allow any printable characters)
         // Use a reasonable max length for version strings (e.g., 255 characters)

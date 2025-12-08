@@ -38,12 +38,6 @@ impl<'a> Parser<'a> {
         self.line
     }
 
-    #[inline]
-    #[must_use]
-    pub(crate) fn is_at_start(&self) -> bool {
-        self.pos == 0
-    }
-
     pub fn skip_whitespace(&mut self) -> ParseResult<&mut Self> {
         if self.pos >= self.input.len() {
             return Err(ParseError::UnexpectedEof);
@@ -82,7 +76,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn find_next_keyword(&mut self) -> ParseResult<&'a str> {
+    pub fn peek_next_keyword(&mut self) -> ParseResult<&'a str> {
         // Skip newlines and spaces to find the next keyword
         self.skip_newlines_and_spaces();
 
@@ -92,14 +86,15 @@ impl<'a> Parser<'a> {
         }
 
         // Try to match each keyword (checking longer ones first)
+        // Note: This function does NOT advance the position - it only peeks at the keyword
+        // Callers must consume the keyword themselves using expect()
         for keyword in crate::DBC_KEYWORDS {
             let keyword_bytes = keyword.as_bytes();
             if self.starts_with(keyword_bytes) {
                 // Check if the next character after the keyword is a valid delimiter
                 let next_pos = self.pos + keyword_bytes.len();
                 if next_pos >= self.input.len() {
-                    // End of input, keyword is valid
-                    self.pos = next_pos;
+                    // End of input, keyword is valid (but don't advance position)
                     return Ok(keyword);
                 }
 
@@ -107,7 +102,7 @@ impl<'a> Parser<'a> {
                 // Valid delimiters: whitespace, newline, colon (for keywords like "BU_:")
                 // Note: underscore is allowed as it may be part of compound keywords
                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t' | b':') {
-                    self.pos = next_pos;
+                    // Keyword found (but don't advance position)
                     return Ok(keyword);
                 }
             }
@@ -289,6 +284,42 @@ impl<'a> Parser<'a> {
         }
 
         if self.pos == start_pos {
+            return Err(ParseError::Expected("Expected number"));
+        }
+
+        let num_bytes = &self.input[start_pos..self.pos];
+        let num_str = core::str::from_utf8(num_bytes)
+            .map_err(|_| ParseError::Expected("Invalid UTF-8 in number"))?;
+        num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
+    }
+
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    pub(crate) fn parse_i64(&mut self) -> ParseResult<i64> {
+        let start_pos = self.pos;
+        let mut has_sign = false;
+
+        // Check for optional sign
+        if self.pos < self.input.len() && self.input[self.pos] == b'-' {
+            has_sign = true;
+            self.pos += 1;
+        }
+
+        // Read digits
+        while self.pos < self.input.len() {
+            let byte = self.input[self.pos];
+            if byte.is_ascii_digit() {
+                self.pos += 1;
+            } else if matches!(
+                byte,
+                b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@' | b';'
+            ) {
+                break;
+            } else {
+                return Err(ParseError::Expected("Expected number"));
+            }
+        }
+
+        if self.pos == start_pos || (has_sign && self.pos == start_pos + 1) {
             return Err(ParseError::Expected("Expected number"));
         }
 

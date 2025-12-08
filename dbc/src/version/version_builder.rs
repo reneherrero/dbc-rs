@@ -1,4 +1,3 @@
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, display_to_string, format_two};
 use crate::{Error, Result, Version, error};
 
@@ -190,7 +189,7 @@ impl VersionBuilder {
     #[must_use]
     pub fn patch(mut self, patch: u8) -> Self {
         if let Some(ref mut v) = self.version {
-            *v = format_two(v.as_str(), ".", patch);
+            *v = crate::compat::format_two(v.as_str(), ".", patch);
         } else {
             // If major/minor weren't called, treat this as just the version string
             self.version = Some(display_to_string(patch));
@@ -253,37 +252,36 @@ impl VersionBuilder {
     }
 }
 
-#[cfg(all(test, feature = "alloc"))]
+#[cfg(test)]
 mod tests {
     use super::VersionBuilder;
-    use crate::{compat::ToString, error::lang};
+    use crate::error::lang;
 
     #[test]
     fn test_version_builder_version_string() {
         let version = VersionBuilder::new().version("1.0").build().unwrap();
-        assert_eq!(version.to_string(), "1.0");
+        assert_eq!(version.as_str(), "1.0");
     }
 
     #[test]
     fn test_version_builder_major_only() {
         let version = VersionBuilder::new().major(1).build().unwrap();
-        assert_eq!(version.to_string(), "1");
+        assert_eq!(version.as_str(), "1");
     }
 
     #[test]
     fn test_version_builder_major_minor() {
         let version = VersionBuilder::new().major(1).minor(0).build().unwrap();
-        assert_eq!(version.to_string(), "1.0");
+        assert_eq!(version.as_str(), "1.0");
     }
 
     #[test]
     fn test_version_builder_full() {
         let version = VersionBuilder::new().major(1).minor(2).patch(3).build().unwrap();
-        assert_eq!(version.to_string(), "1.2.3");
+        assert_eq!(version.as_str(), "1.2.3");
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
     fn test_version_builder_missing_version() {
         use crate::Error;
 
@@ -298,55 +296,55 @@ mod tests {
     #[test]
     fn test_version_builder_with_special_chars() {
         let version = VersionBuilder::new().version("1.0-beta").build().unwrap();
-        assert_eq!(version.to_string(), "1.0-beta");
+        assert_eq!(version.as_str(), "1.0-beta");
     }
 
     #[test]
     fn test_version_builder_minor_without_major() {
         let version = VersionBuilder::new().minor(2).build().unwrap();
-        assert_eq!(version.to_string(), "2");
+        assert_eq!(version.as_str(), "2");
     }
 
     #[test]
     fn test_version_builder_patch_without_major_minor() {
         let version = VersionBuilder::new().patch(3).build().unwrap();
-        assert_eq!(version.to_string(), "3");
+        assert_eq!(version.as_str(), "3");
     }
 
     #[test]
     fn test_version_builder_patch_without_major() {
         let version = VersionBuilder::new().minor(2).patch(3).build().unwrap();
-        assert_eq!(version.to_string(), "2.3");
+        assert_eq!(version.as_str(), "2.3");
     }
 
     #[test]
     fn test_version_builder_version_overrides_major() {
         let version = VersionBuilder::new().major(1).version("2.0").build().unwrap();
-        assert_eq!(version.to_string(), "2.0");
+        assert_eq!(version.as_str(), "2.0");
     }
 
     #[test]
     fn test_version_builder_version_overrides_major_minor() {
         let version = VersionBuilder::new().major(1).minor(2).version("3.0").build().unwrap();
-        assert_eq!(version.to_string(), "3.0");
+        assert_eq!(version.as_str(), "3.0");
     }
 
     #[test]
     fn test_version_builder_major_minor_patch_sequence() {
         let version = VersionBuilder::new().major(1).minor(2).patch(3).build().unwrap();
-        assert_eq!(version.to_string(), "1.2.3");
+        assert_eq!(version.as_str(), "1.2.3");
     }
 
     #[test]
     fn test_version_builder_empty_string() {
         let version = VersionBuilder::new().version("").build().unwrap();
-        assert_eq!(version.to_string(), "");
+        assert_eq!(version.as_str(), "");
     }
 
     #[test]
     fn test_version_builder_long_version() {
         let long_version = "1.2.3.4.5.6.7.8.9.10";
         let version = VersionBuilder::new().version(long_version).build().unwrap();
-        assert_eq!(version.to_string(), long_version);
+        assert_eq!(version.as_str(), long_version);
     }
 }

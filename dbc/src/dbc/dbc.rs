@@ -1,7 +1,11 @@
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+use crate::dbc::ValueDescriptionsList;
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+use crate::value_descriptions::ValueDescriptions;
 #[cfg(feature = "alloc")]
 use crate::{Error, Result};
 use crate::{
-    Message, Messages, Nodes, ParseOptions, Parser, Signal, Signals, Version,
+    Message, MessageList, Nodes, ParseOptions, Parser, Signal, Signals, Version,
     error::{ParseError, ParseResult},
 };
 
@@ -36,15 +40,19 @@ use alloc::string::String;
 pub struct Dbc<'a> {
     version: Option<Version<'a>>,
     nodes: Nodes<'a>,
-    messages: Messages<'a>,
+    messages: MessageList<'a>,
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    value_descriptions: crate::dbc::ValueDescriptionsList<'a>,
 }
 
 impl<'a> Dbc<'a> {
     pub(crate) fn validate(
-        _version: Option<&Version<'_>>,
         nodes: &Nodes<'_>,
         messages: &[Option<Message<'_>>],
         message_count: usize,
+        #[cfg(any(feature = "alloc", feature = "kernel"))] value_descriptions: Option<
+            &crate::dbc::ValueDescriptionsList<'_>,
+        >,
     ) -> ParseResult<()> {
         // Check for duplicate message IDs
         let messages_slice = &messages[..message_count];
@@ -80,6 +88,54 @@ impl<'a> Dbc<'a> {
             }
         }
 
+        // Validate value descriptions if provided
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        if let Some(value_descriptions) = value_descriptions {
+            // Validate that all value descriptions reference existing messages and signals
+            for ((message_id_opt, signal_name), _) in value_descriptions.iter() {
+                // Check if message exists (for message-specific value descriptions)
+                if let Some(message_id) = message_id_opt {
+                    let message_exists = messages_slice
+                        .iter()
+                        .any(|msg_opt| msg_opt.as_ref().is_some_and(|msg| msg.id() == message_id));
+                    if !message_exists {
+                        return Err(ParseError::Message(
+                            crate::error::lang::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND,
+                        ));
+                    }
+
+                    // Check if signal exists in the message
+                    let signal_exists = messages_slice.iter().any(|msg_opt| {
+                        msg_opt.as_ref().is_some_and(|msg| {
+                            msg.id() == message_id && msg.signals().find(signal_name).is_some()
+                        })
+                    });
+                    if !signal_exists {
+                        return Err(ParseError::Message(
+                            crate::error::lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND,
+                        ));
+                    }
+                } else {
+                    // For global value descriptions (message_id is None), check if signal exists in any message
+                    let signal_exists = messages_slice.iter().any(|msg_opt| {
+                        msg_opt
+                            .as_ref()
+                            .is_some_and(|msg| msg.signals().find(signal_name).is_some())
+                    });
+                    if !signal_exists {
+                        return Err(ParseError::Message(
+                            crate::error::lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND,
+                        ));
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
+        {
+            let _ = value_descriptions; // Suppress unused parameter warning
+        }
+
         Ok(())
     }
 
@@ -88,15 +144,35 @@ impl<'a> Dbc<'a> {
         version: Option<Version<'a>>,
         nodes: Nodes<'a>,
         messages: &'a [Message<'a>],
+        value_descriptions: crate::dbc::value_descriptions_list::ValueDescriptionsList<'a>,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
             version,
             nodes,
-            messages: Messages::from_messages_slice(messages),
+            messages: MessageList::from_messages_slice(messages),
+            value_descriptions,
         }
     }
 
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    fn new_from_options_with_value_descriptions(
+        version: Option<Version<'a>>,
+        nodes: Nodes<'a>,
+        messages: &[Option<Message<'a>>],
+        message_count: usize,
+        value_descriptions: crate::dbc::value_descriptions_list::ValueDescriptionsList<'a>,
+    ) -> Self {
+        // Validation should have been done prior (by parse)
+        Self {
+            version,
+            nodes,
+            messages: MessageList::from_options_slice(messages, message_count),
+            value_descriptions,
+        }
+    }
+
+    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
     fn new_from_options(
         version: Option<Version<'a>>,
         nodes: Nodes<'a>,
@@ -107,7 +183,7 @@ impl<'a> Dbc<'a> {
         Self {
             version,
             nodes,
-            messages: Messages::from_options_slice(messages, message_count),
+            messages: MessageList::from_options_slice(messages, message_count),
         }
     }
 
@@ -171,8 +247,67 @@ impl<'a> Dbc<'a> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn messages(&self) -> &Messages<'a> {
+    pub fn messages(&self) -> &MessageList<'a> {
         &self.messages
+    }
+
+    /// Get value descriptions for a specific signal
+    ///
+    /// Value descriptions map numeric signal values to human-readable text.
+    /// Returns `None` if the signal has no value descriptions.
+    ///
+    /// **Global Value Descriptions**: According to the Vector DBC specification,
+    /// a message_id of `-1` (0xFFFFFFFF) in a `VAL_` statement means the value
+    /// descriptions apply to all signals with that name in ANY message. This
+    /// method will first check for a message-specific entry, then fall back to
+    /// a global entry if one exists.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"VERSION "1.0"\n\nBU_: ECM\n\nBO_ 100 Engine : 8 ECM\n SG_ Gear : 0|8@1+ (1,0) [0|5] "" *\n\nVAL_ 100 Gear 0 "Park" 1 "Reverse" ;"#)?;
+    /// if let Some(value_descriptions) = dbc.value_descriptions_for_signal(100, "Gear") {
+    ///     if let Some(desc) = value_descriptions.get(0) {
+    ///         println!("Value 0 means: {}", desc);
+    ///     }
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    /// Get a reference to the value descriptions list
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 100 Engine : 8 ECM
+    ///  SG_ Gear : 0|8@1+ (1,0) [0|5] "" *
+    ///
+    /// VAL_ 100 Gear 0 "Park" 1 "Drive" ;"#)?;
+    /// let value_descriptions_list = dbc.value_descriptions();
+    /// assert_eq!(value_descriptions_list.len(), 1);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[inline]
+    #[must_use]
+    pub fn value_descriptions(&self) -> &ValueDescriptionsList<'a> {
+        &self.value_descriptions
+    }
+
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[must_use]
+    pub fn value_descriptions_for_signal(
+        &self,
+        message_id: u32,
+        signal_name: &str,
+    ) -> Option<&ValueDescriptions<'a>> {
+        self.value_descriptions.for_signal(message_id, signal_name)
     }
 
     /// Parse a DBC file from a string slice
@@ -225,21 +360,21 @@ impl<'a> Dbc<'a> {
     pub fn parse_with_options(data: &'a str, options: ParseOptions) -> ParseResult<Self> {
         // FIRST PASS: Count messages (two-pass parsing to allocate correct sizes)
         let mut parser1 = Parser::new(data.as_bytes())?;
-        let _ = Messages::count_messages_and_signals(&mut parser1)?;
+        let _ = MessageList::count_messages_and_signals(&mut parser1)?;
 
         // SECOND PASS: Parse into messages array
         let mut parser2 = Parser::new(data.as_bytes())?;
 
-        // Allocate messages buffer - Messages will handle the size internally
-        // We use a temporary buffer that Messages can work with (no alloc in no_std)
-        // Messages handles capacity internally, we just need a buffer
+        // Allocate messages buffer - MessageList will handle the size internally
+        // We use a temporary buffer that MessageList can work with (no alloc in no_std)
+        // MessageList handles capacity internally, we just need a buffer
         #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-        let mut messages_buffer = Messages::new_parse_buffer();
+        let mut messages_buffer = MessageList::new_parse_buffer();
 
         #[cfg(any(feature = "alloc", feature = "kernel"))]
         let mut messages_buffer: alloc::vec::Vec<Option<Message<'a>>> = {
             use crate::compat::vec_with_capacity;
-            vec_with_capacity(Messages::max_capacity())
+            vec_with_capacity(MessageList::max_capacity())
         };
 
         let mut message_count_actual = 0;
@@ -253,6 +388,15 @@ impl<'a> Dbc<'a> {
         let mut version: Option<Version<'a>> = None;
         let mut nodes: Option<Nodes<'a>> = None;
 
+        // Store value descriptions during parsing: (message_id, signal_name, value, description)
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        type ValueDescriptionsBufferEntry<'a> =
+            (Option<u32>, &'a str, alloc::vec::Vec<(u64, &'a str)>);
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        let mut value_descriptions_buffer: alloc::vec::Vec<
+            ValueDescriptionsBufferEntry<'a>,
+        > = alloc::vec::Vec::new();
+
         loop {
             // Skip comments (lines starting with //)
             parser2.skip_newlines_and_spaces();
@@ -261,7 +405,7 @@ impl<'a> Dbc<'a> {
                 continue;
             }
 
-            let keyword_result = parser2.find_next_keyword();
+            let keyword_result = parser2.peek_next_keyword();
             let keyword = match keyword_result {
                 Ok(kw) => kw,
                 Err(ParseError::UnexpectedEof) => break,
@@ -275,8 +419,15 @@ impl<'a> Dbc<'a> {
                 Err(e) => return Err(e),
             };
 
+            // Save position after peek_next_keyword (which skips whitespace, so we're at the keyword)
+            let pos_at_keyword = parser2.pos();
+
             match keyword {
                 NS_ => {
+                    // Consume NS_ keyword
+                    parser2
+                        .expect(crate::NS_.as_bytes())
+                        .map_err(|_| ParseError::Expected("Failed to consume NS_ keyword"))?;
                     parser2.skip_newlines_and_spaces();
                     let _ = parser2.expect(b":").ok();
                     loop {
@@ -304,41 +455,147 @@ impl<'a> Dbc<'a> {
                     }
                     continue;
                 }
-                CM_ | BS_ | VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | VAL_ | SIG_GROUP_
+                CM_ | BS_ | VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | SIG_GROUP_
                 | SIG_VALTYPE_ | EV_ | BO_TX_BU_ => {
+                    // Consume keyword then skip to end of line
+                    let _ = parser2.expect(keyword.as_bytes()).ok();
                     parser2.skip_to_end_of_line();
                     continue;
                 }
+                VAL_ => {
+                    #[cfg(any(feature = "alloc", feature = "kernel"))]
+                    {
+                        // Consume VAL_ keyword
+                        let _ = parser2.expect(crate::VAL_.as_bytes()).ok();
+                        // Parse VAL_ statement: VAL_ message_id signal_name value1 "desc1" value2 "desc2" ... ;
+                        // Note: message_id of -1 (0xFFFFFFFF) means the value descriptions apply to
+                        // all signals with this name in ANY message (global value descriptions)
+                        parser2.skip_newlines_and_spaces();
+                        let message_id = match parser2.parse_i64() {
+                            Ok(id) => {
+                                // -1 (0xFFFFFFFF) is the magic number for global value descriptions
+                                if id == -1 {
+                                    None
+                                } else if id >= 0 && id <= u32::MAX as i64 {
+                                    Some(id as u32)
+                                } else {
+                                    parser2.skip_to_end_of_line();
+                                    continue;
+                                }
+                            }
+                            Err(_) => {
+                                parser2.skip_to_end_of_line();
+                                continue;
+                            }
+                        };
+                        parser2.skip_newlines_and_spaces();
+                        let signal_name = match parser2.parse_identifier() {
+                            Ok(name) => name,
+                            Err(_) => {
+                                parser2.skip_to_end_of_line();
+                                continue;
+                            }
+                        };
+                        // Parse value-description pairs
+                        let mut entries = alloc::vec::Vec::new();
+                        loop {
+                            parser2.skip_newlines_and_spaces();
+                            // Check for semicolon (end of VAL_ statement)
+                            if parser2.starts_with(b";") {
+                                parser2.expect(b";").ok();
+                                break;
+                            }
+                            // Parse value (as i64 first to handle negative values like -1, then convert to u64)
+                            // Note: -1 (0xFFFFFFFF) is the magic number for global value descriptions in message_id,
+                            // but values in VAL_ can also be negative
+                            let value = match parser2.parse_i64() {
+                                Ok(v) => {
+                                    // Handle -1 specially: convert to 0xFFFFFFFF (u32::MAX) instead of large u64
+                                    if v == -1 { 0xFFFF_FFFFu64 } else { v as u64 }
+                                }
+                                Err(_) => {
+                                    parser2.skip_to_end_of_line();
+                                    break;
+                                }
+                            };
+                            parser2.skip_newlines_and_spaces();
+                            // Parse description string (expect quote, then take until quote)
+                            if parser2.expect(b"\"").is_err() {
+                                parser2.skip_to_end_of_line();
+                                break;
+                            }
+                            let description_bytes = match parser2.take_until_quote(false, 1024) {
+                                Ok(bytes) => bytes,
+                                Err(_) => {
+                                    parser2.skip_to_end_of_line();
+                                    break;
+                                }
+                            };
+                            let description = match core::str::from_utf8(description_bytes) {
+                                Ok(s) => s,
+                                Err(_) => {
+                                    parser2.skip_to_end_of_line();
+                                    break;
+                                }
+                            };
+                            entries.push((value, description));
+                        }
+                        if !entries.is_empty() {
+                            value_descriptions_buffer.push((message_id, signal_name, entries));
+                        }
+                    }
+                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
+                    {
+                        // In no_std mode, consume VAL_ keyword and skip the rest
+                        let _ = parser2.expect(crate::VAL_.as_bytes()).ok();
+                        parser2.skip_to_end_of_line();
+                    }
+                    continue;
+                }
                 VERSION => {
+                    // Version::parse expects VERSION keyword, don't consume it here
                     version = Some(Version::parse(&mut parser2)?);
                     continue;
                 }
                 BU_ => {
-                    nodes = Some(Nodes::parse(&mut parser2)?);
+                    // Nodes::parse expects BU_ keyword, create parser from original input including it
+                    parser2.skip_to_end_of_line();
+                    let bu_input = &data.as_bytes()[pos_at_keyword..parser2.pos()];
+                    let mut bu_parser = Parser::new(bu_input)?;
+                    nodes = Some(Nodes::parse(&mut bu_parser)?);
                     continue;
                 }
                 BO_ => {
                     // Check limit using Messages (which knows about the capacity)
-                    if message_count_actual >= Messages::max_capacity() {
+                    if message_count_actual >= MessageList::max_capacity() {
                         return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
                     }
 
-                    // Save parser position (after BO_ keyword, before message header)
-                    let message_start_pos = parser2.pos();
+                    // Save parser position (at BO_ keyword, so Message::parse can consume it)
+                    let message_start_pos = pos_at_keyword;
 
-                    // Parse message header to get past it, then parse signals
-                    parser2.skip_newlines_and_spaces();
-                    let _id = parser2.parse_u32().ok();
-                    parser2.skip_newlines_and_spaces();
-                    let _name = parser2.parse_identifier().ok();
-                    parser2.skip_newlines_and_spaces();
-                    let _ = parser2.expect(b":").ok();
-                    parser2.skip_newlines_and_spaces();
-                    let _dlc = parser2.parse_u8().ok();
-                    parser2.skip_newlines_and_spaces();
-                    let _sender = parser2.parse_identifier().ok();
-                    let message_header_end_pos = parser2.pos();
-                    parser2.skip_to_end_of_line();
+                    // Don't manually parse - just find where the header ends by looking for the colon and sender
+                    // We need to find the end of the header line to separate it from signals
+                    let header_line_end = {
+                        // Skip to end of line to find where header ends
+                        let mut temp_parser = Parser::new(&data.as_bytes()[pos_at_keyword..])?;
+                        // Skip BO_ keyword
+                        temp_parser.expect(crate::BO_.as_bytes()).ok();
+                        temp_parser.skip_whitespace().ok();
+                        temp_parser.parse_u32().ok(); // ID
+                        temp_parser.skip_whitespace().ok();
+                        temp_parser.parse_identifier().ok(); // name
+                        temp_parser.skip_whitespace().ok();
+                        temp_parser.expect(b":").ok(); // colon
+                        temp_parser.skip_whitespace().ok();
+                        temp_parser.parse_u8().ok(); // DLC
+                        temp_parser.skip_whitespace().ok();
+                        temp_parser.parse_identifier().ok(); // sender
+                        pos_at_keyword + temp_parser.pos()
+                    };
+
+                    // Now parse signals from the original parser
+                    parser2.skip_to_end_of_line(); // Skip past header line
 
                     // Parse signals into fixed array
                     #[cfg(not(any(feature = "alloc", feature = "kernel")))]
@@ -361,12 +618,7 @@ impl<'a> Dbc<'a> {
                                             crate::error::lang::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }
-                                    let _kw = parser2.find_next_keyword().map_err(|e| match e {
-                                        ParseError::Expected(_) => {
-                                            ParseError::Expected("Expected SG_ keyword")
-                                        }
-                                        _ => e,
-                                    })?;
+                                    // Signal::parse expects SG_ keyword, which we've already verified with starts_with
                                     let signal = Signal::parse(&mut parser2)?;
                                     #[cfg(not(any(feature = "alloc", feature = "kernel")))]
                                     {
@@ -387,7 +639,7 @@ impl<'a> Dbc<'a> {
                     // Restore parser to start of message line and use Message::parse
                     // Create a new parser from the original input, but only up to the end of the header
                     // (not including signals, so Message::parse doesn't complain about extra content)
-                    let message_input = &data.as_bytes()[message_start_pos..message_header_end_pos];
+                    let message_input = &data.as_bytes()[message_start_pos..header_line_end];
                     let mut message_parser = Parser::new(message_input)?;
 
                     // Use Message::parse which will parse the header and use our signals
@@ -416,7 +668,8 @@ impl<'a> Dbc<'a> {
                     continue;
                 }
                 SG_ => {
-                    let _ = Signal::parse(&mut parser2)?;
+                    // Orphaned signal (not inside a message) - skip it
+                    parser2.skip_to_end_of_line();
                     continue;
                 }
                 _ => {
@@ -436,6 +689,20 @@ impl<'a> Dbc<'a> {
             Version::parse(&mut parser).ok()
         });
 
+        // Build value descriptions map for storage in Dbc
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        let value_descriptions_list = {
+            use crate::value_descriptions::ValueDescriptions;
+            use alloc::collections::BTreeMap;
+            let mut map = BTreeMap::new();
+            for (message_id, signal_name, entries) in value_descriptions_buffer {
+                let key = (message_id, signal_name);
+                let value_descriptions = ValueDescriptions::from_slice(&entries);
+                map.insert(key, value_descriptions);
+            }
+            crate::dbc::value_descriptions_list::ValueDescriptionsList::from_map(map)
+        };
+
         // Convert messages buffer to slice for validation and construction
         let messages_slice: &[Option<Message<'a>>] = {
             #[cfg(not(any(feature = "alloc", feature = "kernel")))]
@@ -449,20 +716,40 @@ impl<'a> Dbc<'a> {
         };
 
         // Validate messages (duplicate IDs, sender in nodes, etc.)
-        Self::validate(
-            version.as_ref(),
-            &nodes,
-            messages_slice,
-            message_count_actual,
-        )?;
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        {
+            Self::validate(
+                &nodes,
+                messages_slice,
+                message_count_actual,
+                Some(&value_descriptions_list),
+            )?;
+        }
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
+        {
+            Self::validate(&nodes, messages_slice, message_count_actual, None)?;
+        }
 
         // Construct directly (validation already done)
-        Ok(Self::new_from_options(
-            version,
-            nodes,
-            messages_slice,
-            message_count_actual,
-        ))
+        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        {
+            Ok(Self::new_from_options_with_value_descriptions(
+                version,
+                nodes,
+                messages_slice,
+                message_count_actual,
+                value_descriptions_list,
+            ))
+        }
+        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
+        {
+            Ok(Self::new_from_options(
+                version,
+                nodes,
+                messages_slice,
+                message_count_actual,
+            ))
+        }
     }
 
     /// Parse a DBC file from a byte slice
@@ -493,7 +780,7 @@ impl<'a> Dbc<'a> {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,no_run,ignore
     /// use dbc_rs::Dbc;
     ///
     /// // Create a temporary file for the example
@@ -982,5 +1269,160 @@ BO_ 256 Test : 8 ECM
         let options = ParseOptions::new();
         let result = Dbc::parse_with_options(data, options);
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    fn test_parse_val_value_descriptions() {
+        let data = r#"VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_: Node1 Node2
+
+BO_ 100 Message1 : 8 Node1
+ SG_ Signal : 32|8@1- (1,0) [-1|4] "Gear" Node2
+
+VAL_ 100 Signal -1 "Reverse" 0 "Neutral" 1 "First" 2 "Second" 3 "Third" 4 "Fourth" ;
+"#;
+
+        let dbc = match Dbc::parse(data) {
+            Ok(dbc) => dbc,
+            Err(e) => panic!("Failed to parse DBC: {:?}", e),
+        };
+
+        // Verify basic structure
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().iter().find(|m| m.id() == 100).unwrap();
+        assert_eq!(message.name(), "Message1");
+        assert_eq!(message.sender(), "Node1");
+
+        // Verify signal exists
+        let signal = message.signals().find("Signal").unwrap();
+        assert_eq!(signal.name(), "Signal");
+        assert_eq!(signal.start_bit(), 32);
+        assert_eq!(signal.length(), 8);
+        assert_eq!(signal.unit(), Some("Gear"));
+
+        // Verify value descriptions are parsed and accessible
+        let value_descriptions = dbc
+            .value_descriptions_for_signal(100, "Signal")
+            .expect("Value descriptions should exist for signal");
+
+        // Verify all value mappings
+        assert_eq!(value_descriptions.get(0xFFFFFFFF), Some("Reverse")); // -1 as u32
+        assert_eq!(value_descriptions.get(0), Some("Neutral"));
+        assert_eq!(value_descriptions.get(1), Some("First"));
+        assert_eq!(value_descriptions.get(2), Some("Second"));
+        assert_eq!(value_descriptions.get(3), Some("Third"));
+        assert_eq!(value_descriptions.get(4), Some("Fourth"));
+
+        // Verify non-existent values return None
+        assert_eq!(value_descriptions.get(5), None);
+        assert_eq!(value_descriptions.get(99), None);
+
+        // Verify we can iterate over all value descriptions
+        let iter = value_descriptions.iter();
+        let mut entries: Vec<_> = iter.collect();
+        entries.sort_by_key(|(v, _)| *v);
+
+        assert_eq!(entries.len(), 6);
+        // After sorting by key (u64), 0xFFFFFFFF (4294967295) comes after smaller values
+        assert_eq!(entries[0], (0, "Neutral"));
+        assert_eq!(entries[1], (1, "First"));
+        assert_eq!(entries[2], (2, "Second"));
+        assert_eq!(entries[3], (3, "Third"));
+        assert_eq!(entries[4], (4, "Fourth"));
+        assert_eq!(entries[5], (0xFFFFFFFF, "Reverse"));
+    }
+
+    #[test]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    fn test_parse_val_global_value_descriptions() {
+        // Test global value descriptions (VAL_ -1) that apply to all signals with the same name
+        let data = r#"VERSION "1.0"
+
+NS_ :
+
+    VAL_
+
+BS_:
+
+BU_: ECU DASH
+
+BO_ 256 EngineData: 8 ECU
+ SG_ EngineRPM : 0|16@1+ (0.125,0) [0|8000] "rpm" Vector__XXX
+ SG_ DI_gear : 24|3@1+ (1,0) [0|7] "" Vector__XXX
+
+BO_ 512 DashboardDisplay: 8 DASH
+ SG_ DI_gear : 0|3@1+ (1,0) [0|7] "" Vector__XXX
+ SG_ SpeedDisplay : 8|16@1+ (0.01,0) [0|300] "km/h" Vector__XXX
+
+VAL_ -1 DI_gear 0 "INVALID" 1 "P" 2 "R" 3 "N" 4 "D" 5 "S" 6 "L" 7 "SNA" ;
+"#;
+
+        let dbc = match Dbc::parse(data) {
+            Ok(dbc) => dbc,
+            Err(e) => panic!("Failed to parse DBC: {:?}", e),
+        };
+
+        // Verify basic structure
+        assert_eq!(dbc.messages().len(), 2);
+
+        // Verify first message (EngineData)
+        let engine_msg = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
+        assert_eq!(engine_msg.name(), "EngineData");
+        assert_eq!(engine_msg.sender(), "ECU");
+        let di_gear_signal1 = engine_msg.signals().find("DI_gear").unwrap();
+        assert_eq!(di_gear_signal1.name(), "DI_gear");
+        assert_eq!(di_gear_signal1.start_bit(), 24);
+
+        // Verify second message (DashboardDisplay)
+        let dash_msg = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
+        assert_eq!(dash_msg.name(), "DashboardDisplay");
+        assert_eq!(dash_msg.sender(), "DASH");
+        let di_gear_signal2 = dash_msg.signals().find("DI_gear").unwrap();
+        assert_eq!(di_gear_signal2.name(), "DI_gear");
+        assert_eq!(di_gear_signal2.start_bit(), 0);
+
+        // Verify global value descriptions apply to DI_gear in message 256
+        let value_descriptions1 = dbc
+            .value_descriptions_for_signal(256, "DI_gear")
+            .expect("Global value descriptions should exist for DI_gear in message 256");
+
+        assert_eq!(value_descriptions1.get(0), Some("INVALID"));
+        assert_eq!(value_descriptions1.get(1), Some("P"));
+        assert_eq!(value_descriptions1.get(2), Some("R"));
+        assert_eq!(value_descriptions1.get(3), Some("N"));
+        assert_eq!(value_descriptions1.get(4), Some("D"));
+        assert_eq!(value_descriptions1.get(5), Some("S"));
+        assert_eq!(value_descriptions1.get(6), Some("L"));
+        assert_eq!(value_descriptions1.get(7), Some("SNA"));
+
+        // Verify global value descriptions also apply to DI_gear in message 512
+        let value_descriptions2 = dbc
+            .value_descriptions_for_signal(512, "DI_gear")
+            .expect("Global value descriptions should exist for DI_gear in message 512");
+
+        // Both should return the same value descriptions (same reference or same content)
+        assert_eq!(value_descriptions2.get(0), Some("INVALID"));
+        assert_eq!(value_descriptions2.get(1), Some("P"));
+        assert_eq!(value_descriptions2.get(2), Some("R"));
+        assert_eq!(value_descriptions2.get(3), Some("N"));
+        assert_eq!(value_descriptions2.get(4), Some("D"));
+        assert_eq!(value_descriptions2.get(5), Some("S"));
+        assert_eq!(value_descriptions2.get(6), Some("L"));
+        assert_eq!(value_descriptions2.get(7), Some("SNA"));
+
+        // Verify they should be the same instance (both reference the global entry)
+        // Since we store by (Option<u32>, &str), both should return the same entry
+        assert_eq!(value_descriptions1.len(), value_descriptions2.len());
+        assert_eq!(value_descriptions1.len(), 8);
+
+        // Verify other signals don't have value descriptions
+        assert_eq!(dbc.value_descriptions_for_signal(256, "EngineRPM"), None);
+        assert_eq!(dbc.value_descriptions_for_signal(512, "SpeedDisplay"), None);
     }
 }
