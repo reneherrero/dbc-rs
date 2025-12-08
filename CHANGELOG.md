@@ -10,6 +10,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - (Future changes will be listed here)
 
+## [0.1.0-beta.3] - 2025-12-08
+
+### Added
+
+- **VAL Support**: Added support for value descriptions (VAL_ lines in DBC files)
+  - Parse value descriptions for signals and messages
+  - Support for message-specific and global value descriptions
+  - Value descriptions accessible through `Dbc::value_descriptions()` method
+  - Builder support for creating value descriptions programmatically
+
+### Fixed
+
+- **no_std Build Compatibility**: Fixed compilation errors in no_std mode
+  - Split `validate` function into feature-specific versions (alloc/kernel vs no_std)
+  - Removed conditional parameter that caused compilation errors
+  - All builds now compile successfully in no_std mode
+
+- **Kernel Mock API Verification**: Improved kernel alloc API mock implementation
+  - Removed unused `CapacityOverflow` variant from `TryReserveErrorKind`
+  - Verified all methods match real kernel alloc API patterns
+  - All clippy warnings resolved
+
 ## [0.1.0-beta.2] - 2025-12-07
 
 ### Changed
