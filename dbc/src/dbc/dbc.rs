@@ -1,5 +1,5 @@
 #[cfg(feature = "alloc")]
-use crate::{Error, Result, error::messages as error_messages};
+use crate::{Error, Result};
 use crate::{
     Message, Messages, Nodes, ParseOptions, Parser, Signal, Signals, Version,
     error::{ParseError, ParseResult},
@@ -46,9 +46,6 @@ impl<'a> Dbc<'a> {
         messages: &[Option<Message<'_>>],
         message_count: usize,
     ) -> ParseResult<()> {
-        #[cfg(feature = "alloc")]
-        use crate::error::messages as error_messages;
-
         // Check for duplicate message IDs
         let messages_slice = &messages[..message_count];
         for (i, msg1_opt) in messages_slice.iter().enumerate() {
@@ -62,21 +59,9 @@ impl<'a> Dbc<'a> {
                     None => continue, // Should not happen, but be safe
                 };
                 if msg1.id() == msg2.id() {
-                    #[cfg(feature = "alloc")]
-                    {
-                        let msg = error_messages::duplicate_message_id(
-                            msg1.id(),
-                            msg1.name(),
-                            msg2.name(),
-                        );
-                        return Err(ParseError::Message(msg.leak()));
-                    }
-                    #[cfg(not(feature = "alloc"))]
-                    {
-                        return Err(ParseError::Message(
-                            crate::error::lang::FORMAT_DUPLICATE_MESSAGE_ID,
-                        ));
-                    }
+                    return Err(ParseError::Message(
+                        crate::error::lang::DUPLICATE_MESSAGE_ID,
+                    ));
                 }
             }
         }
@@ -90,17 +75,7 @@ impl<'a> Dbc<'a> {
                     None => continue, // Should not happen, but be safe
                 };
                 if !nodes.contains(msg.sender()) {
-                    #[cfg(feature = "alloc")]
-                    {
-                        let msg_str = error_messages::sender_not_in_nodes(msg.name(), msg.sender());
-                        return Err(ParseError::Message(msg_str.leak()));
-                    }
-                    #[cfg(not(feature = "alloc"))]
-                    {
-                        return Err(ParseError::Message(
-                            crate::error::lang::FORMAT_SENDER_NOT_IN_NODES,
-                        ));
-                    }
+                    return Err(ParseError::Message(crate::error::lang::SENDER_NOT_IN_NODES));
                 }
             }
         }
@@ -383,7 +358,7 @@ impl<'a> Dbc<'a> {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signal_count >= Signals::max_capacity() {
                                         return Err(ParseError::Receivers(
-                                            crate::error::messages::SIGNAL_RECEIVERS_TOO_MANY,
+                                            crate::error::lang::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }
                                     let _kw = parser2.find_next_keyword().map_err(|e| match e {
@@ -504,8 +479,8 @@ impl<'a> Dbc<'a> {
     /// ```
     #[cfg(feature = "alloc")]
     pub fn parse_bytes(data: &[u8]) -> Result<Dbc<'static>> {
-        let content =
-            core::str::from_utf8(data).map_err(|e| Error::Dbc(error_messages::invalid_utf8(e)))?;
+        let content = core::str::from_utf8(data)
+            .map_err(|_e| Error::dbc(crate::error::lang::INVALID_UTF8))?;
         // Convert to owned string, box it, and leak to get 'static lifetime
         use alloc::boxed::Box;
         let owned = String::from(content);
@@ -538,7 +513,7 @@ impl<'a> Dbc<'a> {
     #[cfg(feature = "std")]
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Dbc<'static>> {
         let file =
-            std::fs::File::open(path).map_err(|e| Error::Dbc(error_messages::read_failed(e)))?;
+            std::fs::File::open(path).map_err(|_e| Error::dbc(crate::error::lang::READ_FAILED))?;
         Self::from_reader(file)
     }
 
@@ -560,7 +535,7 @@ impl<'a> Dbc<'a> {
     pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Dbc<'static>> {
         let mut buffer = String::new();
         std::io::Read::read_to_string(&mut reader, &mut buffer)
-            .map_err(|e| Error::Dbc(error_messages::read_failed(e)))?;
+            .map_err(|_e| Error::dbc(crate::error::lang::READ_FAILED))?;
         // Convert to boxed str and leak to get 'static lifetime
         // The leaked memory will live for the duration of the program
         use alloc::boxed::Box;
@@ -672,9 +647,7 @@ BO_ 256 EngineData2 : 8 ECM
         assert!(result.is_err());
         match result.unwrap_err() {
             ParseError::Message(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_DUPLICATE_MESSAGE_ID.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+                assert!(msg.contains(lang::DUPLICATE_MESSAGE_ID));
             }
             _ => panic!("Expected ParseError::Message"),
         }
@@ -695,9 +668,7 @@ BO_ 256 EngineData : 8 TCM
         assert!(result.is_err());
         match result.unwrap_err() {
             ParseError::Message(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_SENDER_NOT_IN_NODES.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end()));
+                assert!(msg.contains(lang::SENDER_NOT_IN_NODES));
             }
             _ => panic!("Expected ParseError::Message"),
         }
@@ -782,9 +753,7 @@ BO_ 256 Engine : 8 ECM
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Dbc(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_INVALID_UTF8.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+                assert!(msg.contains(lang::INVALID_UTF8));
             }
             _ => panic!("Expected Dbc error"),
         }

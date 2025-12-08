@@ -130,50 +130,23 @@ impl<'a> Message<'a> {
         // - Classic CAN Extended (CAN 2.0B): DLC <= 8 bytes (64 bits) maximum payload
         // - CAN FD (Flexible Data Rate, ISO/Bosch): DLC <= 64 bytes (512 bits) maximum payload
         if dlc == 0 {
-            #[cfg(feature = "alloc")]
-            {
-                use crate::error::{messages, parse_error_from_string};
-                let msg = messages::message_dlc_too_small(name, id, dlc);
-                return Err(parse_error_from_string(msg, ParseError::Message));
-            }
-            #[cfg(not(feature = "alloc"))]
-            {
-                return Err(ParseError::Message(
-                    crate::error::lang::MESSAGE_DLC_TOO_SMALL,
-                ));
-            }
+            return Err(ParseError::Message(
+                crate::error::lang::MESSAGE_DLC_TOO_SMALL,
+            ));
         }
         if dlc > 64 {
-            #[cfg(feature = "alloc")]
-            {
-                use crate::error::{messages, parse_error_from_string};
-                let msg = messages::message_dlc_too_large(name, id, dlc);
-                return Err(parse_error_from_string(msg, ParseError::Message));
-            }
-            #[cfg(not(feature = "alloc"))]
-            {
-                return Err(ParseError::Message(
-                    crate::error::lang::MESSAGE_DLC_TOO_LARGE,
-                ));
-            }
+            return Err(ParseError::Message(
+                crate::error::lang::MESSAGE_DLC_TOO_LARGE,
+            ));
         }
 
         // Validate that ID is within valid CAN ID range
         // Extended CAN IDs can be 0x00000000 to 0x1FFFFFFF (0 to 536870911)
         // IDs exceeding 0x1FFFFFFF are invalid
         if id > MAX_EXTENDED_ID {
-            #[cfg(feature = "alloc")]
-            {
-                use crate::error::{messages, parse_error_from_string};
-                let msg = messages::message_id_out_of_range(id);
-                return Err(parse_error_from_string(msg, ParseError::Message));
-            }
-            #[cfg(not(feature = "alloc"))]
-            {
-                return Err(ParseError::Message(
-                    crate::error::lang::MESSAGE_ID_OUT_OF_RANGE,
-                ));
-            }
+            return Err(ParseError::Message(
+                crate::error::lang::MESSAGE_ID_OUT_OF_RANGE,
+            ));
         }
 
         // Validate that all signals fit within the message boundary
@@ -192,26 +165,9 @@ impl<'a> Message<'a> {
             if signal_max_bit >= max_bits {
                 // Only fail if strict boundary checking is enabled
                 if options.strict_boundary_check {
-                    #[cfg(feature = "alloc")]
-                    {
-                        use crate::error::messages;
-                        let msg = messages::signal_extends_beyond_message(
-                            signal.name(),
-                            signal.start_bit(),
-                            signal.length(),
-                            signal_max_bit,
-                            max_bits,
-                            dlc,
-                        );
-                        use crate::error::parse_error_from_string;
-                        return Err(parse_error_from_string(msg, ParseError::Message));
-                    }
-                    #[cfg(not(feature = "alloc"))]
-                    {
-                        return Err(ParseError::Message(
-                            crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
-                        ));
-                    }
+                    return Err(ParseError::Message(
+                        crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
+                    ));
                 }
                 // In lenient mode, we allow signals that extend beyond boundaries
             }
@@ -243,16 +199,7 @@ impl<'a> Message<'a> {
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
                 // lsb1 <= msb2 && lsb2 <= msb1
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
-                    #[cfg(feature = "alloc")]
-                    {
-                        use crate::error::{messages, parse_error_from_string};
-                        let msg = messages::signal_overlap(sig1.name(), sig2.name(), name);
-                        return Err(parse_error_from_string(msg, ParseError::Message));
-                    }
-                    #[cfg(not(feature = "alloc"))]
-                    {
-                        return Err(ParseError::Message(crate::error::lang::SIGNAL_OVERLAP));
-                    }
+                    return Err(ParseError::Message(crate::error::lang::SIGNAL_OVERLAP));
                 }
             }
         }

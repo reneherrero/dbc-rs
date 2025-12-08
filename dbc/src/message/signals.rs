@@ -70,12 +70,9 @@ impl<'a> Signals<'a> {
 
         #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
-            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut signals_vec: Vec<Option<Signal<'a>>> = vec_with_capacity(count);
-            for signal in signals.iter().take(count) {
-                signals_vec.push(Some(signal.clone()));
-            }
+            let signals_vec: Vec<Option<Signal<'a>>> =
+                signals.iter().take(count).map(|signal| Some(signal.clone())).collect();
             Self {
                 signals: signals_vec.into_boxed_slice(),
                 signal_count: count,
@@ -102,12 +99,9 @@ impl<'a> Signals<'a> {
 
         #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
-            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut signals_vec: Vec<Option<Signal<'a>>> = vec_with_capacity(count);
-            for signal_opt in signals.iter().take(count) {
-                signals_vec.push(signal_opt.clone());
-            }
+            let signals_vec: Vec<Option<Signal<'a>>> =
+                signals.iter().take(count).cloned().collect();
             Self {
                 signals: signals_vec.into_boxed_slice(),
                 signal_count: count,

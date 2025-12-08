@@ -83,6 +83,8 @@ impl TestStats {
             self.round_trip_failed,
             100.0 * self.round_trip_failed as f64 / self.parsed_successfully.max(1) as f64
         );
+        eprintln!("Total messages parsed: {}", self.total_messages);
+        eprintln!("Total signals parsed: {}", self.total_signals);
     }
 
     /// Print errors for a source

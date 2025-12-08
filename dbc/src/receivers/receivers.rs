@@ -1,4 +1,4 @@
-use crate::{Parser, error::ParseError, error::ParseResult, error::messages};
+use crate::{Parser, error, error::ParseError, error::ParseResult};
 
 /// Represents the receiver nodes for a signal in a DBC file.
 ///
@@ -119,7 +119,9 @@ impl<'a> Receivers<'a> {
             match parser.parse_identifier() {
                 Ok(node) => {
                     if count >= MAX_RECEIVER_NODES {
-                        return Err(ParseError::Receivers(messages::SIGNAL_RECEIVERS_TOO_MANY));
+                        return Err(ParseError::Receivers(
+                            error::lang::SIGNAL_RECEIVERS_TOO_MANY,
+                        ));
                     }
                     nodes[count] = Some(node);
                     count += 1;
@@ -149,7 +151,9 @@ impl<'a> Receivers<'a> {
             // Validate before construction
             const MAX_RECEIVER_NODES: usize = 64;
             if count > MAX_RECEIVER_NODES {
-                return Err(ParseError::Receivers(messages::SIGNAL_RECEIVERS_TOO_MANY));
+                return Err(ParseError::Receivers(
+                    error::lang::SIGNAL_RECEIVERS_TOO_MANY,
+                ));
             }
             // Construct directly (validation already done)
             Ok(Self::new_nodes(&node_refs[..count]))

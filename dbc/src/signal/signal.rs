@@ -48,7 +48,7 @@ impl<'a> Signal<'a> {
 
         // Validate min <= max
         if min > max {
-            return Err(ParseError::Signal(crate::error::lang::FORMAT_INVALID_RANGE));
+            return Err(ParseError::Signal(crate::error::lang::INVALID_RANGE));
         }
 
         Ok(())
@@ -707,9 +707,7 @@ mod tests {
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
             ParseError::Signal(msg) => {
-                // Check for format template text (language-agnostic) - extract text before first placeholder
-                let template_text = lang::FORMAT_INVALID_RANGE.split("{}").next().unwrap();
-                assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
+                assert!(msg.contains(lang::INVALID_RANGE));
             }
             e => panic!("Expected ParseError::Signal, got: {:?}", e),
         }

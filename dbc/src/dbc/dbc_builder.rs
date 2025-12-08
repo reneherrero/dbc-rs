@@ -2,7 +2,7 @@
 use crate::compat::{Box, Vec};
 use crate::{
     Dbc, Message, Nodes, Version,
-    error::{Error, Result, messages},
+    error::{Error, Result},
 };
 
 /// Builder for constructing `Dbc` instances programmatically.
@@ -304,11 +304,7 @@ impl DbcBuilder {
     }
 
     fn extract_fields(self) -> Result<(Version<'static>, Nodes<'static>, Vec<Message<'static>>)> {
-        let version = self.version.ok_or_else(|| {
-            Error::Dbc(crate::error::str_to_error_string(
-                messages::DBC_VERSION_REQUIRED,
-            ))
-        })?;
+        let version = self.version.ok_or(Error::dbc(crate::error::lang::DBC_VERSION_REQUIRED))?;
         // Allow empty nodes (DBC spec allows empty BU_: line)
         let nodes = self.nodes.unwrap_or_default();
         Ok((version, nodes, self.messages))
@@ -344,9 +340,7 @@ impl DbcBuilder {
             messages_options_slice.len(),
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Message(msg) => {
-                Error::Message(crate::error::str_to_error_string(msg))
-            }
+            crate::error::ParseError::Message(msg) => Error::message(msg),
             _ => Error::from(e),
         })?;
         Ok(Self {
@@ -386,9 +380,7 @@ impl DbcBuilder {
             messages_options_slice.len(),
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Message(msg) => {
-                Error::Message(crate::error::str_to_error_string(msg))
-            }
+            crate::error::ParseError::Message(msg) => Error::message(msg),
             _ => Error::from(e),
         })?;
         // Convert Option array back to Vec for slice creation

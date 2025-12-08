@@ -1,6 +1,6 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, display_to_string, format_two};
-use crate::{Error, Result, Version, error::messages};
+use crate::{Error, Result, Version, error};
 
 /// Builder for creating `Version` programmatically.
 ///
@@ -80,14 +80,7 @@ impl VersionBuilder {
     /// ```
     #[must_use]
     pub fn version(mut self, version: &str) -> Self {
-        #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-        {
-            self.version = Some(String::from(version));
-        }
-        #[cfg(all(feature = "alloc", not(feature = "kernel")))]
-        {
-            self.version = Some(crate::compat::str_to_string(version));
-        }
+        self.version = Some(String::from(version));
         self
     }
 
@@ -251,9 +244,7 @@ impl VersionBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<Version<'static>> {
-        let version = self.version.ok_or_else(|| {
-            Error::Version(crate::error::str_to_error_string(messages::VERSION_EMPTY))
-        })?;
+        let version = self.version.ok_or(Error::version(error::lang::VERSION_EMPTY))?;
 
         // Convert owned String to static reference by leaking Box<str>
         let boxed: Box<str> = version.into_boxed_str();

@@ -2,7 +2,7 @@
 use crate::compat::{Box, String, str_to_string};
 use crate::{
     ByteOrder, Receivers, ReceiversBuilder,
-    error::{Error, Result, messages},
+    error::{Error, Result},
     signal::Signal,
 };
 
@@ -131,21 +131,12 @@ impl SignalBuilder {
     }
 
     fn extract_fields(self) -> Result<SignalFields> {
-        let name = self.name.ok_or_else(|| {
-            Error::Signal(crate::error::str_to_error_string(
-                messages::SIGNAL_NAME_EMPTY,
-            ))
-        })?;
-        let start_bit = self.start_bit.ok_or_else(|| {
-            Error::Signal(crate::error::str_to_error_string(
-                messages::SIGNAL_START_BIT_REQUIRED,
-            ))
-        })?;
-        let length = self.length.ok_or_else(|| {
-            Error::Signal(crate::error::str_to_error_string(
-                messages::SIGNAL_LENGTH_REQUIRED,
-            ))
-        })?;
+        let name = self.name.ok_or(Error::signal(crate::error::lang::SIGNAL_NAME_EMPTY))?;
+        let start_bit = self
+            .start_bit
+            .ok_or(Error::signal(crate::error::lang::SIGNAL_START_BIT_REQUIRED))?;
+        let length =
+            self.length.ok_or(Error::signal(crate::error::lang::SIGNAL_LENGTH_REQUIRED))?;
         Ok((
             name,
             start_bit,
@@ -179,9 +170,9 @@ impl SignalBuilder {
 
         // Validate start_bit: must be between 0 and 511 (CAN FD maximum is 512 bits)
         if start_bit > 511 {
-            return Err(Error::Signal(crate::error::str_to_error_string(
-                &crate::error::messages::signal_start_bit_invalid(&name, start_bit),
-            )));
+            return Err(Error::signal(
+                crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT,
+            ));
         }
 
         // Validate that start_bit + length doesn't exceed CAN FD maximum (512 bits)
@@ -189,12 +180,9 @@ impl SignalBuilder {
         // and overlap detection) happens when the signal is added to a message.
         let end_bit = start_bit + length - 1; // -1 because length includes the start bit
         if end_bit >= 512 {
-            return Err(Error::Signal(crate::error::str_to_error_string(
-                &crate::error::messages::signal_extends_beyond_message(
-                    &name, start_bit, length, end_bit, 512, // max_bits (CAN FD maximum)
-                    64,  // dlc in bytes (64 bytes = 512 bits)
-                ),
-            )));
+            return Err(Error::signal(
+                crate::error::lang::SIGNAL_EXTENDS_BEYOND_MESSAGE,
+            ));
         }
 
         Signal::validate(&name, length, min, max).map_err(Error::from)?;
@@ -238,9 +226,7 @@ impl SignalBuilder {
         };
         // Validate before construction
         Signal::validate(name_static, length, min, max).map_err(|e| match e {
-            crate::error::ParseError::Signal(msg) => {
-                Error::Signal(crate::error::str_to_error_string(msg))
-            }
+            crate::error::ParseError::Signal(msg) => Error::signal(msg),
             _ => Error::ParseError(e),
         })?;
         Ok(Signal::new(

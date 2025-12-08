@@ -1,10 +1,7 @@
 use core::{convert::From, fmt};
 
 // ParseIntError is used in From<ParseIntError> implementations
-// The warning appears when default features (std/alloc) are enabled with kernel
-// because the kernel-specific implementation isn't compiled in that case
 #[cfg(any(feature = "alloc", feature = "kernel"))]
-#[allow(unused_imports)]
 use core::num::ParseIntError;
 
 // Type alias for String based on feature flags
@@ -14,18 +11,12 @@ use crate::kernel::alloc::string::String as ErrorString;
 use alloc::string::String as ErrorString;
 
 // Helper function to convert &str to ErrorString
-#[cfg(all(feature = "kernel", not(feature = "alloc")))]
-pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
-    ErrorString::from_str(s)
-}
-
-#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 pub(crate) fn str_to_error_string(s: &str) -> ErrorString {
     ErrorString::from(s)
 }
 
 pub mod lang;
-pub(crate) mod messages;
 
 /// Error type for DBC parsing and validation operations.
 ///
@@ -116,100 +107,51 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Result type alias for low-level parsing operations that can return a `ParseError`.
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
-// ============================================================================
-// Helper function to convert String to ParseError variant with static lifetime
-// ============================================================================
+// Helper functions for creating Error variants (simplifies error creation)
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+impl Error {
+    pub(crate) fn signal(msg: &'static str) -> Self {
+        Error::Signal(str_to_error_string(msg))
+    }
 
-/// Converts a String error message to a `ParseError` variant with a static lifetime.
-///
-/// This function takes ownership of the String, boxes it, and leaks it to create
-/// a `&'static str` that can be used in `ParseError` variants.
-///
-/// # Safety
-///
-/// This function leaks memory. The leaked memory will live for the duration of
-/// the program. This is acceptable for error messages that are typically displayed
-/// once and then the program exits or handles the error.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// use crate::error::{messages, parse_error_from_string};
-///
-/// let msg = messages::message_id_out_of_range(0x20000000);
-/// return Err(parse_error_from_string(msg, ParseError::Message));
-/// ```
-#[cfg(feature = "alloc")]
-pub(crate) fn parse_error_from_string<F>(msg: ErrorString, f: F) -> ParseError
-where
-    F: FnOnce(&'static str) -> ParseError,
-{
-    use alloc::boxed::Box;
-    f(Box::leak(msg.into_boxed_str()))
+    pub(crate) fn message(msg: &'static str) -> Self {
+        Error::Message(str_to_error_string(msg))
+    }
+
+    pub(crate) fn dbc(msg: &'static str) -> Self {
+        Error::Dbc(str_to_error_string(msg))
+    }
+
+    pub(crate) fn version(msg: &'static str) -> Self {
+        Error::Version(str_to_error_string(msg))
+    }
+
+    pub(crate) fn nodes(msg: &'static str) -> Self {
+        Error::Nodes(str_to_error_string(msg))
+    }
 }
 
-// Separate Display implementations for alloc and kernel (Strategy 4)
-#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+// Unified Display implementation for alloc and kernel
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::InvalidData(msg) => write!(f, "{}", messages::format_invalid_data(msg)),
-            Error::Signal(msg) => write!(f, "{}", messages::format_signal_error(msg)),
-            Error::Message(msg) => write!(f, "{}", messages::format_message_error(msg)),
-            Error::Dbc(msg) => write!(f, "{}", messages::format_dbc_error(msg)),
-            Error::Version(msg) => write!(f, "{}", messages::format_version_error(msg)),
-            Error::Nodes(msg) => write!(f, "{}", messages::format_nodes_error(msg)),
+            Error::InvalidData(msg) => write!(f, "{}: {}", lang::INVALID_DATA_CATEGORY, msg),
+            Error::Signal(msg) => write!(f, "{}: {}", lang::SIGNAL_ERROR_CATEGORY, msg),
+            Error::Message(msg) => write!(f, "{}: {}", lang::MESSAGE_ERROR_CATEGORY, msg),
+            Error::Dbc(msg) => write!(f, "{}: {}", lang::DBC_ERROR_CATEGORY, msg),
+            Error::Version(msg) => write!(f, "{}: {}", lang::VERSION_ERROR_CATEGORY, msg),
+            Error::Nodes(msg) => write!(f, "{}: {}", lang::NODES_ERROR_CATEGORY, msg),
             Error::ParseError(msg) => write!(f, "Parse Error: {}", msg),
         }
     }
 }
 
-#[cfg(all(feature = "kernel", not(feature = "alloc")))]
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::InvalidData(msg) => {
-                let formatted = messages::format_invalid_data(msg);
-                write!(f, "{}", formatted)
-            }
-            Error::Signal(msg) => {
-                let formatted = messages::format_signal_error(msg);
-                write!(f, "{}", formatted)
-            }
-            Error::Message(msg) => {
-                let formatted = messages::format_message_error(msg);
-                write!(f, "{}", formatted)
-            }
-            Error::Dbc(msg) => {
-                let formatted = messages::format_dbc_error(msg);
-                write!(f, "{}", formatted)
-            }
-            Error::Version(msg) => {
-                let formatted = messages::format_version_error(msg);
-                write!(f, "{}", formatted)
-            }
-            Error::Nodes(msg) => {
-                let formatted = messages::format_nodes_error(msg);
-                write!(f, "{}", formatted)
-            }
-            Error::ParseError(msg) => write!(f, "Parse Error: {}", msg),
-        }
-    }
-}
-
-// Separate From<ParseIntError> implementations for alloc vs kernel
-#[cfg(all(feature = "alloc", not(feature = "kernel")))]
+// Unified From<ParseIntError> implementation for alloc and kernel
+#[cfg(any(feature = "alloc", feature = "kernel"))]
 impl From<ParseIntError> for Error {
-    fn from(err: ParseIntError) -> Self {
-        Error::InvalidData(messages::parse_number_failed(err))
-    }
-}
-
-#[cfg(all(feature = "kernel", not(feature = "alloc")))]
-impl From<ParseIntError> for Error {
-    fn from(err: ParseIntError) -> Self {
-        // In kernel mode, parse_number_failed returns String (infallible)
-        Error::InvalidData(messages::parse_number_failed(err))
+    fn from(_err: ParseIntError) -> Self {
+        Error::InvalidData(str_to_error_string(lang::PARSE_NUMBER_FAILED))
     }
 }
 
@@ -254,9 +196,7 @@ mod tests {
 
             match error {
                 Error::InvalidData(msg) => {
-                    assert!(
-                        msg.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap())
-                    );
+                    assert!(msg.contains(lang::PARSE_NUMBER_FAILED));
                 }
                 _ => panic!("Expected InvalidData error"),
             }
@@ -302,7 +242,7 @@ mod tests {
             let display = display_to_string(error);
 
             assert!(display.starts_with(lang::INVALID_DATA_CATEGORY));
-            assert!(display.contains(lang::FORMAT_PARSE_NUMBER_FAILED.split(':').next().unwrap()));
+            assert!(display.contains(lang::PARSE_NUMBER_FAILED));
         }
     }
 

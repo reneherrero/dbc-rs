@@ -1,8 +1,7 @@
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{
-    error::messages,
-    {Error, Message, ParseOptions, Result, Signal},
+    error, {Error, Message, ParseOptions, Result, Signal},
 };
 
 #[cfg(any(feature = "alloc", feature = "kernel"))]
@@ -70,26 +69,10 @@ impl MessageBuilder {
     }
 
     fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<Signal<'static>>)> {
-        let id = self.id.ok_or_else(|| {
-            Error::Message(crate::error::str_to_error_string(
-                messages::MESSAGE_ID_REQUIRED,
-            ))
-        })?;
-        let name = self.name.ok_or_else(|| {
-            Error::Message(crate::error::str_to_error_string(
-                messages::MESSAGE_NAME_EMPTY,
-            ))
-        })?;
-        let dlc = self.dlc.ok_or_else(|| {
-            Error::Message(crate::error::str_to_error_string(
-                messages::MESSAGE_DLC_REQUIRED,
-            ))
-        })?;
-        let sender = self.sender.ok_or_else(|| {
-            Error::Message(crate::error::str_to_error_string(
-                messages::MESSAGE_SENDER_EMPTY,
-            ))
-        })?;
+        let id = self.id.ok_or(Error::message(error::lang::MESSAGE_ID_REQUIRED))?;
+        let name = self.name.ok_or(Error::message(error::lang::MESSAGE_NAME_EMPTY))?;
+        let dlc = self.dlc.ok_or(Error::message(error::lang::MESSAGE_DLC_REQUIRED))?;
+        let sender = self.sender.ok_or(Error::message(error::lang::MESSAGE_SENDER_EMPTY))?;
         Ok((id, name, dlc, sender, self.signals))
     }
 
@@ -136,9 +119,7 @@ impl MessageBuilder {
             ParseOptions::new(), // Builder always uses strict mode
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Message(msg) => {
-                Error::Dbc(crate::error::str_to_error_string(msg))
-            }
+            crate::error::ParseError::Message(msg) => Error::dbc(msg),
             _ => Error::ParseError(e),
         })?;
         // Convert owned strings to static references by leaking Box<str>

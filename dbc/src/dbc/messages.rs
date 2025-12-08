@@ -70,12 +70,9 @@ impl<'a> Messages<'a> {
 
         #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
-            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut messages_vec: Vec<Option<Message<'a>>> = vec_with_capacity(count);
-            for message in messages.iter().take(count) {
-                messages_vec.push(Some(message.clone()));
-            }
+            let messages_vec: Vec<Option<Message<'a>>> =
+                messages.iter().take(count).map(|message| Some(message.clone())).collect();
             Self {
                 messages: messages_vec.into_boxed_slice(),
                 message_count: count,
@@ -105,12 +102,9 @@ impl<'a> Messages<'a> {
 
         #[cfg(any(feature = "alloc", feature = "kernel"))]
         {
-            use crate::compat::vec_with_capacity;
             use alloc::vec::Vec;
-            let mut messages_vec: Vec<Option<Message<'a>>> = vec_with_capacity(count);
-            for message_opt in messages.iter().take(count) {
-                messages_vec.push(message_opt.clone());
-            }
+            let messages_vec: Vec<Option<Message<'a>>> =
+                messages.iter().take(count).cloned().collect();
             Self {
                 messages: messages_vec.into_boxed_slice(),
                 message_count: count,
@@ -308,7 +302,7 @@ impl<'a> Messages<'a> {
                     // Count this message
                     if message_count >= MAX_MESSAGES {
                         return Err(crate::error::ParseError::Message(
-                            crate::error::messages::NODES_TOO_MANY,
+                            crate::error::lang::NODES_TOO_MANY,
                         ));
                     }
 
@@ -334,7 +328,7 @@ impl<'a> Messages<'a> {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signal_count >= crate::Signals::max_capacity() {
                                         return Err(crate::error::ParseError::Message(
-                                            crate::error::messages::SIGNAL_RECEIVERS_TOO_MANY,
+                                            crate::error::lang::MESSAGE_TOO_MANY_SIGNALS,
                                         ));
                                     }
                                     signal_count += 1;

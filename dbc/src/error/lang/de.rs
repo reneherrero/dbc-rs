@@ -31,6 +31,14 @@ pub const DBC_NODES_NOT_DEFINED: &str = "Knoten (BU_) sind nicht definiert";
 pub const DBC_TOO_MANY_MESSAGES: &str = "Zu viele Nachrichten: das Maximum beträgt 10000";
 pub const NODES_DUPLICATE_NAME: &str = "Doppelter Knotenname";
 pub const NODES_TOO_MANY: &str = "Zu viele Knoten: das Maximum beträgt 256";
+pub const DUPLICATE_MESSAGE_ID: &str = "Doppelte Nachrichten-ID";
+pub const SENDER_NOT_IN_NODES: &str = "Nachrichtensender nicht in Knotenliste";
+pub const SIGNAL_EXTENDS_BEYOND_MESSAGE: &str =
+    "Signal erstreckt sich über Nachrichtengrenze hinaus";
+pub const INVALID_RANGE: &str = "Ungültiger Bereich: min > max";
+pub const PARSE_NUMBER_FAILED: &str = "Fehler beim Parsen der Zahl";
+pub const INVALID_UTF8: &str = "Ungültiges UTF-8";
+pub const READ_FAILED: &str = "Fehler beim Lesen";
 pub const MESSAGE_TOO_MANY_SIGNALS: &str = "Zu viele Signale: das Maximum beträgt 64 pro Nachricht";
 pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
     "Zu viele Empfängerknoten: das Maximum beträgt 64 pro Signal";
@@ -46,14 +54,9 @@ pub const MESSAGE_SENDER_EMPTY: &str = "Nachrichtensender darf nicht leer sein";
 pub const MESSAGE_DLC_TOO_SMALL: &str = "Nachrichten-DLC muss mindestens 1 Byte betragen";
 pub const MESSAGE_DLC_TOO_LARGE: &str =
     "Nachrichten-DLC darf 64 Bytes nicht überschreiten (CAN FD Maximum)";
-pub const FORMAT_MESSAGE_DLC_TOO_SMALL: &str = "Nachricht '{}' (ID {}) hat DLC {}, muss mindestens 1 Byte betragen. Verwenden Sie DLC zwischen 1 und 64 Bytes";
-pub const FORMAT_MESSAGE_DLC_TOO_LARGE: &str = "Nachricht '{}' (ID {}) hat DLC {}, darf 64 Bytes nicht überschreiten (CAN FD Maximum). Verwenden Sie DLC zwischen 1 und 64 Bytes";
 pub const MESSAGE_INVALID_FORMAT: &str = "Ungültiges Nachrichtenformat";
 pub const MESSAGE_INVALID_ID: &str = "Ungültige Nachrichten-ID";
 pub const MESSAGE_INVALID_DLC: &str = "Ungültiger DLC";
-pub const FORMAT_MESSAGE_INVALID_ID: &str = "Ungültige Nachrichten-ID '{}'. Erwartet wurde eine gültige Zahl (0-536,870,911 für erweiterte IDs)";
-pub const FORMAT_MESSAGE_INVALID_DLC: &str =
-    "Ungültiger DLC '{}' für Nachricht '{}' (ID {}). Erwartet wurde eine Zahl zwischen 1 und 64";
 pub const MESSAGE_ID_OUT_OF_RANGE: &str = "Nachrichten-ID außerhalb des gültigen Bereichs";
 
 // ============================================================================
@@ -66,8 +69,6 @@ pub const SIGNAL_LENGTH_REQUIRED: &str = "length ist erforderlich";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signallänge muss mindestens 1 Bit betragen";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str =
     "Signallänge darf 512 Bits nicht überschreiten (CAN FD Maximum)";
-pub const FORMAT_SIGNAL_LENGTH_TOO_SMALL: &str = "Signal '{}' hat Länge {} Bits, muss mindestens 1 Bit betragen. Verwenden Sie Länge zwischen 1 und 512 Bits";
-pub const FORMAT_SIGNAL_LENGTH_TOO_LARGE: &str = "Signal '{}' hat Länge {} Bits, darf 512 Bits nicht überschreiten (CAN FD Maximum). Verwenden Sie Länge zwischen 1 und 512 Bits";
 pub const SIGNAL_OVERLAP: &str = "Signale überlappen sich in der Nachricht";
 
 // ============================================================================
@@ -82,9 +83,6 @@ pub const SIGNAL_PARSE_EXPECTED_AT: &str = "Erwartet '@' in startbit|length@..."
 pub const SIGNAL_PARSE_EXPECTED_PIPE: &str = "Erwartet '|' in startbit|length";
 pub const SIGNAL_PARSE_INVALID_START_BIT: &str = "Ungültiger start_bit";
 pub const SIGNAL_PARSE_INVALID_LENGTH: &str = "Ungültige Länge";
-pub const FORMAT_SIGNAL_PARSE_INVALID_START_BIT: &str = "Signal '{}' hat start_bit {}, muss zwischen 0 und 511 liegen. Verwenden Sie start_bit zwischen 0 und 511";
-pub const FORMAT_SIGNAL_PARSE_INVALID_LENGTH: &str =
-    "Ungültige Länge '{}' für Signal '{}'. Erwartet wurde eine Zahl zwischen 1 und 512";
 pub const SIGNAL_PARSE_MISSING_BYTE_ORDER: &str = "Fehlende Byte-Reihenfolge";
 pub const SIGNAL_PARSE_MISSING_SIGN: &str = "Fehlendes Vorzeichen";
 pub const SIGNAL_PARSE_MISSING_CLOSING_PAREN: &str = "Fehlende ')' für factor,offset";
@@ -100,28 +98,3 @@ pub const SIGNAL_PARSE_INVALID_MAX: &str = "Ungültiges Max";
 pub const SIGNAL_PARSE_EXPECTED_UNIT_QUOTE: &str = "Erwartet Beginn der 'unit'-Zeichenkette '\"'";
 pub const SIGNAL_PARSE_UNIT_TOO_LONG: &str =
     "Einheitszeichenkette überschreitet die maximale Länge von 256 Zeichen";
-
-// ============================================================================
-// Formatted error message templates
-// ============================================================================
-
-pub const FORMAT_DUPLICATE_MESSAGE_ID: &str =
-    "Doppelte Nachrichten-ID: {} (Nachrichten '{}' und '{}')";
-pub const FORMAT_DUPLICATE_NODE_NAME: &str = "Doppelter Knotenname: '{}'";
-pub const FORMAT_SENDER_NOT_IN_NODES: &str =
-    "Nachricht '{}' hat einen Sender '{}', der nicht in der Knotenliste steht";
-pub const FORMAT_SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Signal '{}' erstreckt sich über die Nachrichtengrenze hinaus: start_bit {} + length {} = {} > {} (DLC {} Bytes). {}";
-pub const SUGGEST_CAN_FD: &str =
-    "Erwägen Sie die Verwendung von CAN FD mit DLC {} oder höher (erfordert DLC > 8 Bytes)";
-pub const SUGGEST_INCREASE_DLC: &str = "Erwägen Sie, DLC auf {} Bytes zu erhöhen";
-pub const FORMAT_INVALID_RANGE: &str = "Ungültiger Bereich: min {} > max {}";
-pub const FORMAT_UNKNOWN_BYTE_ORDER: &str = "Unbekannte Byte-Reihenfolge '{}'";
-pub const FORMAT_UNKNOWN_SIGN: &str = "Unbekanntes Vorzeichen '{}'";
-pub const FORMAT_PARSE_NUMBER_FAILED: &str = "Fehler beim Parsen der Zahl: {}";
-pub const FORMAT_INVALID_UTF8: &str = "Ungültiges UTF-8: {}";
-pub const FORMAT_READ_FAILED: &str = "Fehler beim Lesen: {}";
-pub const FORMAT_MESSAGE_ID_OUT_OF_RANGE: &str = "Nachrichten-ID {} ({} dezimal) liegt außerhalb des gültigen Bereichs (Standard 11-Bit: 0x000-0x7FF (0-2,047 dezimal), Erweitert 29-Bit: 0x0000_0000-0x1FFF_FFFF (0-536,870,911 dezimal))";
-pub const FORMAT_SIGNAL_OVERLAP: &str =
-    "Signale '{}' und '{}' überlappen sich in der Nachricht '{}'. {}";
-pub const SUGGEST_MULTIPLEXING: &str = "Hinweis: Wenn diese Signale multiplexiert sind (zu verschiedenen Zeiten aktiv), ist Signal-Multiplexing-Unterstützung erforderlich (noch nicht implementiert)";
-pub const FORMAT_LINE_NUMBER: &str = "{} (Zeile {})";

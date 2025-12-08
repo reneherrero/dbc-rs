@@ -1,6 +1,6 @@
 use crate::{
     Parser,
-    error::{ParseError, ParseResult, messages},
+    error::{ParseError, ParseResult},
 };
 
 /// Iterator over nodes in a Nodes collection
@@ -102,7 +102,7 @@ impl<'a> Nodes<'a> {
         use crate::error::lang;
         // Check for too many nodes (DoS protection)
         if nodes.len() > crate::MAX_NODES {
-            return Err(ParseError::Nodes(messages::NODES_TOO_MANY));
+            return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
         }
 
         // Check for duplicate node names (case-sensitive)
@@ -171,7 +171,7 @@ impl<'a> Nodes<'a> {
             match parser.parse_identifier() {
                 Ok(node) => {
                     if count >= crate::MAX_NODES {
-                        return Err(ParseError::Nodes(messages::NODES_TOO_MANY));
+                        return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
                     }
                     node_names[count] = Some(node);
                     count += 1;
