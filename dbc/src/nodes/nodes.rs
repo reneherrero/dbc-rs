@@ -116,7 +116,7 @@ impl<'a> Nodes<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)] // Only used by builders (std-only)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub(crate) fn new(nodes: &[&'a str]) -> Self {
         // Validation should have been done prior (by builder)
         let mut node_array: [Option<&'a str>; crate::MAX_NODES] =

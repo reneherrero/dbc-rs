@@ -54,8 +54,8 @@ impl<'a> Signal<'a> {
         Ok(())
     }
 
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     #[allow(clippy::too_many_arguments)] // Internal method, builder pattern is the public API
-    #[allow(dead_code)] // Only used by builders (std-only)
     pub(crate) fn new(
         name: &'a str,
         start_bit: u16,

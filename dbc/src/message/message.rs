@@ -207,7 +207,7 @@ impl<'a> Message<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)] // Only used by builders (std-only)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub(crate) fn new(
         id: u32,
         name: &'a str,

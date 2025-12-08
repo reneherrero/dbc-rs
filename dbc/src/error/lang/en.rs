@@ -38,6 +38,8 @@ pub const INVALID_RANGE: &str = "Invalid range: min > max";
 pub const PARSE_NUMBER_FAILED: &str = "Failed to parse number";
 pub const INVALID_UTF8: &str = "Invalid UTF-8";
 pub const READ_FAILED: &str = "Failed to read";
+pub const EXPECTED_WHITESPACE: &str = "Expected whitespace";
+pub const EXPECTED_PATTERN: &str = "Expected pattern";
 pub const MESSAGE_TOO_MANY_SIGNALS: &str = "Too many signals: maximum allowed is 64 per message";
 pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
     "Too many receiver nodes: maximum allowed is 64 per signal";

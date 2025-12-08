@@ -2,9 +2,7 @@ use crate::error::{ParseError, ParseResult};
 
 // Error message constants - grouped together for easy maintenance
 mod err {
-    #[allow(dead_code)] // Reserved for future use
     pub const EXPECTED_WHITESPACE: &str = "Expected whitespace";
-    #[allow(dead_code)] // Reserved for future use
     pub const EXPECTED_PATTERN: &str = "Expected pattern";
 }
 

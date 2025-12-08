@@ -83,7 +83,7 @@ impl<'a> Dbc<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)] // Only used by builders (std-only)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub(crate) fn new(
         version: Option<Version<'a>>,
         nodes: Nodes<'a>,

@@ -51,7 +51,7 @@ pub struct Messages<'a> {
 
 impl<'a> Messages<'a> {
     /// Create Messages from a slice of messages by cloning them
-    #[allow(dead_code)] // Only used by builders (std-only)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub(crate) fn from_messages_slice(messages: &[Message<'a>]) -> Self {
         let count = messages.len().min(MAX_MESSAGES);
 

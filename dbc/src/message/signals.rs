@@ -51,7 +51,7 @@ pub struct Signals<'a> {
 
 impl<'a> Signals<'a> {
     /// Create Signals from a slice of signals by cloning them
-    #[allow(dead_code)] // Only used by builders (std-only)
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub(crate) fn from_signals_slice(signals: &[Signal<'a>]) -> Self {
         let count = signals.len().min(MAX_SIGNALS_PER_MESSAGE);
 

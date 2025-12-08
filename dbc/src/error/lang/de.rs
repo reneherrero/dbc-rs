@@ -39,6 +39,8 @@ pub const INVALID_RANGE: &str = "Ungültiger Bereich: min > max";
 pub const PARSE_NUMBER_FAILED: &str = "Fehler beim Parsen der Zahl";
 pub const INVALID_UTF8: &str = "Ungültiges UTF-8";
 pub const READ_FAILED: &str = "Fehler beim Lesen";
+pub const EXPECTED_WHITESPACE: &str = "Leerzeichen erwartet";
+pub const EXPECTED_PATTERN: &str = "Muster erwartet";
 pub const MESSAGE_TOO_MANY_SIGNALS: &str = "Zu viele Signale: das Maximum beträgt 64 pro Nachricht";
 pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
     "Zu viele Empfängerknoten: das Maximum beträgt 64 pro Signal";
