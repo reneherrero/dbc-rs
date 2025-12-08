@@ -290,18 +290,6 @@ pub(crate) fn message_dlc_too_large(msg_name: &str, msg_id: u32, dlc: u8) -> Str
     replace_placeholders(lang::FORMAT_MESSAGE_DLC_TOO_LARGE, &args)
 }
 
-#[cfg(feature = "alloc")]
-pub(crate) fn signal_length_too_small(signal_name: &str, length: u16) -> String {
-    let args: [&dyn core::fmt::Display; 2] = [&signal_name as &dyn core::fmt::Display, &length];
-    replace_placeholders(lang::FORMAT_SIGNAL_LENGTH_TOO_SMALL, &args)
-}
-
-#[cfg(feature = "alloc")]
-pub(crate) fn signal_length_too_large(signal_name: &str, length: u16) -> String {
-    let args: [&dyn core::fmt::Display; 2] = [&signal_name as &dyn core::fmt::Display, &length];
-    replace_placeholders(lang::FORMAT_SIGNAL_LENGTH_TOO_LARGE, &args)
-}
-
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 pub(crate) fn signal_start_bit_invalid(signal_name: &str, start_bit: u16) -> String {
     let args: [&dyn core::fmt::Display; 2] = [&signal_name as &dyn core::fmt::Display, &start_bit];

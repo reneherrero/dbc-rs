@@ -110,17 +110,17 @@ impl<'a> Message<'a> {
         // Check signal count limit per message (DoS protection)
         const MAX_SIGNALS_PER_MESSAGE: usize = crate::Signals::max_capacity();
         if signal_count > MAX_SIGNALS_PER_MESSAGE {
-            return Err(ParseError::Version(
+            return Err(ParseError::Message(
                 crate::error::lang::MESSAGE_TOO_MANY_SIGNALS,
             ));
         }
 
         if name.trim().is_empty() {
-            return Err(ParseError::Version(crate::error::lang::MESSAGE_NAME_EMPTY));
+            return Err(ParseError::Message(crate::error::lang::MESSAGE_NAME_EMPTY));
         }
 
         if sender.trim().is_empty() {
-            return Err(ParseError::Version(
+            return Err(ParseError::Message(
                 crate::error::lang::MESSAGE_SENDER_EMPTY,
             ));
         }
@@ -132,13 +132,13 @@ impl<'a> Message<'a> {
         if dlc == 0 {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::{messages, version_error_from_string};
+                use crate::error::{messages, parse_error_from_string};
                 let msg = messages::message_dlc_too_small(name, id, dlc);
-                return Err(version_error_from_string(msg));
+                return Err(parse_error_from_string(msg, ParseError::Message));
             }
             #[cfg(not(feature = "alloc"))]
             {
-                return Err(ParseError::Version(
+                return Err(ParseError::Message(
                     crate::error::lang::MESSAGE_DLC_TOO_SMALL,
                 ));
             }
@@ -146,13 +146,13 @@ impl<'a> Message<'a> {
         if dlc > 64 {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::{messages, version_error_from_string};
+                use crate::error::{messages, parse_error_from_string};
                 let msg = messages::message_dlc_too_large(name, id, dlc);
-                return Err(version_error_from_string(msg));
+                return Err(parse_error_from_string(msg, ParseError::Message));
             }
             #[cfg(not(feature = "alloc"))]
             {
-                return Err(ParseError::Version(
+                return Err(ParseError::Message(
                     crate::error::lang::MESSAGE_DLC_TOO_LARGE,
                 ));
             }
@@ -164,13 +164,13 @@ impl<'a> Message<'a> {
         if id > MAX_EXTENDED_ID {
             #[cfg(feature = "alloc")]
             {
-                use crate::error::{messages, version_error_from_string};
+                use crate::error::{messages, parse_error_from_string};
                 let msg = messages::message_id_out_of_range(id);
-                return Err(version_error_from_string(msg));
+                return Err(parse_error_from_string(msg, ParseError::Message));
             }
             #[cfg(not(feature = "alloc"))]
             {
-                return Err(ParseError::Version(
+                return Err(ParseError::Message(
                     crate::error::lang::MESSAGE_ID_OUT_OF_RANGE,
                 ));
             }
@@ -203,12 +203,12 @@ impl<'a> Message<'a> {
                             max_bits,
                             dlc,
                         );
-                        use crate::error::version_error_from_string;
-                        return Err(version_error_from_string(msg));
+                        use crate::error::parse_error_from_string;
+                        return Err(parse_error_from_string(msg, ParseError::Message));
                     }
                     #[cfg(not(feature = "alloc"))]
                     {
-                        return Err(ParseError::Version(
+                        return Err(ParseError::Message(
                             crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
                         ));
                     }
@@ -245,13 +245,13 @@ impl<'a> Message<'a> {
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
                     #[cfg(feature = "alloc")]
                     {
-                        use crate::error::{messages, version_error_from_string};
+                        use crate::error::{messages, parse_error_from_string};
                         let msg = messages::signal_overlap(sig1.name(), sig2.name(), name);
-                        return Err(version_error_from_string(msg));
+                        return Err(parse_error_from_string(msg, ParseError::Message));
                     }
                     #[cfg(not(feature = "alloc"))]
                     {
-                        return Err(ParseError::Version(crate::error::lang::SIGNAL_OVERLAP));
+                        return Err(ParseError::Message(crate::error::lang::SIGNAL_OVERLAP));
                     }
                 }
             }
@@ -313,7 +313,7 @@ impl<'a> Message<'a> {
         // Parse message ID
         let id = parser
             .parse_u32()
-            .map_err(|_| ParseError::Version(crate::error::lang::MESSAGE_INVALID_ID))?;
+            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_INVALID_ID))?;
 
         // Skip whitespace
         parser
@@ -323,7 +323,7 @@ impl<'a> Message<'a> {
         // Parse message name (identifier)
         let name = parser
             .parse_identifier()
-            .map_err(|_| ParseError::Version(crate::error::lang::MESSAGE_NAME_EMPTY))?;
+            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_NAME_EMPTY))?;
 
         // Skip whitespace (optional before colon)
         let _ = parser.skip_whitespace();
@@ -337,7 +337,7 @@ impl<'a> Message<'a> {
         // Parse DLC
         let dlc = parser
             .parse_u8()
-            .map_err(|_| ParseError::Version(crate::error::lang::MESSAGE_INVALID_DLC))?;
+            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_INVALID_DLC))?;
 
         // Skip whitespace
         parser
@@ -347,7 +347,7 @@ impl<'a> Message<'a> {
         // Parse sender (identifier, until end of line or whitespace)
         let sender = parser
             .parse_identifier()
-            .map_err(|_| ParseError::Version(crate::error::lang::MESSAGE_SENDER_EMPTY))?;
+            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_SENDER_EMPTY))?;
 
         // Check for extra content after sender (invalid format)
         parser.skip_newlines_and_spaces();
@@ -521,10 +521,10 @@ mod tests {
         let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(_) => {
+            ParseError::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Version"),
+            _ => panic!("Expected ParseError::Message"),
         }
     }
 
@@ -537,10 +537,10 @@ mod tests {
         let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(_) => {
+            ParseError::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Version"),
+            _ => panic!("Expected ParseError::Message"),
         }
     }
 
@@ -553,10 +553,10 @@ mod tests {
         let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(_) => {
+            ParseError::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Version"),
+            _ => panic!("Expected ParseError::Message"),
         }
     }
 
@@ -569,10 +569,10 @@ mod tests {
         let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(_) => {
+            ParseError::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Version"),
+            _ => panic!("Expected ParseError::Message"),
         }
     }
 

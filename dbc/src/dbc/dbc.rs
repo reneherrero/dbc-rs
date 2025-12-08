@@ -69,11 +69,11 @@ impl<'a> Dbc<'a> {
                             msg1.name(),
                             msg2.name(),
                         );
-                        return Err(ParseError::Version(msg.leak()));
+                        return Err(ParseError::Message(msg.leak()));
                     }
                     #[cfg(not(feature = "alloc"))]
                     {
-                        return Err(ParseError::Version(
+                        return Err(ParseError::Message(
                             crate::error::lang::FORMAT_DUPLICATE_MESSAGE_ID,
                         ));
                     }
@@ -93,11 +93,11 @@ impl<'a> Dbc<'a> {
                     #[cfg(feature = "alloc")]
                     {
                         let msg_str = error_messages::sender_not_in_nodes(msg.name(), msg.sender());
-                        return Err(ParseError::Version(msg_str.leak()));
+                        return Err(ParseError::Message(msg_str.leak()));
                     }
                     #[cfg(not(feature = "alloc"))]
                     {
-                        return Err(ParseError::Version(
+                        return Err(ParseError::Message(
                             crate::error::lang::FORMAT_SENDER_NOT_IN_NODES,
                         ));
                     }
@@ -345,7 +345,7 @@ impl<'a> Dbc<'a> {
                 BO_ => {
                     // Check limit using Messages (which knows about the capacity)
                     if message_count_actual >= Messages::max_capacity() {
-                        return Err(ParseError::Version(crate::error::lang::NODES_TOO_MANY));
+                        return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
                     }
 
                     // Save parser position (after BO_ keyword, before message header)
@@ -382,7 +382,7 @@ impl<'a> Dbc<'a> {
                             if let Some(next_byte) = parser2.peek_byte_at(3) {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signal_count >= Signals::max_capacity() {
-                                        return Err(ParseError::Version(
+                                        return Err(ParseError::Receivers(
                                             crate::error::messages::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }
@@ -671,12 +671,12 @@ BO_ 256 EngineData2 : 8 ECM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(msg) => {
+            ParseError::Message(msg) => {
                 // Check for format template text (language-agnostic) - extract text before first placeholder
                 let template_text = lang::FORMAT_DUPLICATE_MESSAGE_ID.split("{}").next().unwrap();
                 assert!(msg.contains(template_text.trim_end_matches(':').trim_end()));
             }
-            _ => panic!("Expected ParseError::Version"),
+            _ => panic!("Expected ParseError::Message"),
         }
     }
 
@@ -694,12 +694,12 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(msg) => {
+            ParseError::Message(msg) => {
                 // Check for format template text (language-agnostic) - extract text before first placeholder
                 let template_text = lang::FORMAT_SENDER_NOT_IN_NODES.split("{}").next().unwrap();
                 assert!(msg.contains(template_text.trim_end()));
             }
-            _ => panic!("Expected ParseError::Version"),
+            _ => panic!("Expected ParseError::Message"),
         }
     }
 
@@ -929,12 +929,16 @@ BO_ 257 Invalid : 8 ECM
         // Accept any ParseError - line number tracking is not yet implemented
         match err {
             ParseError::Version(_)
+            | ParseError::Message(_)
+            | ParseError::Nodes(_)
+            | ParseError::Receivers(_)
+            | ParseError::Signal(_)
             | ParseError::UnexpectedEof
             | ParseError::Expected(_)
-            | ParseError::InvalidChar(_) => {
+            | ParseError::InvalidChar(_)
+            | ParseError::MaxStrLength(_) => {
                 // Accept various parse errors
             }
-            _ => panic!("Expected ParseError"),
         };
         // Note: Line number tracking is not yet implemented, so we just verify an error is returned
     }
@@ -951,10 +955,17 @@ BU_: ECM
         let err = result.unwrap_err();
         // Accept any ParseError - line number tracking is not yet implemented
         match err {
-            ParseError::Version(_) | ParseError::UnexpectedEof | ParseError::Expected(_) => {
+            ParseError::Version(_)
+            | ParseError::Message(_)
+            | ParseError::Nodes(_)
+            | ParseError::Receivers(_)
+            | ParseError::Signal(_)
+            | ParseError::UnexpectedEof
+            | ParseError::Expected(_)
+            | ParseError::InvalidChar(_)
+            | ParseError::MaxStrLength(_) => {
                 // Accept various parse errors
             }
-            _ => panic!("Expected ParseError"),
         };
         // Note: Line number tracking is not yet implemented, so we just verify an error is returned
     }

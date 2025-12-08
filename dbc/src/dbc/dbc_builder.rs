@@ -344,8 +344,8 @@ impl DbcBuilder {
             messages_options_slice.len(),
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => {
-                Error::Dbc(crate::error::str_to_error_string(msg))
+            crate::error::ParseError::Message(msg) => {
+                Error::Message(crate::error::str_to_error_string(msg))
             }
             _ => Error::from(e),
         })?;
@@ -386,8 +386,8 @@ impl DbcBuilder {
             messages_options_slice.len(),
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => {
-                Error::Dbc(crate::error::str_to_error_string(msg))
+            crate::error::ParseError::Message(msg) => {
+                Error::Message(crate::error::str_to_error_string(msg))
             }
             _ => Error::from(e),
         })?;

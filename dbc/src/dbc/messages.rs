@@ -307,7 +307,7 @@ impl<'a> Messages<'a> {
                 BO_ => {
                     // Count this message
                     if message_count >= MAX_MESSAGES {
-                        return Err(crate::error::ParseError::Version(
+                        return Err(crate::error::ParseError::Message(
                             crate::error::messages::NODES_TOO_MANY,
                         ));
                     }
@@ -333,7 +333,7 @@ impl<'a> Messages<'a> {
                             if let Some(next_byte) = parser.peek_byte_at(3) {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signal_count >= crate::Signals::max_capacity() {
-                                        return Err(crate::error::ParseError::Version(
+                                        return Err(crate::error::ParseError::Message(
                                             crate::error::messages::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }

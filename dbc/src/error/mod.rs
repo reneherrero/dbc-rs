@@ -80,6 +80,18 @@ pub enum ParseError {
 
     /// Version-related parse error.
     Version(&'static str),
+
+    /// Message-related parse error.
+    Message(&'static str),
+
+    /// Receivers-related parse error.
+    Receivers(&'static str),
+
+    /// Nodes-related parse error.
+    Nodes(&'static str),
+
+    /// Signal-related parse error.
+    Signal(&'static str),
 }
 
 impl fmt::Display for ParseError {
@@ -90,6 +102,10 @@ impl fmt::Display for ParseError {
             ParseError::InvalidChar(c) => write!(f, "Invalid character: {}", c),
             ParseError::MaxStrLength(max) => write!(f, "String length exceeds maximum: {}", max),
             ParseError::Version(msg) => write!(f, "Version error: {}", msg),
+            ParseError::Message(msg) => write!(f, "Message error: {}", msg),
+            ParseError::Receivers(msg) => write!(f, "Receivers error: {}", msg),
+            ParseError::Nodes(msg) => write!(f, "Nodes error: {}", msg),
+            ParseError::Signal(msg) => write!(f, "Signal error: {}", msg),
         }
     }
 }
@@ -101,13 +117,13 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub type ParseResult<T> = core::result::Result<T, ParseError>;
 
 // ============================================================================
-// Helper function to convert String to ParseError::Version(&'static str)
+// Helper function to convert String to ParseError variant with static lifetime
 // ============================================================================
 
-/// Converts a String error message to a `ParseError::Version` with a static lifetime.
+/// Converts a String error message to a `ParseError` variant with a static lifetime.
 ///
 /// This function takes ownership of the String, boxes it, and leaks it to create
-/// a `&'static str` that can be used in `ParseError::Version`.
+/// a `&'static str` that can be used in `ParseError` variants.
 ///
 /// # Safety
 ///
@@ -118,15 +134,18 @@ pub type ParseResult<T> = core::result::Result<T, ParseError>;
 /// # Examples
 ///
 /// ```rust,ignore
-/// use crate::error::{messages, version_error_from_string};
+/// use crate::error::{messages, parse_error_from_string};
 ///
 /// let msg = messages::message_id_out_of_range(0x20000000);
-/// return Err(version_error_from_string(msg));
+/// return Err(parse_error_from_string(msg, ParseError::Message));
 /// ```
 #[cfg(feature = "alloc")]
-pub(crate) fn version_error_from_string(msg: ErrorString) -> ParseError {
+pub(crate) fn parse_error_from_string<F>(msg: ErrorString, f: F) -> ParseError
+where
+    F: FnOnce(&'static str) -> ParseError,
+{
     use alloc::boxed::Box;
-    ParseError::Version(Box::leak(msg.into_boxed_str()))
+    f(Box::leak(msg.into_boxed_str()))
 }
 
 // Separate Display implementations for alloc and kernel (Strategy 4)

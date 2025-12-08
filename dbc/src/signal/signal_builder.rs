@@ -238,7 +238,7 @@ impl SignalBuilder {
         };
         // Validate before construction
         Signal::validate(name_static, length, min, max).map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => {
+            crate::error::ParseError::Signal(msg) => {
                 Error::Signal(crate::error::str_to_error_string(msg))
             }
             _ => Error::ParseError(e),

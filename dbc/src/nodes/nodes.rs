@@ -102,14 +102,14 @@ impl<'a> Nodes<'a> {
         use crate::error::lang;
         // Check for too many nodes (DoS protection)
         if nodes.len() > crate::MAX_NODES {
-            return Err(ParseError::Version(messages::NODES_TOO_MANY));
+            return Err(ParseError::Nodes(messages::NODES_TOO_MANY));
         }
 
         // Check for duplicate node names (case-sensitive)
         for (i, node1) in nodes.iter().enumerate() {
             for node2 in nodes.iter().skip(i + 1) {
                 if *node1 == *node2 {
-                    return Err(ParseError::Version(lang::NODES_DUPLICATE_NAME));
+                    return Err(ParseError::Nodes(lang::NODES_DUPLICATE_NAME));
                 }
             }
         }
@@ -171,7 +171,7 @@ impl<'a> Nodes<'a> {
             match parser.parse_identifier() {
                 Ok(node) => {
                     if count >= crate::MAX_NODES {
-                        return Err(ParseError::Version(messages::NODES_TOO_MANY));
+                        return Err(ParseError::Nodes(messages::NODES_TOO_MANY));
                     }
                     node_names[count] = Some(node);
                     count += 1;
@@ -488,8 +488,8 @@ mod tests {
         let result = Nodes::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(msg) => assert!(msg == lang::NODES_DUPLICATE_NAME),
-            _ => panic!("Expected ParseError::Version"),
+            ParseError::Nodes(msg) => assert!(msg == lang::NODES_DUPLICATE_NAME),
+            _ => panic!("Expected ParseError::Nodes"),
         }
     }
 

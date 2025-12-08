@@ -136,7 +136,7 @@ impl MessageBuilder {
             ParseOptions::new(), // Builder always uses strict mode
         )
         .map_err(|e| match e {
-            crate::error::ParseError::Version(msg) => {
+            crate::error::ParseError::Message(msg) => {
                 Error::Dbc(crate::error::str_to_error_string(msg))
             }
             _ => Error::ParseError(e),

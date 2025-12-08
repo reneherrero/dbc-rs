@@ -119,7 +119,7 @@ impl<'a> Receivers<'a> {
             match parser.parse_identifier() {
                 Ok(node) => {
                     if count >= MAX_RECEIVER_NODES {
-                        return Err(ParseError::Version(messages::SIGNAL_RECEIVERS_TOO_MANY));
+                        return Err(ParseError::Receivers(messages::SIGNAL_RECEIVERS_TOO_MANY));
                     }
                     nodes[count] = Some(node);
                     count += 1;
@@ -149,7 +149,7 @@ impl<'a> Receivers<'a> {
             // Validate before construction
             const MAX_RECEIVER_NODES: usize = 64;
             if count > MAX_RECEIVER_NODES {
-                return Err(ParseError::Version(messages::SIGNAL_RECEIVERS_TOO_MANY));
+                return Err(ParseError::Receivers(messages::SIGNAL_RECEIVERS_TOO_MANY));
             }
             // Construct directly (validation already done)
             Ok(Self::new_nodes(&node_refs[..count]))
@@ -485,7 +485,7 @@ mod tests {
         let result = Receivers::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Version(msg) => {
+            ParseError::Receivers(msg) => {
                 assert!(msg.contains(lang::SIGNAL_RECEIVERS_TOO_MANY));
             }
             _ => panic!("Expected ParseError"),
