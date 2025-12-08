@@ -339,9 +339,14 @@ impl DbcBuilder {
             messages_options_slice,
             messages_options_slice.len(),
         )
-        .map_err(|e| match e {
-            crate::error::ParseError::Message(msg) => Error::message(msg),
-            _ => Error::from(e),
+        .map_err(|e| {
+            // Dbc::validate only returns ParseError::Message (duplicate IDs or sender not in nodes)
+            // Convert to the more specific Error::Message variant
+            match e {
+                crate::error::ParseError::Message(msg) => Error::message(msg),
+                // This should never happen with current validate implementation
+                _ => Error::from(e),
+            }
         })?;
         Ok(Self {
             version: Some(version),
@@ -379,9 +384,14 @@ impl DbcBuilder {
             messages_options_slice,
             messages_options_slice.len(),
         )
-        .map_err(|e| match e {
-            crate::error::ParseError::Message(msg) => Error::message(msg),
-            _ => Error::from(e),
+        .map_err(|e| {
+            // Dbc::validate only returns ParseError::Message (duplicate IDs or sender not in nodes)
+            // Convert to the more specific Error::Message variant
+            match e {
+                crate::error::ParseError::Message(msg) => Error::message(msg),
+                // This should never happen with current validate implementation
+                _ => Error::from(e),
+            }
         })?;
         // Convert Option array back to Vec for slice creation
         let messages: Vec<Message<'static>> =
