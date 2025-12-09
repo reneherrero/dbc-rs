@@ -96,7 +96,8 @@ impl<'a> Message<'a> {
         signals: &[Option<Signal<'a>>],
         signal_count: usize,
         options: crate::ParseOptions,
-    ) -> ParseResult<()> {
+    ) -> crate::error::Result<()> {
+        use crate::error::{Error, lang};
         // Validate CAN ID range
         // CAN specification allows:
         // - Standard 11-bit IDs: 0x000 to 0x7FF (0-2047)
@@ -110,19 +111,15 @@ impl<'a> Message<'a> {
         // Check signal count limit per message (DoS protection)
         const MAX_SIGNALS_PER_MESSAGE: usize = crate::Signals::max_capacity();
         if signal_count > MAX_SIGNALS_PER_MESSAGE {
-            return Err(ParseError::Message(
-                crate::error::lang::MESSAGE_TOO_MANY_SIGNALS,
-            ));
+            return Err(Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS));
         }
 
         if name.trim().is_empty() {
-            return Err(ParseError::Message(crate::error::lang::MESSAGE_NAME_EMPTY));
+            return Err(Error::Validation(lang::MESSAGE_NAME_EMPTY));
         }
 
         if sender.trim().is_empty() {
-            return Err(ParseError::Message(
-                crate::error::lang::MESSAGE_SENDER_EMPTY,
-            ));
+            return Err(Error::Validation(lang::MESSAGE_SENDER_EMPTY));
         }
 
         // Validate DLC (Data Length Code): must be between 1 and 64 bytes
@@ -130,23 +127,17 @@ impl<'a> Message<'a> {
         // - Classic CAN Extended (CAN 2.0B): DLC <= 8 bytes (64 bits) maximum payload
         // - CAN FD (Flexible Data Rate, ISO/Bosch): DLC <= 64 bytes (512 bits) maximum payload
         if dlc == 0 {
-            return Err(ParseError::Message(
-                crate::error::lang::MESSAGE_DLC_TOO_SMALL,
-            ));
+            return Err(Error::Validation(lang::MESSAGE_DLC_TOO_SMALL));
         }
         if dlc > 64 {
-            return Err(ParseError::Message(
-                crate::error::lang::MESSAGE_DLC_TOO_LARGE,
-            ));
+            return Err(Error::Validation(lang::MESSAGE_DLC_TOO_LARGE));
         }
 
         // Validate that ID is within valid CAN ID range
         // Extended CAN IDs can be 0x00000000 to 0x1FFFFFFF (0 to 536870911)
         // IDs exceeding 0x1FFFFFFF are invalid
         if id > MAX_EXTENDED_ID {
-            return Err(ParseError::Message(
-                crate::error::lang::MESSAGE_ID_OUT_OF_RANGE,
-            ));
+            return Err(Error::Validation(lang::MESSAGE_ID_OUT_OF_RANGE));
         }
 
         // Validate that all signals fit within the message boundary
@@ -165,9 +156,7 @@ impl<'a> Message<'a> {
             if signal_max_bit >= max_bits {
                 // Only fail if strict boundary checking is enabled
                 if options.strict_boundary_check {
-                    return Err(ParseError::Message(
-                        crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
-                    ));
+                    return Err(Error::Validation(lang::SIGNAL_EXTENDS_BEYOND_MESSAGE));
                 }
                 // In lenient mode, we allow signals that extend beyond boundaries
             }
@@ -199,7 +188,7 @@ impl<'a> Message<'a> {
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
                 // lsb1 <= msb2 && lsb2 <= msb1
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
-                    return Err(ParseError::Message(crate::error::lang::SIGNAL_OVERLAP));
+                    return Err(Error::Validation(lang::SIGNAL_OVERLAP));
                 }
             }
         }
@@ -313,7 +302,11 @@ impl<'a> Message<'a> {
             &signals[..signal_count],
             signal_count,
             options,
-        )?;
+        )
+        .map_err(|e| match e {
+            crate::error::Error::Validation(msg) => crate::error::ParseError::Message(msg),
+            _ => crate::error::ParseError::Message("Validation error"),
+        })?;
         // Construct directly (validation already done)
         Ok(Self::new_from_options(
             id,

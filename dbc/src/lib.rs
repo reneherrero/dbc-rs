@@ -74,7 +74,7 @@ pub use byte_order::ByteOrder;
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use dbc::ValueDescriptionsList;
 pub use dbc::{Dbc, MessageList};
-pub use error::{Error, Result};
+pub use error::{Error, ParseError, ParseResult, Result};
 pub use message::{Message, Signals};
 pub use nodes::Nodes;
 pub use parse_options::ParseOptions;

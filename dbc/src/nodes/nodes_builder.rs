@@ -1,6 +1,5 @@
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, Vec, str_to_string};
-use crate::{error::Error, error::Result, nodes::Nodes};
+use crate::{error::Result, nodes::Nodes};
 
 /// Builder for creating `Nodes` programmatically.
 ///
@@ -140,10 +139,7 @@ impl NodesBuilder {
     fn extract_and_validate_nodes(self) -> Result<Vec<String>> {
         let node_strs: Vec<String> = crate::compat::strings_from_iter(self.nodes);
         let node_refs: Vec<&str> = node_strs.iter().map(|s| s.as_str()).collect();
-        super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
-            crate::error::ParseError::Nodes(msg) => Error::nodes(msg),
-            _ => Error::from(e),
-        })?;
+        super::Nodes::validate(&node_refs)?;
         Ok(node_strs)
     }
 
@@ -154,7 +150,7 @@ impl NodesBuilder {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(Self)` if validation succeeds, or `Err(Error::Nodes)` if:
+    /// Returns `Ok(Self)` if validation succeeds, or `Err(Error::Validation)` if:
     /// - More than 256 nodes are specified (exceeds maximum limit)
     /// - Duplicate node names are found (case-sensitive)
     ///
@@ -188,7 +184,7 @@ impl NodesBuilder {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(Nodes)` if successful, or `Err(Error::Nodes)` if:
+    /// Returns `Ok(Nodes)` if successful, or `Err(Error::Validation)` if:
     /// - More than 256 nodes are specified (exceeds maximum limit)
     /// - Duplicate node names are found (case-sensitive)
     ///
@@ -239,10 +235,7 @@ impl NodesBuilder {
             node_refs.push(Box::leak(boxed));
         }
         // Validate before construction
-        super::Nodes::validate_nodes(&node_refs).map_err(|e| match e {
-            crate::error::ParseError::Nodes(msg) => Error::nodes(msg),
-            _ => Error::from(e),
-        })?;
+        super::Nodes::validate(&node_refs)?;
         Ok(Nodes::new(&node_refs))
     }
 }
@@ -252,7 +245,6 @@ mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
     use crate::{error::Error, error::lang};
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
     use alloc::format;
 
     #[test]
@@ -260,8 +252,8 @@ mod tests {
         let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
-            _ => panic!("Expected Nodes error"),
+            Error::Validation(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
+            _ => panic!("Expected Validation error"),
         }
     }
 
@@ -274,10 +266,10 @@ mod tests {
         let result = builder.build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => {
+            Error::Validation(msg) => {
                 assert!(msg.contains(lang::NODES_TOO_MANY));
             }
-            _ => panic!("Expected Nodes error"),
+            _ => panic!("Expected Validation error"),
         }
     }
 
@@ -327,8 +319,8 @@ mod tests {
         let result = builder.validate();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
-            _ => panic!("Expected Nodes error"),
+            Error::Validation(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
+            _ => panic!("Expected Validation error"),
         }
     }
 
@@ -341,8 +333,8 @@ mod tests {
         let result = builder.validate();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg.contains(lang::NODES_TOO_MANY)),
-            _ => panic!("Expected Nodes error"),
+            Error::Validation(msg) => assert!(msg.contains(lang::NODES_TOO_MANY)),
+            _ => panic!("Expected Validation error"),
         }
     }
 

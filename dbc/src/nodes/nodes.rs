@@ -98,18 +98,18 @@ impl<'a> Default for Nodes<'a> {
 
 impl<'a> Nodes<'a> {
     // Shared validation function
-    pub(crate) fn validate_nodes(nodes: &[&str]) -> ParseResult<()> {
-        use crate::error::lang;
+    pub(crate) fn validate(nodes: &[&str]) -> crate::error::Result<()> {
+        use crate::error::{Error, lang};
         // Check for too many nodes (DoS protection)
         if nodes.len() > crate::MAX_NODES {
-            return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
+            return Err(Error::Validation(lang::NODES_TOO_MANY));
         }
 
         // Check for duplicate node names (case-sensitive)
         for (i, node1) in nodes.iter().enumerate() {
             for node2 in nodes.iter().skip(i + 1) {
                 if *node1 == *node2 {
-                    return Err(ParseError::Nodes(lang::NODES_DUPLICATE_NAME));
+                    return Err(Error::Validation(lang::NODES_DUPLICATE_NAME));
                 }
             }
         }
@@ -189,7 +189,10 @@ impl<'a> Nodes<'a> {
         }
 
         // Validate before construction
-        Self::validate_nodes(&node_refs[..count])?;
+        Self::validate(&node_refs[..count]).map_err(|e| match e {
+            crate::error::Error::Validation(msg) => crate::error::ParseError::Nodes(msg),
+            _ => crate::error::ParseError::Nodes("Validation error"),
+        })?;
         // Construct directly (validation already done)
         let mut node_array: [Option<&'a str>; crate::MAX_NODES] =
             [const { None }; crate::MAX_NODES];

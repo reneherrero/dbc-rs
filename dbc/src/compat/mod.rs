@@ -5,15 +5,11 @@
 //!
 //! Strategy: Separate modules for alloc vs kernel modes.
 //! The `alloc` and `kernel` features are mutually exclusive.
-//! Kernel takes priority when both are available (kernel wraps alloc internally).
 
-#![cfg(any(feature = "alloc", feature = "kernel"))]
-
-// Kernel takes priority when both are available (kernel wraps alloc internally)
-// This allows kernel to work even if alloc is transitively enabled by dependencies
-#[cfg(feature = "kernel")]
+// Only use kernel module if alloc is not enabled
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
 mod kernel;
-#[cfg(feature = "kernel")]
+#[cfg(all(feature = "kernel", not(feature = "alloc")))]
 pub use kernel::*;
 
 // Only use alloc module if kernel is not enabled

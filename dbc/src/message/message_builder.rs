@@ -1,10 +1,8 @@
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{
     error, {Error, Message, ParseOptions, Result, Signal},
 };
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 #[derive(Debug, Clone, Default)]
 pub struct MessageBuilder {
     id: Option<u32>,
@@ -14,7 +12,6 @@ pub struct MessageBuilder {
     signals: Vec<Signal<'static>>,
 }
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 impl MessageBuilder {
     pub fn new() -> Self {
         Self::default()
@@ -91,8 +88,7 @@ impl MessageBuilder {
             signals_options_slice,
             signals_options_slice.len(),
             ParseOptions::new(), // Builder always uses strict mode
-        )
-        .map_err(Error::from)?;
+        )?;
         Ok(Self {
             id: Some(id),
             name: Some(name),
@@ -117,11 +113,7 @@ impl MessageBuilder {
             signals_options_slice,
             signals_options_slice.len(),
             ParseOptions::new(), // Builder always uses strict mode
-        )
-        .map_err(|e| match e {
-            crate::error::ParseError::Message(msg) => Error::dbc(msg),
-            _ => Error::ParseError(e),
-        })?;
+        )?;
         // Convert owned strings to static references by leaking Box<str>
         // name and sender are already String types, so convert directly
         let name_boxed: Box<str> = name.into_boxed_str();

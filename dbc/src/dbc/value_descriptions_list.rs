@@ -1,13 +1,10 @@
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::value_descriptions::ValueDescriptions;
 
 /// Iterator over value descriptions in a ValueDescriptionsList
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 struct ValueDescriptionsListIter<'a, 'b> {
     entries: alloc::collections::btree_map::Iter<'b, (Option<u32>, &'a str), ValueDescriptions<'a>>,
 }
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 impl<'a, 'b> Iterator for ValueDescriptionsListIter<'a, 'b> {
     type Item = ((Option<u32>, &'a str), &'b ValueDescriptions<'a>);
 
@@ -22,13 +19,11 @@ impl<'a, 'b> Iterator for ValueDescriptionsListIter<'a, 'b> {
 /// Value descriptions map signal values to human-readable text descriptions.
 /// They can be message-specific (keyed by message_id and signal_name) or global
 /// (keyed by None and signal_name, applying to all signals with that name).
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct ValueDescriptionsList<'a> {
     value_descriptions: alloc::collections::BTreeMap<(Option<u32>, &'a str), ValueDescriptions<'a>>,
 }
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 impl<'a> ValueDescriptionsList<'a> {
     /// Create ValueDescriptionsList from a BTreeMap
     pub(crate) fn from_map(

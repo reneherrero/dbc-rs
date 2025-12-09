@@ -1,5 +1,4 @@
 use super::Receivers;
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{Error, Result};
 
@@ -273,9 +272,7 @@ impl ReceiversBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
     use crate::error::Error;
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
     use alloc::format;
 
     #[test]
@@ -321,8 +318,6 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_too_many() {
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        use alloc::format;
         let mut builder = ReceiversBuilder::new();
         for i in 0..65 {
             builder = builder.add_node(format!("Node{i}"));
@@ -416,8 +411,6 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_at_limit() {
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        use alloc::format;
         let mut builder = ReceiversBuilder::new();
         for i in 0..64 {
             builder = builder.add_node(format!("Node{i}"));

@@ -1,4 +1,3 @@
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, Vec, str_to_string};
 use crate::{
     Dbc, Message, Nodes, Version,
@@ -366,16 +365,7 @@ impl DbcBuilder {
             messages_options_slice,
             messages_options_slice.len(),
             Some(&value_descriptions),
-        )
-        .map_err(|e| {
-            // Dbc::validate only returns ParseError::Message (duplicate IDs or sender not in nodes)
-            // Convert to the more specific Error::Message variant
-            match e {
-                crate::error::ParseError::Message(msg) => Error::message(msg),
-                // This should never happen with current validate implementation
-                _ => Error::from(e),
-            }
-        })?;
+        )?;
         // Reconstruct builder with validated fields
         Ok(Self {
             version: Some(version),
@@ -415,16 +405,7 @@ impl DbcBuilder {
             messages_options_slice,
             messages_options_slice.len(),
             Some(&value_descriptions),
-        )
-        .map_err(|e| {
-            // Dbc::validate only returns ParseError::Message (duplicate IDs or sender not in nodes)
-            // Convert to the more specific Error::Message variant
-            match e {
-                crate::error::ParseError::Message(msg) => Error::message(msg),
-                // This should never happen with current validate implementation
-                _ => Error::from(e),
-            }
-        })?;
+        )?;
         // Convert Option array back to Vec for slice creation
         let messages: Vec<Message<'static>> =
             messages_options.into_iter().map(|opt| opt.unwrap()).collect();
@@ -444,11 +425,10 @@ impl DbcBuilder {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::DbcBuilder;
-    use crate::{ByteOrder, Dbc, Error, Parser, Version, error::lang};
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
-    use crate::{MessageBuilder, NodesBuilder, ReceiversBuilder, SignalBuilder};
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
-    use alloc::vec;
+    use crate::{
+        ByteOrder, Dbc, Error, MessageBuilder, NodesBuilder, Parser, ReceiversBuilder,
+        SignalBuilder, Version, error::lang,
+    };
 
     #[test]
     fn test_dbc_builder_valid() {
@@ -594,7 +574,7 @@ mod tests {
         let dbc = DbcBuilder::new(None)
             .version(version)
             .nodes(nodes)
-            .add_messages(vec![message1, message2])
+            .add_messages([message1, message2].to_vec())
             .build()
             .unwrap();
 

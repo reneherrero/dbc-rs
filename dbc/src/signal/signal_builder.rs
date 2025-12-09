@@ -1,4 +1,3 @@
-#[cfg(any(feature = "alloc", feature = "kernel"))]
 use crate::compat::{Box, String, str_to_string};
 use crate::{
     ByteOrder, Receivers, ReceiversBuilder,
@@ -185,7 +184,7 @@ impl SignalBuilder {
             ));
         }
 
-        Signal::validate(&name, length, min, max).map_err(Error::from)?;
+        Signal::validate(&name, length, min, max)?;
         Ok(Self {
             name: Some(name),
             start_bit: Some(start_bit),
@@ -225,10 +224,7 @@ impl SignalBuilder {
             None
         };
         // Validate before construction
-        Signal::validate(name_static, length, min, max).map_err(|e| match e {
-            crate::error::ParseError::Signal(msg) => Error::signal(msg),
-            _ => Error::ParseError(e),
-        })?;
+        Signal::validate(name_static, length, min, max)?;
         Ok(Signal::new(
             name_static,
             start_bit,

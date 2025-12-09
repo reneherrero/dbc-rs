@@ -12,5 +12,6 @@ pub use dbc_builder::DbcBuilder;
 
 pub use dbc_impl::Dbc;
 pub use message_list::MessageList;
+
 #[cfg(any(feature = "alloc", feature = "kernel"))]
 pub use value_descriptions_list::ValueDescriptionsList;

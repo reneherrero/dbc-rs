@@ -54,6 +54,12 @@ pub enum Error {
     #[cfg(any(feature = "alloc", feature = "kernel"))]
     Nodes(ErrorString),
 
+    /// Decoding-related parse error.
+    Decoding(&'static str),
+
+    /// Validation-related parse error.
+    Validation(&'static str),
+
     /// Low-level parse error (available in `no_std` builds).
     ParseError(ParseError),
 }
@@ -131,10 +137,6 @@ impl Error {
     pub(crate) fn version(msg: &'static str) -> Self {
         Error::Version(str_to_error_string(msg))
     }
-
-    pub(crate) fn nodes(msg: &'static str) -> Self {
-        Error::Nodes(str_to_error_string(msg))
-    }
 }
 
 // Unified Display implementation for alloc and kernel
@@ -149,6 +151,8 @@ impl fmt::Display for Error {
             Error::Version(msg) => write!(f, "{}: {}", lang::VERSION_ERROR_CATEGORY, msg),
             Error::Nodes(msg) => write!(f, "{}: {}", lang::NODES_ERROR_CATEGORY, msg),
             Error::ParseError(msg) => write!(f, "Parse Error: {}", msg),
+            Error::Decoding(msg) => write!(f, "Decoding Error: {}", msg),
+            Error::Validation(msg) => write!(f, "Validation Error: {}", msg),
         }
     }
 }

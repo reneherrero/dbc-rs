@@ -19,9 +19,15 @@ pub struct Signal<'a> {
 }
 
 impl<'a> Signal<'a> {
-    pub(crate) fn validate(name: &str, length: u16, min: f64, max: f64) -> ParseResult<()> {
+    pub(crate) fn validate(
+        name: &str,
+        length: u16,
+        min: f64,
+        max: f64,
+    ) -> crate::error::Result<()> {
+        use crate::error::{Error, lang};
         if name.trim().is_empty() {
-            return Err(ParseError::Signal(crate::error::lang::SIGNAL_NAME_EMPTY));
+            return Err(Error::Validation(lang::SIGNAL_NAME_EMPTY));
         }
 
         // Validate length: must be between 1 and 512 bits
@@ -30,14 +36,10 @@ impl<'a> Signal<'a> {
         // Signal length is validated against message DLC in Message::validate
         // Note: name is parsed before this validation, so we can include it in error messages
         if length == 0 {
-            return Err(ParseError::Signal(
-                crate::error::lang::SIGNAL_LENGTH_TOO_SMALL,
-            ));
+            return Err(Error::Validation(lang::SIGNAL_LENGTH_TOO_SMALL));
         }
         if length > 512 {
-            return Err(ParseError::Signal(
-                crate::error::lang::SIGNAL_LENGTH_TOO_LARGE,
-            ));
+            return Err(Error::Validation(lang::SIGNAL_LENGTH_TOO_LARGE));
         }
 
         // Note: start_bit validation (boundary checks and overlap detection) is done in
@@ -48,7 +50,7 @@ impl<'a> Signal<'a> {
 
         // Validate min <= max
         if min > max {
-            return Err(ParseError::Signal(crate::error::lang::INVALID_RANGE));
+            return Err(Error::Validation(lang::INVALID_RANGE));
         }
 
         Ok(())
@@ -379,7 +381,10 @@ impl<'a> Signal<'a> {
         let receivers = Receivers::parse(parser)?;
 
         // Validate before construction
-        Self::validate(name, length, min, max)?;
+        Self::validate(name, length, min, max).map_err(|e| match e {
+            crate::error::Error::Validation(msg) => crate::error::ParseError::Signal(msg),
+            _ => crate::error::ParseError::Signal("Validation error"),
+        })?;
         // Construct directly (validation already done)
         // Value descriptions are stored in Dbc, not in Signal
         Ok(Self {
@@ -499,15 +504,15 @@ impl<'a> Signal<'a> {
     /// assert_eq!(rpm, 2000.0);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn decode(&self, data: &[u8]) -> Result<f64, crate::error::ParseError> {
-        use crate::error::{ParseError, lang};
+    pub fn decode(&self, data: &[u8]) -> Result<f64, crate::error::Error> {
+        use crate::error::{Error, lang};
 
         let start_bit = self.start_bit as usize;
         let length = self.length as usize;
         let end_byte = (start_bit + length - 1) / 8;
 
         if end_byte >= data.len() {
-            return Err(ParseError::Signal(lang::SIGNAL_EXTENDS_BEYOND_DATA));
+            return Err(Error::Decoding(lang::SIGNAL_EXTENDS_BEYOND_DATA));
         }
 
         // Extract bits based on byte order

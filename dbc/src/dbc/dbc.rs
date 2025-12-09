@@ -1,16 +1,9 @@
-#[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::dbc::ValueDescriptionsList;
-#[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::value_descriptions::ValueDescriptions;
-#[cfg(feature = "alloc")]
-use crate::{Error, Result};
 use crate::{
-    Message, MessageList, Nodes, ParseOptions, Parser, Signal, Signals, Version,
-    error::{ParseError, ParseResult},
+    Error, Message, MessageList, Nodes, ParseError, ParseOptions, ParseResult, Parser, Result,
+    Signal, Signals, Version, error::lang,
 };
-
-#[cfg(feature = "alloc")]
-use alloc::string::String;
+#[cfg(any(feature = "alloc", feature = "kernel"))]
+use crate::{ValueDescriptions, ValueDescriptionsList, compat::String};
 
 /// Represents a complete DBC (CAN database) file.
 ///
@@ -42,7 +35,7 @@ pub struct Dbc<'a> {
     nodes: Nodes<'a>,
     messages: MessageList<'a>,
     #[cfg(any(feature = "alloc", feature = "kernel"))]
-    value_descriptions: crate::dbc::ValueDescriptionsList<'a>,
+    value_descriptions: ValueDescriptionsList<'a>,
 }
 
 impl<'a> Dbc<'a> {
@@ -52,8 +45,8 @@ impl<'a> Dbc<'a> {
         nodes: &Nodes<'_>,
         messages: &[Option<Message<'_>>],
         message_count: usize,
-        value_descriptions: Option<&crate::dbc::ValueDescriptionsList<'_>>,
-    ) -> ParseResult<()> {
+        value_descriptions: Option<&ValueDescriptionsList<'_>>,
+    ) -> Result<()> {
         Self::validate_common(nodes, messages, message_count)?;
 
         // Validate value descriptions if provided
@@ -67,9 +60,7 @@ impl<'a> Dbc<'a> {
                         .iter()
                         .any(|msg_opt| msg_opt.as_ref().is_some_and(|msg| msg.id() == message_id));
                     if !message_exists {
-                        return Err(ParseError::Message(
-                            crate::error::lang::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND,
-                        ));
+                        return Err(Error::Validation(lang::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND));
                     }
 
                     // Check if signal exists in the message
@@ -79,9 +70,7 @@ impl<'a> Dbc<'a> {
                         })
                     });
                     if !signal_exists {
-                        return Err(ParseError::Message(
-                            crate::error::lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND,
-                        ));
+                        return Err(Error::Validation(lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
                     }
                 } else {
                     // For global value descriptions (message_id is None), check if signal exists in any message
@@ -91,9 +80,7 @@ impl<'a> Dbc<'a> {
                             .is_some_and(|msg| msg.signals().find(signal_name).is_some())
                     });
                     if !signal_exists {
-                        return Err(ParseError::Message(
-                            crate::error::lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND,
-                        ));
+                        return Err(Error::Validation(lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
                     }
                 }
             }
@@ -108,7 +95,7 @@ impl<'a> Dbc<'a> {
         nodes: &Nodes<'_>,
         messages: &[Option<Message<'_>>],
         message_count: usize,
-    ) -> ParseResult<()> {
+    ) -> Result<()> {
         Self::validate_common(nodes, messages, message_count)
     }
 
@@ -117,7 +104,7 @@ impl<'a> Dbc<'a> {
         nodes: &Nodes<'_>,
         messages: &[Option<Message<'_>>],
         message_count: usize,
-    ) -> ParseResult<()> {
+    ) -> Result<()> {
         // Check for duplicate message IDs
         let messages_slice = &messages[..message_count];
         for (i, msg1_opt) in messages_slice.iter().enumerate() {
@@ -131,9 +118,7 @@ impl<'a> Dbc<'a> {
                     None => continue, // Should not happen, but be safe
                 };
                 if msg1.id() == msg2.id() {
-                    return Err(ParseError::Message(
-                        crate::error::lang::DUPLICATE_MESSAGE_ID,
-                    ));
+                    return Err(Error::Validation(lang::DUPLICATE_MESSAGE_ID));
                 }
             }
         }
@@ -147,7 +132,7 @@ impl<'a> Dbc<'a> {
                     None => continue, // Should not happen, but be safe
                 };
                 if !nodes.contains(msg.sender()) {
-                    return Err(ParseError::Message(crate::error::lang::SENDER_NOT_IN_NODES));
+                    return Err(Error::Validation(lang::SENDER_NOT_IN_NODES));
                 }
             }
         }
@@ -584,7 +569,7 @@ impl<'a> Dbc<'a> {
                 BO_ => {
                     // Check limit using Messages (which knows about the capacity)
                     if message_count_actual >= MessageList::max_capacity() {
-                        return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
+                        return Err(ParseError::Nodes(lang::NODES_TOO_MANY));
                     }
 
                     // Save parser position (at BO_ keyword, so Message::parse can consume it)
@@ -631,7 +616,7 @@ impl<'a> Dbc<'a> {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signal_count >= Signals::max_capacity() {
                                         return Err(ParseError::Receivers(
-                                            crate::error::lang::SIGNAL_RECEIVERS_TOO_MANY,
+                                            lang::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }
                                     // Signal::parse expects SG_ keyword, which we've already verified with starts_with
@@ -739,11 +724,18 @@ impl<'a> Dbc<'a> {
                 messages_slice,
                 message_count_actual,
                 Some(&value_descriptions_list),
-            )?;
+            )
+            .map_err(|e| match e {
+                Error::Validation(msg) => ParseError::Message(msg),
+                _ => ParseError::Message("Validation error"),
+            })?;
         }
         #[cfg(not(any(feature = "alloc", feature = "kernel")))]
         {
-            Self::validate(&nodes, messages_slice, message_count_actual)?;
+            Self::validate(&nodes, messages_slice, message_count_actual).map_err(|e| match e {
+                Error::Validation(msg) => ParseError::Message(msg),
+                _ => ParseError::Message("Validation error"),
+            })?;
         }
 
         // Construct directly (validation already done)
@@ -780,10 +772,9 @@ impl<'a> Dbc<'a> {
     /// println!("Parsed {} messages", dbc.messages().len());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[cfg(feature = "alloc")]
+    #[cfg(any(feature = "alloc", feature = "kernel"))]
     pub fn parse_bytes(data: &[u8]) -> Result<Dbc<'static>> {
-        let content = core::str::from_utf8(data)
-            .map_err(|_e| Error::dbc(crate::error::lang::INVALID_UTF8))?;
+        let content = core::str::from_utf8(data).map_err(|_e| Error::dbc(lang::INVALID_UTF8))?;
         // Convert to owned string, box it, and leak to get 'static lifetime
         use alloc::boxed::Box;
         let owned = String::from(content);
@@ -815,8 +806,7 @@ impl<'a> Dbc<'a> {
     /// ```
     #[cfg(feature = "std")]
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Dbc<'static>> {
-        let file =
-            std::fs::File::open(path).map_err(|_e| Error::dbc(crate::error::lang::READ_FAILED))?;
+        let file = std::fs::File::open(path).map_err(|_e| Error::dbc(lang::READ_FAILED))?;
         Self::from_reader(file)
     }
 
@@ -838,7 +828,7 @@ impl<'a> Dbc<'a> {
     pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Dbc<'static>> {
         let mut buffer = String::new();
         std::io::Read::read_to_string(&mut reader, &mut buffer)
-            .map_err(|_e| Error::dbc(crate::error::lang::READ_FAILED))?;
+            .map_err(|_e| Error::dbc(lang::READ_FAILED))?;
         // Convert to boxed str and leak to get 'static lifetime
         // The leaked memory will live for the duration of the program
         use alloc::boxed::Box;
