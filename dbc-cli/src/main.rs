@@ -3,29 +3,17 @@
 //! This binary provides a CLI tool for parsing, validating, and manipulating
 //! DBC (CAN Database) files.
 
-use clap::{Parser, Subcommand};
+mod commands;
+mod storage;
 
-#[derive(Parser)]
-#[command(name = "dbc-cli")]
-#[command(about = "Command-line interface for DBC file manipulation", long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Print version information
-    Version,
-}
+use clap::Parser;
+use commands::{Cli, execute_command};
 
 fn main() {
     let cli = Cli::parse();
 
-    match cli.command {
-        Some(Commands::Version) | None => {
-            println!("dbc-cli version {}", env!("CARGO_PKG_VERSION"));
-            println!("dbc-rs library version {}", dbc_rs::PKG_VERSION);
-        }
+    if let Err(e) = execute_command(cli.command) {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
 }

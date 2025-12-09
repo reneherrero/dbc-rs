@@ -213,6 +213,25 @@ impl<'a> MessageList<'a> {
         self.iter().find(|m| m.name() == name)
     }
 
+    /// Find a message by CAN ID, or None if not found
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// if let Some(message) = dbc.messages().find_by_id(256) {
+    ///     assert_eq!(message.name(), "Engine");
+    ///     assert_eq!(message.id(), 256);
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use]
+    pub fn find_by_id(&self, id: u32) -> Option<&Message<'a>> {
+        self.iter().find(|m| m.id() == id)
+    }
+
     /// Get the maximum capacity (for limit checking during parsing)
     pub(crate) const fn max_capacity() -> usize {
         MAX_MESSAGES

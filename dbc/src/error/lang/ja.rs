@@ -38,6 +38,11 @@ pub const INVALID_RANGE: &str = "無効な範囲: min > max";
 pub const PARSE_NUMBER_FAILED: &str = "数値の解析に失敗しました";
 pub const INVALID_UTF8: &str = "無効なUTF-8";
 pub const READ_FAILED: &str = "読み取りに失敗しました";
+pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &str =
+    "値の説明が存在しないメッセージを参照しています";
+pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &str = "値の説明が存在しない信号を参照しています";
+pub const EXPECTED_WHITESPACE: &str = "空白が期待されました";
+pub const EXPECTED_PATTERN: &str = "パターンが期待されました";
 pub const MESSAGE_TOO_MANY_SIGNALS: &str =
     "信号が多すぎます：メッセージあたり最大64個まで許可されています";
 pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
@@ -70,6 +75,7 @@ pub const SIGNAL_LENGTH_TOO_SMALL: &str = "信号長は少なくとも1ビット
 pub const SIGNAL_LENGTH_TOO_LARGE: &str =
     "信号長は512ビット（CAN FD最大値）を超えることはできません";
 pub const SIGNAL_OVERLAP: &str = "信号がメッセージ内で重複しています";
+pub const SIGNAL_EXTENDS_BEYOND_DATA: &str = "信号がメッセージデータを超えて拡張しています";
 
 // ============================================================================
 // Signal parsing error messages

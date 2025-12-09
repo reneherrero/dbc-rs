@@ -39,6 +39,10 @@ pub const INVALID_RANGE: &str = "Ungültiger Bereich: min > max";
 pub const PARSE_NUMBER_FAILED: &str = "Fehler beim Parsen der Zahl";
 pub const INVALID_UTF8: &str = "Ungültiges UTF-8";
 pub const READ_FAILED: &str = "Fehler beim Lesen";
+pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &str =
+    "Wertbeschreibung verweist auf nicht vorhandene Nachricht";
+pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &str =
+    "Wertbeschreibung verweist auf nicht vorhandenes Signal";
 pub const EXPECTED_WHITESPACE: &str = "Leerzeichen erwartet";
 pub const EXPECTED_PATTERN: &str = "Muster erwartet";
 pub const MESSAGE_TOO_MANY_SIGNALS: &str = "Zu viele Signale: das Maximum beträgt 64 pro Nachricht";
@@ -72,6 +76,8 @@ pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signallänge muss mindestens 1 Bit be
 pub const SIGNAL_LENGTH_TOO_LARGE: &str =
     "Signallänge darf 512 Bits nicht überschreiten (CAN FD Maximum)";
 pub const SIGNAL_OVERLAP: &str = "Signale überlappen sich in der Nachricht";
+pub const SIGNAL_EXTENDS_BEYOND_DATA: &str =
+    "Signal erstreckt sich über die Nachrichtendaten hinaus";
 
 // ============================================================================
 // Signal parsing error messages

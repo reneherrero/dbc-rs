@@ -73,6 +73,7 @@ pub const SIGNAL_LENGTH_REQUIRED: &str = "length is required";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signal length must be at least 1 bit";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "Signal length cannot exceed 512 bits (CAN FD maximum)";
 pub const SIGNAL_OVERLAP: &str = "Signals overlap within message";
+pub const SIGNAL_EXTENDS_BEYOND_DATA: &str = "Signal extends beyond message data";
 
 // ============================================================================
 // Signal parsing error messages
