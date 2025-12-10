@@ -157,4 +157,31 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  benchmark:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run benchmarks in test mode
+        run: cargo test --benches --verbose -p dbc-rs
+      # Run actual benchmarks and save baseline for comparison
+      - name: Run benchmarks and save baseline
+        continue-on-error: true
+        run: |
+          # Save baseline with commit SHA for tracking
+          BASELINE_NAME="ci-$(git rev-parse --short HEAD)"
+          cargo bench --verbose -p dbc-rs -- --save-baseline "$BASELINE_NAME"
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: criterion-results-${{ github.ref_name == 'main' && 'main' || format('commit-{0}', github.sha) }}
+          path: |
+            criterion/
+            target/criterion/
+          retention-days: 90
+
 

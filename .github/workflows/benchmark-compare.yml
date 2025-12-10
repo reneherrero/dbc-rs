@@ -1,0 +1,72 @@
+name: Benchmark Comparison
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'dbc/**'
+      - '.github/workflows/benchmark-compare.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark-compare:
+    name: Compare Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for baseline comparison
+      
+      - name: Setup Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install critcmp
+        run: cargo install critcmp --locked
+      
+      - name: Checkout main branch baseline
+        run: |
+          git checkout main
+          # Download baseline artifact if it exists
+          mkdir -p criterion-main
+      
+      - name: Download main baseline artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: criterion-results-main
+          path: criterion-main/
+      
+      - name: Checkout PR branch
+        run: git checkout ${{ github.head_ref || github.ref_name }}
+      
+      - name: Run benchmarks on PR branch
+        continue-on-error: true
+        run: |
+          BASELINE_NAME="pr-$(git rev-parse --short HEAD)"
+          cargo bench --verbose -p dbc-rs -- --save-baseline "$BASELINE_NAME"
+      
+      - name: Compare benchmarks
+        continue-on-error: true
+        run: |
+          # Try to compare with main baseline if available
+          if [ -d "criterion-main/criterion" ]; then
+            echo "## Benchmark Comparison with main" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            critcmp criterion-main/criterion target/criterion 2>&1 | tee -a $GITHUB_STEP_SUMMARY || echo "Comparison failed or no baseline found"
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## Benchmark Results (no baseline for comparison)" >> $GITHUB_STEP_SUMMARY
+            echo "Run benchmarks on main branch to establish baseline." >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Upload PR benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: criterion-results-pr-${{ github.head_ref || github.ref_name }}
+          path: target/criterion/
+          retention-days: 30
