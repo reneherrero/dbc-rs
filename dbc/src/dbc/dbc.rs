@@ -272,12 +272,7 @@ impl<'a> Dbc<'a> {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse(data: &'a str) -> ParseResult<Self> {
-        // FIRST PASS: Count messages (two-pass parsing to allocate correct sizes)
-        let mut parser1 = Parser::new(data.as_bytes())?;
-        let _ = MessageList::count_messages_and_signals(&mut parser1)?;
-
-        // SECOND PASS: Parse into messages array
-        let mut parser2 = Parser::new(data.as_bytes())?;
+        let mut parser = Parser::new(data.as_bytes())?;
 
         let mut messages_buffer: Vec<Message<'a>> = { Vec::with_capacity(MAX_MESSAGES) };
 
@@ -300,19 +295,19 @@ impl<'a> Dbc<'a> {
 
         loop {
             // Skip comments (lines starting with //)
-            parser2.skip_newlines_and_spaces();
-            if parser2.starts_with(b"//") {
-                parser2.skip_to_end_of_line();
+            parser.skip_newlines_and_spaces();
+            if parser.starts_with(b"//") {
+                parser.skip_to_end_of_line();
                 continue;
             }
 
-            let keyword_result = parser2.peek_next_keyword();
+            let keyword_result = parser.peek_next_keyword();
             let keyword = match keyword_result {
                 Ok(kw) => kw,
                 Err(ParseError::UnexpectedEof) => break,
                 Err(ParseError::Expected(_)) => {
-                    if parser2.starts_with(b"//") {
-                        parser2.skip_to_end_of_line();
+                    if parser.starts_with(b"//") {
+                        parser.skip_to_end_of_line();
                         continue;
                     }
                     return Err(keyword_result.unwrap_err());
@@ -321,58 +316,58 @@ impl<'a> Dbc<'a> {
             };
 
             // Save position after peek_next_keyword (which skips whitespace, so we're at the keyword)
-            let pos_at_keyword = parser2.pos();
+            let pos_at_keyword = parser.pos();
 
             match keyword {
                 NS_ => {
                     // Consume NS_ keyword
-                    parser2
+                    parser
                         .expect(crate::NS_.as_bytes())
                         .map_err(|_| ParseError::Expected("Failed to consume NS_ keyword"))?;
-                    parser2.skip_newlines_and_spaces();
-                    let _ = parser2.expect(b":").ok();
+                    parser.skip_newlines_and_spaces();
+                    let _ = parser.expect(b":").ok();
                     loop {
-                        parser2.skip_newlines_and_spaces();
-                        if parser2.is_empty() {
+                        parser.skip_newlines_and_spaces();
+                        if parser.is_empty() {
                             break;
                         }
-                        if parser2.starts_with(b" ") || parser2.starts_with(b"\t") {
-                            parser2.skip_to_end_of_line();
+                        if parser.starts_with(b" ") || parser.starts_with(b"\t") {
+                            parser.skip_to_end_of_line();
                             continue;
                         }
-                        if parser2.starts_with(b"//") {
-                            parser2.skip_to_end_of_line();
+                        if parser.starts_with(b"//") {
+                            parser.skip_to_end_of_line();
                             continue;
                         }
-                        if parser2.starts_with(BS_.as_bytes())
-                            || parser2.starts_with(BU_.as_bytes())
-                            || parser2.starts_with(BO_.as_bytes())
-                            || parser2.starts_with(SG_.as_bytes())
-                            || parser2.starts_with(VERSION.as_bytes())
+                        if parser.starts_with(BS_.as_bytes())
+                            || parser.starts_with(BU_.as_bytes())
+                            || parser.starts_with(BO_.as_bytes())
+                            || parser.starts_with(SG_.as_bytes())
+                            || parser.starts_with(VERSION.as_bytes())
                         {
                             break;
                         }
-                        parser2.skip_to_end_of_line();
+                        parser.skip_to_end_of_line();
                     }
                     continue;
                 }
                 CM_ | BS_ | VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | SIG_GROUP_
                 | SIG_VALTYPE_ | EV_ | BO_TX_BU_ => {
                     // Consume keyword then skip to end of line
-                    let _ = parser2.expect(keyword.as_bytes()).ok();
-                    parser2.skip_to_end_of_line();
+                    let _ = parser.expect(keyword.as_bytes()).ok();
+                    parser.skip_to_end_of_line();
                     continue;
                 }
                 VAL_ => {
                     #[cfg(feature = "std")]
                     {
                         // Consume VAL_ keyword
-                        let _ = parser2.expect(crate::VAL_.as_bytes()).ok();
+                        let _ = parser.expect(crate::VAL_.as_bytes()).ok();
                         // Parse VAL_ statement: VAL_ message_id signal_name value1 "desc1" value2 "desc2" ... ;
                         // Note: message_id of -1 (0xFFFFFFFF) means the value descriptions apply to
                         // all signals with this name in ANY message (global value descriptions)
-                        parser2.skip_newlines_and_spaces();
-                        let message_id = match parser2.parse_i64() {
+                        parser.skip_newlines_and_spaces();
+                        let message_id = match parser.parse_i64() {
                             Ok(id) => {
                                 // -1 (0xFFFFFFFF) is the magic number for global value descriptions
                                 if id == -1 {
@@ -380,62 +375,62 @@ impl<'a> Dbc<'a> {
                                 } else if id >= 0 && id <= u32::MAX as i64 {
                                     Some(id as u32)
                                 } else {
-                                    parser2.skip_to_end_of_line();
+                                    parser.skip_to_end_of_line();
                                     continue;
                                 }
                             }
                             Err(_) => {
-                                parser2.skip_to_end_of_line();
+                                parser.skip_to_end_of_line();
                                 continue;
                             }
                         };
-                        parser2.skip_newlines_and_spaces();
-                        let signal_name = match parser2.parse_identifier() {
+                        parser.skip_newlines_and_spaces();
+                        let signal_name = match parser.parse_identifier() {
                             Ok(name) => name,
                             Err(_) => {
-                                parser2.skip_to_end_of_line();
+                                parser.skip_to_end_of_line();
                                 continue;
                             }
                         };
                         // Parse value-description pairs
                         let mut entries = Vec::new();
                         loop {
-                            parser2.skip_newlines_and_spaces();
+                            parser.skip_newlines_and_spaces();
                             // Check for semicolon (end of VAL_ statement)
-                            if parser2.starts_with(b";") {
-                                parser2.expect(b";").ok();
+                            if parser.starts_with(b";") {
+                                parser.expect(b";").ok();
                                 break;
                             }
                             // Parse value (as i64 first to handle negative values like -1, then convert to u64)
                             // Note: -1 (0xFFFFFFFF) is the magic number for global value descriptions in message_id,
                             // but values in VAL_ can also be negative
-                            let value = match parser2.parse_i64() {
+                            let value = match parser.parse_i64() {
                                 Ok(v) => {
                                     // Handle -1 specially: convert to 0xFFFFFFFF (u32::MAX) instead of large u64
                                     if v == -1 { 0xFFFF_FFFFu64 } else { v as u64 }
                                 }
                                 Err(_) => {
-                                    parser2.skip_to_end_of_line();
+                                    parser.skip_to_end_of_line();
                                     break;
                                 }
                             };
-                            parser2.skip_newlines_and_spaces();
+                            parser.skip_newlines_and_spaces();
                             // Parse description string (expect quote, then take until quote)
-                            if parser2.expect(b"\"").is_err() {
-                                parser2.skip_to_end_of_line();
+                            if parser.expect(b"\"").is_err() {
+                                parser.skip_to_end_of_line();
                                 break;
                             }
-                            let description_bytes = match parser2.take_until_quote(false, 1024) {
+                            let description_bytes = match parser.take_until_quote(false, 1024) {
                                 Ok(bytes) => bytes,
                                 Err(_) => {
-                                    parser2.skip_to_end_of_line();
+                                    parser.skip_to_end_of_line();
                                     break;
                                 }
                             };
                             let description = match core::str::from_utf8(description_bytes) {
                                 Ok(s) => s,
                                 Err(_) => {
-                                    parser2.skip_to_end_of_line();
+                                    parser.skip_to_end_of_line();
                                     break;
                                 }
                             };
@@ -448,20 +443,20 @@ impl<'a> Dbc<'a> {
                     #[cfg(not(feature = "std"))]
                     {
                         // In no_std mode, consume VAL_ keyword and skip the rest
-                        let _ = parser2.expect(crate::VAL_.as_bytes()).ok();
-                        parser2.skip_to_end_of_line();
+                        let _ = parser.expect(crate::VAL_.as_bytes()).ok();
+                        parser.skip_to_end_of_line();
                     }
                     continue;
                 }
                 VERSION => {
                     // Version::parse expects VERSION keyword, don't consume it here
-                    version = Some(Version::parse(&mut parser2)?);
+                    version = Some(Version::parse(&mut parser)?);
                     continue;
                 }
                 BU_ => {
                     // Nodes::parse expects BU_ keyword, create parser from original input including it
-                    parser2.skip_to_end_of_line();
-                    let bu_input = &data.as_bytes()[pos_at_keyword..parser2.pos()];
+                    parser.skip_to_end_of_line();
+                    let bu_input = &data.as_bytes()[pos_at_keyword..parser.pos()];
                     let mut bu_parser = Parser::new(bu_input)?;
                     nodes = Some(Nodes::parse(&mut bu_parser)?);
                     continue;
@@ -496,15 +491,15 @@ impl<'a> Dbc<'a> {
                     };
 
                     // Now parse signals from the original parser
-                    parser2.skip_to_end_of_line(); // Skip past header line
+                    parser.skip_to_end_of_line(); // Skip past header line
 
                     let mut signals_array: Vec<Signal<'a>> =
                         { Vec::with_capacity(MAX_SIGNALS_PER_MESSAGE) };
 
                     loop {
-                        parser2.skip_newlines_and_spaces();
-                        if parser2.starts_with(crate::SG_.as_bytes()) {
-                            if let Some(next_byte) = parser2.peek_byte_at(3) {
+                        parser.skip_newlines_and_spaces();
+                        if parser.starts_with(crate::SG_.as_bytes()) {
+                            if let Some(next_byte) = parser.peek_byte_at(3) {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
                                         return Err(ParseError::Receivers(
@@ -512,7 +507,7 @@ impl<'a> Dbc<'a> {
                                         ));
                                     }
                                     // Signal::parse expects SG_ keyword, which we've already verified with starts_with
-                                    let signal = Signal::parse(&mut parser2)?;
+                                    let signal = Signal::parse(&mut parser)?;
                                     signals_array.push(signal);
                                     continue;
                                 }
@@ -536,11 +531,11 @@ impl<'a> Dbc<'a> {
                 }
                 SG_ => {
                     // Orphaned signal (not inside a message) - skip it
-                    parser2.skip_to_end_of_line();
+                    parser.skip_to_end_of_line();
                     continue;
                 }
                 _ => {
-                    parser2.skip_to_end_of_line();
+                    parser.skip_to_end_of_line();
                     continue;
                 }
             }

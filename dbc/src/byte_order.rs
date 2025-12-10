@@ -18,6 +18,8 @@ pub enum ByteOrder {
 #[cfg(test)]
 mod tests {
     use super::ByteOrder;
+    #[cfg(not(feature = "std"))]
+    use alloc::format;
 
     // Helper macro to run tests that work in all configurations
     macro_rules! test_all_configs {
@@ -61,19 +63,13 @@ mod tests {
         _assert_hash::<ByteOrder>();
     });
 
-    // Tests that require std (for format! macro)
-    #[cfg(feature = "std")]
-    mod tests_with_format {
-        use super::*;
+    #[test]
+    fn test_byte_order_debug() {
+        let little = format!("{:?}", ByteOrder::LittleEndian);
+        assert!(little.contains("LittleEndian"));
 
-        #[test]
-        fn test_byte_order_debug() {
-            let little = format!("{:?}", ByteOrder::LittleEndian);
-            assert!(little.contains("LittleEndian"));
-
-            let big = format!("{:?}", ByteOrder::BigEndian);
-            assert!(big.contains("BigEndian"));
-        }
+        let big = format!("{:?}", ByteOrder::BigEndian);
+        assert!(big.contains("BigEndian"));
     }
 
     // Tests that require std (for DefaultHasher)

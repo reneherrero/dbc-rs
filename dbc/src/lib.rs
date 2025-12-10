@@ -6,7 +6,7 @@
 //!
 //! - **`no_std` compatible**: Works in embedded environments without the standard library
 //! - **Zero dependencies**: Pure Rust implementation
-//! - **Memory efficient**: Uses fixed-size arrays for `no_std` builds
+//! - **Memory efficient**: Uses `Vec` (via `alloc`) for dynamic collections
 //! - **Type-safe**: Strong typing for all DBC elements
 //!
 //! ## Usage
