@@ -15,7 +15,7 @@ The minimum supported Rust version is **1.85.0**. The crate is tested against th
 ## Features
 
 - ✅ **Zero dependencies** - Pure Rust implementation
-- ✅ **no_std + alloc support** - Works on embedded targets without the standard library
+- ✅ **no_std support** - Works on embedded targets without the standard library
 - ✅ **Full editing & writing** - Modify and save DBC files with the same structs
 - ✅ **Feature flag control** - Optional `std` feature for desktop conveniences
 - ✅ **Well tested** - Tested with real-world DBC files
@@ -44,75 +44,23 @@ The crate supports multiple levels of functionality through feature flags:
 | Feature | Default | Description |
 |---------|---------|-------------|
 | *(none)* | ❌ | **`no_std`**: Bare bones parsing only. No dynamic memory allocation. Uses fixed-size arrays. |
-| `alloc` | ❌ | Adds dynamic memory allocation (`alloc` crate). Enables builders and string formatting methods. |
-| `std`   | ✅ | Adds standard library integration (I/O helpers, file operations). Requires `alloc`. |
-| `kernel` | ❌ | ⚠️ **EXPERIMENTAL**: Linux kernel compatibility using `kernel::alloc` API. Mutually exclusive with `alloc` and `std`. |
+| `std`   | ✅ | Adds standard library integration (I/O helpers, file operations, builders, string formatting). |
 
 **Feature Hierarchy:**
 - **`no_std`** (no features): Minimal parsing, fixed-size arrays
-- **`alloc`**: Adds dynamic allocation, builders, string formatting
-- **`std`**: Adds I/O helpers, file operations, additional conveniences
-- **`kernel`** ⚠️: Experimental kernel module support (see [Kernel Support](#kernel-support-experimental) below)
-
-### Kernel Support (Experimental)
-
-⚠️ **WARNING**: The `kernel` feature is **experimental** and subject to change without notice.
-
-The `kernel` feature enables compatibility with Linux kernel's `kernel::alloc` API for use in Rust kernel modules. This feature:
-
-- Is **mutually exclusive** with `alloc` and `std` features
-- Uses a mock `kernel::alloc` implementation for testing (not the real kernel alloc API)
-- Requires integration with [rust-for-linux](https://github.com/Rust-for-Linux/linux) for actual kernel usage
-- May have breaking changes in future releases
-- Is not recommended for production use at this time
-
-**Usage:**
-```toml
-[dependencies]
-dbc-rs = { version = "0.1.0-beta.2", default-features = false, features = ["kernel"] }
-```
-
-For more details, see [KERNEL_FEATURE_ANALYSIS.md](../KERNEL_FEATURE_ANALYSIS.md).
+- **`std`**: Adds I/O helpers, file operations, builders, string formatting, dynamic allocation
 
 **Examples:**
 
 ```toml
-# Default: std enabled (includes alloc)
+# Default: std enabled
 [dependencies]
 dbc-rs = "1"
 
-# alloc only (no std)
-[dependencies]
-dbc-rs = { version = "1", default-features = false, features = ["alloc"] }
-
-# Pure no_std (no alloc, no std)
+# Pure no_std (no std)
 [dependencies]
 dbc-rs = { version = "1", default-features = false }
 ```
-
-## Internationalization (i18n)
-
-Error messages can be localized at build time using feature flags. The language is selected during compilation and cannot be changed at runtime.
-
-### Supported Languages
-
-| Language | Feature Flag | Code |
-|----------|-------------|------|
-| English (default) | *(none)* | `en` |
-| French | `lang-fr` | `fr` |
-| Spanish | `lang-es` | `es` |
-| German | `lang-de` | `de` |
-| Japanese | `lang-ja` | `ja` |
-
-**Example:**
-```toml
-[dependencies]
-dbc-rs = { version = "1", features = ["lang-fr"] }
-```
-
-**Note:** Language features are mutually exclusive. If multiple language features are enabled, the last one in the feature list will be used.
-
-⚠️ **Warning**: Translations have been generated and may contain errors. They have not been fully verified by native speakers. Contributions to improve translations are welcome! See [Contributing](#contributing) section.
 
 ## DBC Format Feature Support
 
@@ -168,8 +116,8 @@ use dbc_rs::Dbc;
 
 let dbc = Dbc::parse(&content)?;
 
-// Note: to_string() requires alloc feature
-#[cfg(feature = "alloc")]
+// Note: to_string() requires std feature
+#[cfg(feature = "std")]
 {
     println!("Version: {}", dbc.version().map(|v| v.to_string()).unwrap_or_default());
     println!("Nodes: {}", dbc.nodes().to_string());
@@ -293,12 +241,12 @@ let dbc = Dbc::parse_bytes(dbc_bytes)?;
 let version = dbc.version();
 let messages = dbc.messages();
 
-// Note: to_dbc_string() requires alloc feature
-// #[cfg(feature = "alloc")]
+// Note: to_dbc_string() requires std feature
+// #[cfg(feature = "std")]
 // let saved = dbc.to_dbc_string();
 ```
 
-### alloc Usage (With Builders)
+### std Usage (With Builders)
 
 ```rust
 use dbc_rs::{Dbc, MessageBuilder, SignalBuilder, ByteOrder, Receivers};
@@ -345,7 +293,7 @@ let dbc = Dbc::from_file("example.dbc")?;
 let file = std::fs::File::open("example.dbc")?;
 let dbc = Dbc::from_reader(file)?;
 
-// All alloc features available
+// All std features available
 let dbc_string = dbc.to_dbc_string();
 std::fs::write("output.dbc", dbc_string)?;
 ```
@@ -353,10 +301,12 @@ std::fs::write("output.dbc", dbc_string)?;
 ### Error Handling
 
 ```rust
-use dbc_rs::{Dbc, Error};
+use dbc_rs::{Dbc, Error, ParseError};
 
 match Dbc::parse(invalid_content) {
     Ok(dbc) => println!("Parsed: {} messages", dbc.messages().len()),
+    Err(Error::ParseError(ParseError::Expected(msg))) => eprintln!("Parse error: Expected {}", msg),
+    Err(Error::ParseError(ParseError::UnexpectedEof)) => eprintln!("Parse error: Unexpected end of input"),
     Err(Error::InvalidData(msg)) => eprintln!("Data error: {}", msg),
     Err(Error::Signal(msg)) => eprintln!("Signal error: {}", msg),
     Err(e) => eprintln!("Error: {}", e),
@@ -383,7 +333,7 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 2. **Comments**: Single-line `//` comments are parsed but not preserved when saving.
 3. **Signal Multiplexing**: Multiplexed signals are not yet supported.
 4. **Feature Restrictions**: 
-   - Without `alloc`: Cannot create/modify DBC files (builders unavailable)
+   - Without `std`: Cannot create/modify DBC files (builders unavailable)
    - Without `std`: Cannot read from filesystem (use `parse()` or `parse_bytes()` instead)
 
 ## Troubleshooting
@@ -412,22 +362,25 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 
 1. **Immutability**: All data structures are immutable after creation
 2. **Validation**: Input validation occurs at construction time
-3. **no_std First**: Designed for `no_std` environments, with optional `alloc` and `std` features
+3. **no_std First**: Designed for `no_std` environments, with optional `std` feature
 4. **Zero Dependencies**: No external dependencies
-5. **Memory Efficiency**: Uses fixed arrays in `no_std`, `Box<[T]>` with `alloc`
+5. **Memory Efficiency**: Uses fixed arrays in `no_std`, `Box<[T]>` with `std`
 
 ### Error Handling
 
 - **Result-based**: All fallible operations return `Result<T>`
-- **Categorized errors**: `Error::Signal`, `Error::Message`, `Error::Dbc`, `Error::Version`, `Error::Nodes`, `Error::InvalidData`
+- **Categorized errors**: 
+  - High-level errors (require `std`): `Error::Signal`, `Error::Message`, `Error::Dbc`, `Error::Version`, `Error::Nodes`, `Error::InvalidData`
+  - Low-level parse errors (available in `no_std`): `Error::ParseError(ParseError::...)` with variants like `Expected`, `UnexpectedEof`, `InvalidChar`, etc.
+  - Other errors: `Error::Decoding`, `Error::Validation`
 - **Internationalized**: Error messages can be localized at build time
-- **Feature-dependent**: With `alloc`, errors include detailed `String` messages; without it, static `&'static str` messages
+- **Feature-dependent**: With `std`, errors include detailed `String` messages; without it, static `&'static str` messages via `ParseError`
 
 ## Performance Notes
 
 - **Memory Usage**: 
   - `no_std`: Fixed-size arrays (stack-allocated)
-  - `alloc`: `Box<[T]>` (heap-allocated, dynamic sizing)
+  - `std`: `Box<[T]>` (heap-allocated, dynamic sizing)
 - **Parsing**: O(n) complexity, entire file parsed into memory
 - **Recommendations**: For very large DBC files (>10MB), consider splitting into multiple files
 
@@ -440,26 +393,6 @@ Contributions are welcome! Areas that need work:
 - Attributes (BA_DEF_, BA_, etc.)
 - Environment variables (EV_)
 - Signal multiplexing support
-- **Translation improvements** - Help verify and improve error message translations
-
-### Adding a New Language
-
-1. Create a new file in `src/error/lang/` (e.g., `it.rs` for Italian)
-2. Copy the structure from `en.rs` and translate all constants
-3. Add the language module to `src/error/lang/mod.rs`:
-   ```rust
-   mod it;
-   #[cfg(feature = "lang-it")]
-   use it as lang;
-   ```
-4. Add the feature flag to `Cargo.toml`: `lang-it = []`
-5. Update this README with the new language
-6. Submit a pull request
-
-**Translation Guidelines:**
-- Maintain the same constant names across all language files
-- Keep format placeholders (`{}`) in the same positions
-- Ensure technical terms are accurately translated
 
 ## License
 

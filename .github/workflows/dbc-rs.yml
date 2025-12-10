@@ -78,32 +78,6 @@ jobs:
       - name: Build library without std (no_std mode, MSRV, release)
         run: cargo build --release --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
 
-  test-alloc:
-    name: Test (alloc, latest)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build library with alloc feature
-        run: cargo build --verbose --features alloc --no-default-features -p dbc-rs
-      - name: Run tests with alloc feature
-        run: cargo test --verbose --features alloc --no-default-features -p dbc-rs
-
-  test-kernel:
-    name: Test (kernel, latest)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup Rust toolchain (stable)
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build library with kernel feature
-        run: cargo build --verbose --features kernel --no-default-features -p dbc-rs
-      - name: Run tests with kernel feature
-        run: cargo test --verbose --features kernel --no-default-features -p dbc-rs
-
   lint:
     name: Lint (clippy)
     runs-on: ubuntu-latest

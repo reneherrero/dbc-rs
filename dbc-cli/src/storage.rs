@@ -129,7 +129,7 @@ pub fn describe_stored() -> Result<(), Box<dyn std::error::Error>> {
                 // Receiver information
                 let receivers_str = match signal.receivers() {
                     dbc_rs::Receivers::Broadcast => " (broadcasted)".to_string(),
-                    dbc_rs::Receivers::Nodes(_, count) if *count > 0 => {
+                    dbc_rs::Receivers::Nodes(nodes) if !nodes.is_empty() => {
                         let nodes: Vec<&str> = signal.receivers().iter().collect();
                         format!(" (receivers: {})", nodes.join(", "))
                     }

@@ -170,8 +170,8 @@ mod std {
         // Verify signals with specific receivers
         let data1 = msg.signals().find("Data1").unwrap();
         match data1.receivers() {
-            dbc_rs::Receivers::Nodes(_, count) => {
-                assert_eq!(*count, 2);
+            dbc_rs::Receivers::Nodes(nodes) => {
+                assert_eq!(nodes.len(), 2);
                 let nodes: Vec<&str> = data1.receivers().iter().collect();
                 assert!(nodes.contains(&"RECEIVER1"));
                 assert!(nodes.contains(&"RECEIVER2"));
@@ -181,8 +181,8 @@ mod std {
 
         let data2 = msg.signals().find("Data2").unwrap();
         match data2.receivers() {
-            dbc_rs::Receivers::Nodes(_, count) => {
-                assert_eq!(*count, 1);
+            dbc_rs::Receivers::Nodes(nodes) => {
+                assert_eq!(nodes.len(), 1);
                 let nodes: Vec<&str> = data2.receivers().iter().collect();
                 assert_eq!(nodes[0], "RECEIVER1");
             }

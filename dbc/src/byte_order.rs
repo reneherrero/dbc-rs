@@ -27,7 +27,7 @@ mod tests {
         };
     }
 
-    // Tests that work in all configurations (no_std, alloc, std, kernel)
+    // Tests that work in all configurations (no_std, std)
     test_all_configs!(test_byte_order_variants, {
         assert_eq!(ByteOrder::LittleEndian as u8, 1);
         assert_eq!(ByteOrder::BigEndian as u8, 0);
@@ -61,12 +61,10 @@ mod tests {
         _assert_hash::<ByteOrder>();
     });
 
-    // Tests that require alloc or kernel (for format! macro)
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    // Tests that require std (for format! macro)
+    #[cfg(feature = "std")]
     mod tests_with_format {
         use super::*;
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        use alloc::format;
 
         #[test]
         fn test_byte_order_debug() {

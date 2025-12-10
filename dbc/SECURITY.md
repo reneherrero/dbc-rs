@@ -99,7 +99,7 @@ The codebase demonstrates strong security practices with comprehensive input val
 - Added `MAX_MESSAGES = 10,000` limit in `Dbc::validate()`
 - Added `MAX_SIGNALS_PER_MESSAGE = 64` limit in `Message::validate()`
 - Both limits are enforced during validation
-- Error messages are internationalized across all supported languages
+- Error messages are in English
 - Comprehensive tests added: `test_dbc_too_many_messages()`, `test_dbc_at_message_limit()`, `test_message_too_many_signals()`, `test_message_at_signal_limit()`
 - Documentation updated in `Dbc` and `Message` struct docs
 
@@ -122,8 +122,6 @@ The codebase demonstrates strong security practices with comprehensive input val
 
 **Fix Applied**:
 - Added `MAX_UNIT_LENGTH = 256` limit in `Signal::parse_unit()`
-- Added internationalized error message `SIGNAL_PARSE_UNIT_TOO_LONG`
-- Error message translated across all supported languages
 
 **Risk Level**: 🟢 **RESOLVED**
 
@@ -322,23 +320,14 @@ All security controls remain in place and verified. No new security issues intro
 - ✅ **Zero dependencies**: Confirmed - no external dependencies in production code
 - ✅ **Build-time configuration**: Limits can be overridden via environment variables (DBC_MAX_MESSAGES, DBC_MAX_SIGNALS_PER_MESSAGE) for flexibility while maintaining security
 
-### New Features Since Last Audit
-
-- ✅ **Kernel feature (experimental)**: Added experimental `kernel` feature for Linux kernel module compatibility
-  - Uses `kernel::alloc` API instead of standard `alloc`
-  - Maintains same security guarantees (no unsafe code, proper error handling)
-  - Mutually exclusive with `alloc` and `std` features
-  - **Security assessment**: No new security risks introduced - uses same validation and limits
-
 ### Code Quality Improvements
 
 - ✅ **Build-time limits**: MAX_MESSAGES and MAX_SIGNALS_PER_MESSAGE now configurable via build.rs
 - ✅ **Comprehensive testing**: 576 test cases with unwrap/expect (all in test code, as expected)
 - ✅ **Documentation**: Security considerations documented in README and contributing guidelines
 - ✅ **Code quality**: All clippy warnings resolved, unused imports removed, use statements optimized
-- ✅ **Test organization**: Tests reorganized by feature (no_std, alloc, std, kernel) for better maintainability
+- ✅ **Test organization**: Tests reorganized by feature (no_std, std) for better maintainability
 - ✅ **Doctest compatibility**: All doctests fixed to work in no_std environments
-- ✅ **Compatibility layer**: Improved compat module structure with separate alloc/kernel implementations
 
 ## Next Steps
 
@@ -362,7 +351,6 @@ All security controls remain in place and verified. No new security issues intro
 - ✅ Proper error handling (Result types, no panics in production)
 - ✅ Zero dependencies
 - ✅ Memory safety guaranteed by Rust's type system
-- ✅ Experimental kernel feature maintains security guarantees
 
 **Recommendation**: ✅ **APPROVED FOR PRODUCTION USE**
 

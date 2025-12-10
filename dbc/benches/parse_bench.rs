@@ -68,7 +68,7 @@ BU_: ECM TCM BCM GATEWAY SENSOR ACTUATOR
     });
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "std")]
 fn bench_to_dbc_string(c: &mut Criterion) {
     let dbc_content = r#"VERSION "1.0"
 
@@ -89,7 +89,7 @@ BO_ 512 Brake : 4 TCM
     });
 }
 
-#[cfg(not(feature = "alloc"))]
+#[cfg(not(feature = "std"))]
 criterion_group!(
     benches,
     bench_parse_small,
@@ -97,7 +97,7 @@ criterion_group!(
     bench_parse_large
 );
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "std")]
 criterion_group!(
     benches,
     bench_parse_small,

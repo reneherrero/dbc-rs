@@ -1,18 +1,6 @@
-use crate::value_descriptions::ValueDescriptions;
+use std::collections::{BTreeMap, btree_map::Iter};
 
-/// Iterator over value descriptions in a ValueDescriptionsList
-struct ValueDescriptionsListIter<'a, 'b> {
-    entries: alloc::collections::btree_map::Iter<'b, (Option<u32>, &'a str), ValueDescriptions<'a>>,
-}
-
-impl<'a, 'b> Iterator for ValueDescriptionsListIter<'a, 'b> {
-    type Item = ((Option<u32>, &'a str), &'b ValueDescriptions<'a>);
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.entries.next().map(|(k, v)| (*k, v))
-    }
-}
+use crate::{Cow, value_descriptions::ValueDescriptions};
 
 /// Encapsulates the value descriptions map for a DBC
 ///
@@ -21,30 +9,15 @@ impl<'a, 'b> Iterator for ValueDescriptionsListIter<'a, 'b> {
 /// (keyed by None and signal_name, applying to all signals with that name).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct ValueDescriptionsList<'a> {
-    value_descriptions: alloc::collections::BTreeMap<(Option<u32>, &'a str), ValueDescriptions<'a>>,
+    value_descriptions: BTreeMap<(Option<u32>, Cow<'a, str>), ValueDescriptions<'a>>,
 }
 
 impl<'a> ValueDescriptionsList<'a> {
     /// Create ValueDescriptionsList from a BTreeMap
     pub(crate) fn from_map(
-        value_descriptions: alloc::collections::BTreeMap<
-            (Option<u32>, &'a str),
-            ValueDescriptions<'a>,
-        >,
+        value_descriptions: BTreeMap<(Option<u32>, Cow<'a, str>), ValueDescriptions<'a>>,
     ) -> Self {
         Self { value_descriptions }
-    }
-
-    /// Create an empty ValueDescriptionsList
-    pub(crate) fn new() -> Self {
-        Self {
-            value_descriptions: alloc::collections::BTreeMap::new(),
-        }
-    }
-
-    /// Insert a value description entry
-    pub(crate) fn insert(&mut self, key: (Option<u32>, &'a str), value: ValueDescriptions<'a>) {
-        self.value_descriptions.insert(key, value);
     }
 
     /// Get an iterator over all value descriptions
@@ -69,9 +42,7 @@ impl<'a> ValueDescriptionsList<'a> {
     /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<Item = ((Option<u32>, &'a str), &ValueDescriptions<'a>)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = ((Option<u32>, &str), &ValueDescriptions<'a>)> + '_ {
         ValueDescriptionsListIter {
             entries: self.value_descriptions.iter(),
         }
@@ -157,7 +128,7 @@ impl<'a> ValueDescriptionsList<'a> {
         self.value_descriptions
             .iter()
             .find(|((id, name), _)| {
-                *name == signal_name
+                name.as_ref() == signal_name
                     && match id {
                         Some(specific_id) => *specific_id == message_id,
                         None => false, // Check global entries separately
@@ -168,8 +139,22 @@ impl<'a> ValueDescriptionsList<'a> {
                 // Fall back to global entry (None message_id)
                 self.value_descriptions
                     .iter()
-                    .find(|((id, name), _)| id.is_none() && *name == signal_name)
+                    .find(|((id, name), _)| id.is_none() && name.as_ref() == signal_name)
                     .map(|(_, v)| v)
             })
+    }
+}
+
+/// Iterator over value descriptions in a ValueDescriptionsList
+struct ValueDescriptionsListIter<'a, 'b> {
+    entries: Iter<'b, (Option<u32>, Cow<'a, str>), ValueDescriptions<'a>>,
+}
+
+impl<'a, 'b> Iterator for ValueDescriptionsListIter<'a, 'b> {
+    type Item = ((Option<u32>, &'b str), &'b ValueDescriptions<'a>);
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.entries.next().map(|(k, v)| ((k.0, k.1.as_ref()), v))
     }
 }

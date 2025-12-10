@@ -1,9 +1,9 @@
 use crate::{
-    ByteOrder, Parser, Signal,
-    error::{ParseError, ParseResult},
+    ByteOrder, Cow, MAX_SIGNALS_PER_MESSAGE, Parser, Signal,
+    error::{Error, ParseError, ParseResult, lang},
 };
 
-use super::Signals;
+use super::SignalList;
 
 /// Represents a CAN message in a DBC file.
 ///
@@ -35,10 +35,10 @@ use super::Signals;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Message<'a> {
     id: u32,
-    name: &'a str,
+    name: Cow<'a, str>,
     dlc: u8,
-    sender: &'a str,
-    signals: Signals<'a>,
+    sender: Cow<'a, str>,
+    signals: SignalList<'a>,
 }
 
 impl<'a> Message<'a> {
@@ -93,11 +93,8 @@ impl<'a> Message<'a> {
         name: &str,
         dlc: u8,
         sender: &str,
-        signals: &[Option<Signal<'a>>],
-        signal_count: usize,
-        options: crate::ParseOptions,
+        signals: &[Signal<'a>],
     ) -> crate::error::Result<()> {
-        use crate::error::{Error, lang};
         // Validate CAN ID range
         // CAN specification allows:
         // - Standard 11-bit IDs: 0x000 to 0x7FF (0-2047)
@@ -109,8 +106,7 @@ impl<'a> Message<'a> {
         const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF; // 536870911
 
         // Check signal count limit per message (DoS protection)
-        const MAX_SIGNALS_PER_MESSAGE: usize = crate::Signals::max_capacity();
-        if signal_count > MAX_SIGNALS_PER_MESSAGE {
+        if signals.len() > MAX_SIGNALS_PER_MESSAGE {
             return Err(Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS));
         }
 
@@ -146,7 +142,7 @@ impl<'a> Message<'a> {
         // - CAN FD: DLC * 8 <= 512 bits (64 bytes)
         // This ensures no signal extends beyond the message payload capacity
         let max_bits = u16::from(dlc) * 8;
-        for signal in signals.iter().take(signal_count).filter_map(|opt| opt.as_ref()) {
+        for signal in signals.iter() {
             // Calculate the actual bit range for this signal (accounting for byte order)
             let (lsb, msb) =
                 Self::calculate_bit_range(signal.start_bit(), signal.length(), signal.byte_order());
@@ -154,11 +150,7 @@ impl<'a> Message<'a> {
             // The signal's highest bit position must be less than max_bits
             let signal_max_bit = lsb.max(msb);
             if signal_max_bit >= max_bits {
-                // Only fail if strict boundary checking is enabled
-                if options.strict_boundary_check {
-                    return Err(Error::Validation(lang::SIGNAL_EXTENDS_BEYOND_MESSAGE));
-                }
-                // In lenient mode, we allow signals that extend beyond boundaries
+                return Err(Error::Validation(lang::SIGNAL_EXTENDS_BEYOND_MESSAGE));
             }
         }
 
@@ -167,20 +159,11 @@ impl<'a> Message<'a> {
         // Must account for byte order: little-endian signals extend forward,
         // big-endian signals extend backward from start_bit
         // We iterate over pairs without collecting to avoid alloc
-        let signals_slice = &signals[..signal_count];
-        for (i, sig1_opt) in signals_slice.iter().enumerate() {
-            let sig1 = match sig1_opt {
-                Some(s) => s,
-                None => continue, // Should not happen, but be safe
-            };
+        for (i, sig1) in signals.iter().enumerate() {
             let (sig1_lsb, sig1_msb) =
                 Self::calculate_bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
 
-            for sig2_opt in signals_slice.iter().skip(i + 1) {
-                let sig2 = match sig2_opt {
-                    Some(s) => s,
-                    None => continue, // Should not happen, but be safe
-                };
+            for sig2 in signals.iter().skip(i + 1) {
                 let (sig2_lsb, sig2_msb) =
                     Self::calculate_bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
 
@@ -196,47 +179,44 @@ impl<'a> Message<'a> {
         Ok(())
     }
 
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     pub(crate) fn new(
         id: u32,
-        name: &'a str,
+        name: impl Into<Cow<'a, str>>,
         dlc: u8,
-        sender: &'a str,
-        signals: &'a [Signal<'a>],
+        sender: impl Into<Cow<'a, str>>,
+        signals: impl Into<SignalList<'a>>,
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
             id,
-            name,
+            name: name.into(),
             dlc,
-            sender,
-            signals: Signals::from_signals_slice(signals),
+            sender: sender.into(),
+            signals: signals.into(),
         }
     }
 
-    pub(crate) fn new_from_options(
+    pub(crate) fn new_from_signals(
         id: u32,
-        name: &'a str,
+        name: impl Into<Cow<'a, str>>,
         dlc: u8,
-        sender: &'a str,
-        signals: &[Option<Signal<'a>>],
-        signal_count: usize,
+        sender: impl Into<Cow<'a, str>>,
+        signals: &[Signal<'a>],
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
             id,
-            name,
+            name: name.into(),
             dlc,
-            sender,
-            signals: Signals::from_options_slice(signals, signal_count),
+            sender: sender.into(),
+            signals: SignalList::from_signals_slice(signals),
         }
     }
 
     pub(crate) fn parse<'b: 'a>(
         parser: &mut Parser<'b>,
-        signals: &[Option<Signal<'a>>],
-        signal_count: usize,
-        options: crate::ParseOptions,
+        signals: &[Signal<'a>],
     ) -> ParseResult<Self> {
         // Message parsing must always start with "BO_" keyword
         parser
@@ -294,28 +274,12 @@ impl<'a> Message<'a> {
         }
 
         // Validate before construction
-        Self::validate_internal(
-            id,
-            name,
-            dlc,
-            sender,
-            &signals[..signal_count],
-            signal_count,
-            options,
-        )
-        .map_err(|e| match e {
+        Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| match e {
             crate::error::Error::Validation(msg) => crate::error::ParseError::Message(msg),
             _ => crate::error::ParseError::Message("Validation error"),
         })?;
         // Construct directly (validation already done)
-        Ok(Self::new_from_options(
-            id,
-            name,
-            dlc,
-            sender,
-            signals,
-            signal_count,
-        ))
+        Ok(Self::new_from_signals(id, name, dlc, sender, signals))
     }
 
     /// Returns the CAN message ID.
@@ -350,8 +314,8 @@ impl<'a> Message<'a> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn name(&self) -> &'a str {
-        self.name
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     /// Returns the Data Length Code (DLC) in bytes.
@@ -377,21 +341,20 @@ impl<'a> Message<'a> {
 
     #[inline]
     #[must_use]
-    pub fn sender(&self) -> &'a str {
-        self.sender
+    pub fn sender(&self) -> &str {
+        &self.sender
     }
 
     /// Get a reference to the signals collection
     #[inline]
     #[must_use]
-    pub fn signals(&self) -> &Signals<'a> {
+    pub fn signals(&self) -> &SignalList<'a> {
         &self.signals
     }
 
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> alloc::string::String {
-        use alloc::format;
+    pub fn to_dbc_string(&self) -> String {
         format!(
             "BO_ {} {} : {} {}",
             self.id(),
@@ -401,10 +364,9 @@ impl<'a> Message<'a> {
         )
     }
 
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string_with_signals(&self) -> alloc::string::String {
-        use alloc::string::String;
+    pub fn to_dbc_string_with_signals(&self) -> String {
         let mut result = String::with_capacity(200 + (self.signals.len() * 100));
         result.push_str(&self.to_dbc_string());
         result.push('\n');
@@ -418,7 +380,7 @@ impl<'a> Message<'a> {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "std")]
 impl<'a> core::fmt::Display for Message<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_dbc_string_with_signals())
@@ -430,21 +392,20 @@ mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
     use crate::{Parser, error::ParseError};
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(not(feature = "std"))]
     use alloc::{format, vec};
+
     // Note: Builder tests have been moved to message_builder.rs
     // This module only tests Message parsing and direct API usage
 
     // Note: All test_message_new_* tests have been removed - they belong in message_builder.rs
     // This module only tests Message parsing and direct API usage
-
     #[test]
     fn test_message_parse_valid() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
         assert_eq!(message.id(), 256);
         assert_eq!(message.name(), "EngineData");
         assert_eq!(message.dlc(), 8);
@@ -456,9 +417,8 @@ mod tests {
     fn test_message_parse_invalid_id() {
         let data = b"BO_ invalid EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
+        let signals: &[Signal] = &[];
+        let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
             ParseError::Message(_) => {
@@ -472,9 +432,8 @@ mod tests {
     fn test_message_parse_empty_name() {
         let data = b"BO_ 256  : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
+        let signals: &[Signal] = &[];
+        let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
             ParseError::Message(_) => {
@@ -488,9 +447,8 @@ mod tests {
     fn test_message_parse_invalid_dlc() {
         let data = b"BO_ 256 EngineData : invalid ECM";
         let mut parser = Parser::new(data).unwrap();
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
+        let signals: &[Signal] = &[];
+        let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
             ParseError::Message(_) => {
@@ -504,9 +462,8 @@ mod tests {
     fn test_message_parse_empty_sender() {
         let data = b"BO_ 256 EngineData : 8 ";
         let mut parser = Parser::new(data).unwrap();
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        let result = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new());
+        let signals: &[Signal] = &[];
+        let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
             ParseError::Message(_) => {
@@ -531,12 +488,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-
-        let message = Message::parse(&mut parser, &signals, 2, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         assert_eq!(message.id(), 256);
         assert_eq!(message.name(), "EngineData");
         assert_eq!(message.dlc(), 8);
@@ -559,12 +512,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-
-        let message = Message::parse(&mut parser, &signals, 2, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         let mut signals_iter = message.signals().iter();
         assert_eq!(signals_iter.next().unwrap().name(), "RPM");
         assert_eq!(signals_iter.next().unwrap().name(), "Temp");
@@ -576,9 +525,8 @@ mod tests {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
 
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
         assert_eq!(message.signals().len(), 0);
 
         // Create a new parser for the second parse since the first one consumed the input
@@ -588,11 +536,8 @@ mod tests {
             &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
         )
         .unwrap();
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        let message =
-            Message::parse(&mut parser2, &signals, 1, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1];
+        let message = Message::parse(&mut parser2, &signals).unwrap();
         assert_eq!(message.signals().len(), 1);
     }
 
@@ -610,12 +555,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-
-        let message = Message::parse(&mut parser, &signals, 2, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         assert_eq!(message.signals().at(0).unwrap().name(), "RPM");
         assert_eq!(message.signals().at(1).unwrap().name(), "Temp");
         assert!(message.signals().at(2).is_none());
@@ -635,31 +576,26 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-
-        let message = Message::parse(&mut parser, &signals, 2, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         assert_eq!(message.signals().find("RPM").unwrap().name(), "RPM");
         assert_eq!(message.signals().find("Temp").unwrap().name(), "Temp");
         assert!(message.signals().find("Nonexistent").is_none());
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_to_dbc_string() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
         let dbc_string = message.to_dbc_string();
         assert_eq!(dbc_string, "BO_ 256 EngineData : 8 ECM");
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_to_dbc_string_with_signals() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
@@ -673,12 +609,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-
-        let message = Message::parse(&mut parser, &signals, 2, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         let dbc_string = message.to_dbc_string_with_signals();
         assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
         assert!(dbc_string.contains("SG_ RPM"));
@@ -686,52 +618,40 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_message_can_2_0a_dlc_limits() {
-        use alloc::format;
         // CAN 2.0A: DLC can be 1-8 bytes (8-64 bits)
         // Test valid DLC values
         for dlc in 1..=8 {
             let data = format!("BO_ 256 EngineData : {} ECM", dlc);
             let mut parser = Parser::new(data.as_bytes()).unwrap();
-            const MAX_CAP: usize = crate::Signals::max_capacity();
-            let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-            let message =
-                Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
             assert_eq!(message.dlc(), dlc);
         }
     }
 
     #[test]
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_message_can_2_0b_dlc_limits() {
-        use alloc::format;
         // CAN 2.0B: DLC can be 1-8 bytes (8-64 bits)
         // Test valid DLC values
         for dlc in 1..=8 {
             let data = format!("BO_ 256 EngineData : {} ECM", dlc);
             let mut parser = Parser::new(data.as_bytes()).unwrap();
-            const MAX_CAP: usize = crate::Signals::max_capacity();
-            let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-            let message =
-                Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
             assert_eq!(message.dlc(), dlc);
         }
     }
 
     #[test]
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
     fn test_message_can_fd_dlc_limits() {
-        use alloc::format;
         // CAN FD: DLC can be 1-64 bytes (8-512 bits)
         // Test valid DLC values up to 64
         for dlc in [1, 8, 12, 16, 20, 24, 32, 48, 64] {
             let data = format!("BO_ 256 EngineData : {} ECM", dlc);
             let mut parser = Parser::new(data.as_bytes()).unwrap();
-            const MAX_CAP: usize = crate::Signals::max_capacity();
-            let signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-            let message =
-                Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
             assert_eq!(message.dlc(), dlc);
         }
     }
@@ -763,14 +683,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-        signals[2] = Some(signal3);
-        signals[3] = Some(signal4);
-
-        let message = Message::parse(&mut parser, &signals, 4, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2, signal3, signal4];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         assert_eq!(message.signals().len(), 4);
     }
 
@@ -789,11 +703,8 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@1+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal);
-
-        let message = Message::parse(&mut parser, &signals, 1, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         // The signal should be valid and fit within the message
         assert_eq!(message.signals().len(), 1);
     }
@@ -810,11 +721,8 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal);
-
-        let message = Message::parse(&mut parser, &signals, 1, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal];
+        let message = Message::parse(&mut parser, &signals).unwrap();
         // The signal should be valid and fit within the message
         assert_eq!(message.signals().len(), 1);
     }
@@ -822,40 +730,12 @@ mod tests {
     // Note: Big-endian signal overlap and boundary tests have been moved to message_builder.rs
 
     #[test]
-    fn test_parse_with_lenient_boundary_check() {
-        // Test that lenient mode allows signals that extend beyond message boundaries
-        let data = b"BO_ 256 Test : 8 ECM";
-        let mut parser = Parser::new(data).unwrap();
-
-        // Signal that extends beyond 8-byte boundary (start_bit 63, length 8 = bits 63-70, exceeds 64 bits)
-        let signal =
-            Signal::parse(&mut Parser::new(b"SG_ CHECKSUM : 63|8@1+ (1,0) [0|255] \"\"").unwrap())
-                .unwrap();
-
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal);
-
-        // Strict mode should fail
-        let result = Message::parse(&mut parser, &signals, 1, crate::ParseOptions::new());
-        assert!(result.is_err());
-
-        // Lenient mode should succeed
-        let mut parser2 = Parser::new(data).unwrap();
-        let message =
-            Message::parse(&mut parser2, &signals, 1, crate::ParseOptions::lenient()).unwrap();
-        assert_eq!(message.signals().len(), 1);
-        assert_eq!(message.signals().at(0).unwrap().name(), "CHECKSUM");
-    }
-
-    #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_to_dbc_string_empty_signals() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
 
         let dbc_string = message.to_dbc_string();
         assert_eq!(dbc_string, "BO_ 256 EngineData : 8 ECM");
@@ -865,13 +745,12 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_to_dbc_string_special_characters() {
         let data = b"BO_ 1234 Test_Message_With_Underscores : 4 Sender_Node";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
 
         let dbc_string = message.to_dbc_string();
         assert_eq!(
@@ -881,35 +760,33 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_to_dbc_string_extended_id() {
         // Use a valid extended ID (max is 0x1FFF_FFFF = 536870911)
         let data = b"BO_ 536870911 ExtendedID : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
 
         let dbc_string = message.to_dbc_string();
         assert_eq!(dbc_string, "BO_ 536870911 ExtendedID : 8 ECM");
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_to_dbc_string_dlc_edge_cases() {
         // Test DLC = 1
         let data = b"BO_ 256 MinDLC : 1 ECM";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
         assert_eq!(message.to_dbc_string(), "BO_ 256 MinDLC : 1 ECM");
 
         // Test DLC = 64 (CAN FD max)
         let data2 = b"BO_ 257 MaxDLC : 64 ECM";
         let mut parser2 = Parser::new(data2).unwrap();
-        let message2 =
-            Message::parse(&mut parser2, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals_empty: &[Signal] = &[];
+        let message2 = Message::parse(&mut parser2, signals_empty).unwrap();
         assert_eq!(message2.to_dbc_string(), "BO_ 257 MaxDLC : 64 ECM");
     }
 
@@ -917,9 +794,8 @@ mod tests {
     fn test_message_signals_is_empty() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
         assert!(message.signals().is_empty());
         assert_eq!(message.signals().len(), 0);
     }
@@ -934,11 +810,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal);
-
-        let message = Message::parse(&mut parser, &signals, 1, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal];
+        let message = Message::parse(&mut parser, &signals).unwrap();
 
         // Valid index
         assert!(message.signals().at(0).is_some());
@@ -964,12 +837,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-
-        let message = Message::parse(&mut parser, &signals, 2, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2];
+        let message = Message::parse(&mut parser, &signals).unwrap();
 
         // Exact match
         assert!(message.signals().find("RPM").is_some());
@@ -992,18 +861,16 @@ mod tests {
     fn test_message_signals_find_empty_collection() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
 
         assert!(message.signals().find("RPM").is_none());
         assert!(message.signals().find("").is_none());
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_display_trait() {
-        use alloc::format;
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
 
@@ -1013,11 +880,8 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal);
-
-        let message = Message::parse(&mut parser, &signals, 1, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal];
+        let message = Message::parse(&mut parser, &signals).unwrap();
 
         let display_str = format!("{}", message);
         assert!(display_str.contains("BO_ 256 EngineData : 8 ECM"));
@@ -1025,7 +889,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_message_to_dbc_string_with_signals_multiple() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
@@ -1041,20 +905,14 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-
-        let message = Message::parse(&mut parser, &signals, 2, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2];
+        let message = Message::parse(&mut parser, &signals).unwrap();
 
         let dbc_string = message.to_dbc_string_with_signals();
         assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
         assert!(dbc_string.contains("SG_ RPM"));
         assert!(dbc_string.contains("SG_ Temp"));
         // Should have newlines between signals
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        use crate::compat::Vec;
         let lines: Vec<&str> = dbc_string.lines().collect();
         assert!(lines.len() >= 3); // Message line + at least 2 signal lines
     }
@@ -1064,9 +922,8 @@ mod tests {
         // Test with minimum values
         let data = b"BO_ 0 A : 1 B";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
 
         assert_eq!(message.id(), 0);
         assert_eq!(message.name(), "A");
@@ -1078,9 +935,8 @@ mod tests {
     fn test_message_signals_iterator_empty() {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
-        let signals: [Option<Signal>; crate::Signals::max_capacity()] =
-            [const { None }; crate::Signals::max_capacity()];
-        let message = Message::parse(&mut parser, &signals, 0, crate::ParseOptions::new()).unwrap();
+        let signals: &[Signal] = &[];
+        let message = Message::parse(&mut parser, signals).unwrap();
 
         let mut iter = message.signals().iter();
         assert!(iter.next().is_none());
@@ -1101,13 +957,8 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
-        const MAX_CAP: usize = crate::Signals::max_capacity();
-        let mut signals: [Option<Signal>; MAX_CAP] = [const { None }; MAX_CAP];
-        signals[0] = Some(signal1);
-        signals[1] = Some(signal2);
-        signals[2] = Some(signal3);
-
-        let message = Message::parse(&mut parser, &signals, 3, crate::ParseOptions::new()).unwrap();
+        let signals = vec![signal1, signal2, signal3];
+        let message = Message::parse(&mut parser, &signals).unwrap();
 
         let mut iter = message.signals().iter();
         assert_eq!(iter.next().unwrap().name(), "Signal1");
@@ -1116,14 +967,9 @@ mod tests {
         assert!(iter.next().is_none());
 
         // Test that iterator can be used multiple times
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        #[cfg(feature = "std")]
         {
-            use crate::compat::Vec;
-            use alloc::vec;
             let names: Vec<&str> = message.signals().iter().map(|s| s.name()).collect();
-            // Convert kernel Vec to alloc Vec for comparison
-            #[cfg(feature = "kernel")]
-            let names: alloc::vec::Vec<&str> = names.into();
             assert_eq!(names, vec!["Signal1", "Signal2", "Signal3"]);
         }
     }

@@ -1,10 +1,4 @@
-use crate::error::{ParseError, ParseResult};
-
-// Error message constants - grouped together for easy maintenance
-mod err {
-    pub const EXPECTED_WHITESPACE: &str = "Expected whitespace";
-    pub const EXPECTED_PATTERN: &str = "Expected pattern";
-}
+use crate::error::{ParseError, ParseResult, lang};
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -49,7 +43,7 @@ impl<'a> Parser<'a> {
             }
             Ok(self)
         } else {
-            Err(ParseError::Expected(err::EXPECTED_WHITESPACE))
+            Err(ParseError::Expected(lang::EXPECTED_WHITESPACE))
         }
     }
 
@@ -119,7 +113,7 @@ impl<'a> Parser<'a> {
 
         // Check if we have enough remaining bytes
         if self.input.len() - self.pos < expected.len() {
-            return Err(ParseError::Expected(err::EXPECTED_PATTERN));
+            return Err(ParseError::Expected(lang::EXPECTED_PATTERN));
         }
 
         if self.starts_with(expected) {
@@ -153,7 +147,7 @@ impl<'a> Parser<'a> {
             self.pos = end_pos;
             Ok(self)
         } else {
-            Err(ParseError::Expected(err::EXPECTED_PATTERN))
+            Err(ParseError::Expected(lang::EXPECTED_PATTERN))
         }
     }
 
@@ -293,7 +287,7 @@ impl<'a> Parser<'a> {
         num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
     }
 
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     pub(crate) fn parse_i64(&mut self) -> ParseResult<i64> {
         let start_pos = self.pos;
         let mut has_sign = false;
@@ -439,7 +433,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    // All parser tests work in all configurations (no_std, alloc, std, kernel)
+    // All parser tests work in all configurations (no_std, std)
     // Parser only uses core functionality and doesn't require alloc
     use super::*;
 
@@ -591,7 +585,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, err::EXPECTED_WHITESPACE),
+                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
                 _ => panic!("Expected ParseError"),
             }
         }
@@ -603,7 +597,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, err::EXPECTED_WHITESPACE),
+                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
                 _ => panic!("Expected ParseError"),
             }
         }
@@ -615,7 +609,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, err::EXPECTED_WHITESPACE),
+                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
                 _ => panic!("Expected ParseError"),
             }
         }
@@ -627,7 +621,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, err::EXPECTED_WHITESPACE),
+                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
                 _ => panic!("Expected ParseError"),
             }
         }
@@ -639,7 +633,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, err::EXPECTED_WHITESPACE),
+                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
                 _ => panic!("Expected ParseError"),
             }
             // Input should remain unchanged
@@ -678,7 +672,7 @@ mod tests {
             let result = parser.skip_whitespace().and_then(|p| p.skip_whitespace());
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, err::EXPECTED_WHITESPACE),
+                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
                 _ => panic!("Expected ParseError"),
             }
         }

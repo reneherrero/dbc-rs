@@ -4,15 +4,16 @@
 //! the builder pattern for all components.
 
 use dbc_rs::{
-    ByteOrder, DbcBuilder, MessageBuilder, NodesBuilder, Receivers, SignalBuilder, VersionBuilder,
+    ByteOrder, DbcBuilder, MessageBuilder, NodesBuilder, ReceiversBuilder, SignalBuilder,
+    VersionBuilder,
 };
 
 fn main() -> Result<(), dbc_rs::Error> {
     // Create version "1.0" using builder
-    let version = VersionBuilder::new().major(1).minor(0).build()?;
+    let version = VersionBuilder::new().version("1.0");
 
     // Create nodes: ECM and TCM using builder
-    let nodes = NodesBuilder::new().add_node("ECM").add_node("TCM").build()?;
+    let nodes = NodesBuilder::new().add_node("ECM").add_node("TCM");
 
     // Create signals for Engine message using the builder pattern
     let rpm_signal = SignalBuilder::new()
@@ -26,8 +27,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .min(0.0)
         .max(8000.0)
         .unit("rpm")
-        .receivers(Receivers::None)
-        .build()?;
+        .receivers(ReceiversBuilder::new().none());
 
     let temp_signal = SignalBuilder::new()
         .name("Temp")
@@ -40,8 +40,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .min(-40.0)
         .max(215.0)
         .unit("°C")
-        .receivers(Receivers::None)
-        .build()?;
+        .receivers(ReceiversBuilder::new().none());
 
     // Create signals for Brake message
     let pressure_signal = SignalBuilder::new()
@@ -55,8 +54,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .min(0.0)
         .max(1000.0)
         .unit("bar")
-        .receivers(Receivers::None)
-        .build()?;
+        .receivers(ReceiversBuilder::new().none());
 
     // Create Engine message (ID 256, DLC 8, sender ECM) using the builder pattern
     let engine_message = MessageBuilder::new()
@@ -65,8 +63,7 @@ fn main() -> Result<(), dbc_rs::Error> {
         .dlc(8)
         .sender("ECM")
         .add_signal(rpm_signal)
-        .add_signal(temp_signal)
-        .build()?;
+        .add_signal(temp_signal);
 
     // Create Brake message (ID 512, DLC 4, sender TCM) using the builder pattern
     let brake_message = MessageBuilder::new()
@@ -74,11 +71,10 @@ fn main() -> Result<(), dbc_rs::Error> {
         .name("Brake")
         .dlc(4)
         .sender("TCM")
-        .add_signal(pressure_signal)
-        .build()?;
+        .add_signal(pressure_signal);
 
     // Create DBC with all components using the builder pattern
-    let dbc = DbcBuilder::new(None)
+    let dbc = DbcBuilder::new()
         .version(version)
         .nodes(nodes)
         .add_message(engine_message)

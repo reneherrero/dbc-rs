@@ -1,11 +1,11 @@
 use crate::{
-    ByteOrder, Parser, Receivers,
+    ByteOrder, Cow, Parser, Receivers,
     error::{ParseError, ParseResult},
 };
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal<'a> {
-    name: &'a str,
+    name: Cow<'a, str>,
     start_bit: u16,
     length: u16,
     byte_order: ByteOrder,
@@ -14,7 +14,7 @@ pub struct Signal<'a> {
     offset: f64,
     min: f64,
     max: f64,
-    unit: Option<&'a str>,
+    unit: Option<Cow<'a, str>>,
     receivers: Receivers<'a>,
 }
 
@@ -56,10 +56,10 @@ impl<'a> Signal<'a> {
         Ok(())
     }
 
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     #[allow(clippy::too_many_arguments)] // Internal method, builder pattern is the public API
     pub(crate) fn new(
-        name: &'a str,
+        name: impl Into<Cow<'a, str>>,
         start_bit: u16,
         length: u16,
         byte_order: ByteOrder,
@@ -68,12 +68,12 @@ impl<'a> Signal<'a> {
         offset: f64,
         min: f64,
         max: f64,
-        unit: Option<&'a str>,
+        unit: Option<impl Into<Cow<'a, str>>>,
         receivers: Receivers<'a>,
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
-            name,
+            name: name.into(),
             start_bit,
             length,
             byte_order,
@@ -82,7 +82,7 @@ impl<'a> Signal<'a> {
             offset,
             min,
             max,
-            unit,
+            unit: unit.map(|u| u.into()),
             receivers,
         }
     }
@@ -388,7 +388,7 @@ impl<'a> Signal<'a> {
         // Construct directly (validation already done)
         // Value descriptions are stored in Dbc, not in Signal
         Ok(Self {
-            name,
+            name: Cow::Borrowed(name),
             start_bit,
             length,
             byte_order,
@@ -397,7 +397,7 @@ impl<'a> Signal<'a> {
             offset,
             min,
             max,
-            unit,
+            unit: unit.map(Cow::Borrowed),
             receivers,
         })
     }
@@ -405,7 +405,7 @@ impl<'a> Signal<'a> {
     #[inline]
     #[must_use = "return value should be checked"]
     pub fn name(&self) -> &str {
-        self.name
+        self.name.as_ref()
     }
 
     #[inline]
@@ -458,8 +458,8 @@ impl<'a> Signal<'a> {
 
     #[inline]
     #[must_use]
-    pub fn unit(&self) -> Option<&'a str> {
-        self.unit
+    pub fn unit(&self) -> Option<&str> {
+        self.unit.as_ref().map(|u| u.as_ref())
     }
 
     #[inline]
@@ -590,13 +590,9 @@ impl<'a> Signal<'a> {
         value
     }
 
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> alloc::string::String {
-        use alloc::{
-            format,
-            string::{String, ToString},
-        };
+    pub fn to_dbc_string(&self) -> String {
         let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
 
         result.push_str(" SG_ ");
@@ -651,8 +647,8 @@ impl<'a> Signal<'a> {
                 result.push(' ');
                 result.push('*');
             }
-            Receivers::Nodes(_, count) => {
-                if *count > 0 {
+            Receivers::Nodes(nodes) => {
+                if !nodes.is_empty() {
                     result.push(' ');
                     for (i, node) in self.receivers().iter().enumerate() {
                         if i > 0 {
@@ -692,7 +688,7 @@ impl<'a> core::hash::Hash for Signal<'a> {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "std")]
 impl<'a> core::fmt::Display for Signal<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_dbc_string())
@@ -707,6 +703,8 @@ mod tests {
         Parser,
         error::{ParseError, lang},
     };
+    #[cfg(not(feature = "std"))]
+    use alloc::format;
 
     // Note: Builder tests have been moved to signal_builder.rs
     // This module only tests Signal parsing and direct API usage
@@ -902,16 +900,14 @@ mod tests {
         }
     }
 
-    // Tests that require alloc or kernel (for to_dbc_string)
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
-    mod tests_with_alloc {
-        #[cfg(feature = "alloc")]
+    // Tests that require std (for to_dbc_string)
+    #[cfg(feature = "std")]
+    mod tests_with_std {
         use super::*;
 
         #[test]
-        #[cfg(feature = "alloc")] // to_dbc_string is only available with alloc
+        #[cfg(feature = "std")] // to_dbc_string is only available with std
         fn test_signal_to_dbc_string_round_trip() {
-            use alloc::vec;
             // Test round-trip: parse -> to_dbc_string -> parse
             let test_cases = vec![
                 (

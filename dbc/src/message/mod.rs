@@ -1,12 +1,12 @@
 #[path = "message.rs"]
 mod message_impl;
-mod signals;
+mod signal_list;
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
+#[cfg(feature = "std")]
 mod message_builder;
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
+#[cfg(feature = "std")]
 pub use message_builder::MessageBuilder;
 
 pub use message_impl::Message;
-pub use signals::Signals;
+pub use signal_list::SignalList;

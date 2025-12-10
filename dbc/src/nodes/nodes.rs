@@ -1,28 +1,29 @@
 use crate::{
-    Parser,
+    Cow, MAX_NODES, Parser,
     error::{ParseError, ParseResult},
 };
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 /// Iterator over nodes in a Nodes collection
-struct NodesIter<'a, 'b> {
-    nodes: &'b [Option<&'a str>],
-    count: usize,
+struct NodesIter<'a> {
+    nodes: &'a [Cow<'a, str>],
     pos: usize,
 }
 
-impl<'a, 'b> Iterator for NodesIter<'a, 'b> {
+impl<'a> Iterator for NodesIter<'a> {
     type Item = &'a str;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        while self.pos < self.count {
-            let result = self.nodes[self.pos];
+        if self.pos < self.nodes.len() {
+            let result = self.nodes[self.pos].as_ref();
             self.pos += 1;
-            if let Some(node) = result {
-                return Some(node);
-            }
+            Some(result)
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -81,24 +82,14 @@ impl<'a, 'b> Iterator for NodesIter<'a, 'b> {
 /// - Node names are space-separated
 /// - Maximum of 256 nodes (DoS protection)
 /// - Duplicate node names are not allowed (case-sensitive)
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, PartialEq, Eq, Hash)]
 pub struct Nodes<'a> {
-    nodes: [Option<&'a str>; crate::MAX_NODES],
-    count: usize,
-}
-
-impl<'a> Default for Nodes<'a> {
-    fn default() -> Self {
-        Self {
-            nodes: [const { None }; crate::MAX_NODES],
-            count: 0,
-        }
-    }
+    nodes: Vec<Cow<'a, str>>,
 }
 
 impl<'a> Nodes<'a> {
     // Shared validation function
-    pub(crate) fn validate(nodes: &[&str]) -> crate::error::Result<()> {
+    pub(crate) fn validate(nodes: &[impl AsRef<str>]) -> crate::error::Result<()> {
         use crate::error::{Error, lang};
         // Check for too many nodes (DoS protection)
         if nodes.len() > crate::MAX_NODES {
@@ -108,7 +99,7 @@ impl<'a> Nodes<'a> {
         // Check for duplicate node names (case-sensitive)
         for (i, node1) in nodes.iter().enumerate() {
             for node2 in nodes.iter().skip(i + 1) {
-                if *node1 == *node2 {
+                if node1.as_ref() == node2.as_ref() {
                     return Err(Error::Validation(lang::NODES_DUPLICATE_NAME));
                 }
             }
@@ -116,19 +107,12 @@ impl<'a> Nodes<'a> {
         Ok(())
     }
 
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
-    pub(crate) fn new(nodes: &[&'a str]) -> Self {
+    #[cfg(feature = "std")]
+    pub(crate) fn new(nodes: &[impl Into<Cow<'a, str>> + Clone]) -> Self {
         // Validation should have been done prior (by builder)
-        let mut node_array: [Option<&'a str>; crate::MAX_NODES] =
-            [const { None }; crate::MAX_NODES];
-        let count = nodes.len().min(crate::MAX_NODES);
-        for (i, node) in nodes.iter().take(crate::MAX_NODES).enumerate() {
-            node_array[i] = Some(*node);
-        }
-        Self {
-            nodes: node_array,
-            count,
-        }
+        let nodes_vec: Vec<Cow<'a, str>> =
+            nodes.iter().take(MAX_NODES).map(|node| node.clone().into()).collect();
+        Self { nodes: nodes_vec }
     }
 
     #[must_use = "parse result should be checked"]
@@ -146,10 +130,8 @@ impl<'a> Nodes<'a> {
         // Skip optional whitespace after ":"
         parser.skip_newlines_and_spaces();
 
-        // Parse node names into fixed-size array
-        let mut node_names: [Option<&'b str>; crate::MAX_NODES] =
-            [const { None }; crate::MAX_NODES];
-        let mut count = 0;
+        // Parse node names into Vec
+        let mut node_names: Vec<Cow<'a, str>> = Vec::new();
 
         loop {
             // Skip whitespace before each node name
@@ -159,11 +141,10 @@ impl<'a> Nodes<'a> {
             // parse_identifier() will fail if we're at EOF
             match parser.parse_identifier() {
                 Ok(node) => {
-                    if count >= crate::MAX_NODES {
+                    if node_names.len() >= MAX_NODES {
                         return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
                     }
-                    node_names[count] = Some(node);
-                    count += 1;
+                    node_names.push(Cow::Borrowed(node));
                 }
                 Err(_) => {
                     // No more identifiers, break
@@ -172,37 +153,17 @@ impl<'a> Nodes<'a> {
             }
         }
 
-        if count == 0 {
-            return Ok(Nodes {
-                nodes: [const { None }; crate::MAX_NODES],
-                count: 0,
-            });
-        }
-
-        // Collect valid node names into a slice for validation and construction
-        // We use a stack-allocated array to avoid allocation
-        let mut node_refs: [&'b str; crate::MAX_NODES] = [""; crate::MAX_NODES];
-        for i in 0..count {
-            if let Some(node) = node_names[i] {
-                node_refs[i] = node;
-            }
+        if node_names.is_empty() {
+            return Ok(Nodes { nodes: Vec::new() });
         }
 
         // Validate before construction
-        Self::validate(&node_refs[..count]).map_err(|e| match e {
+        Self::validate(&node_names).map_err(|e| match e {
             crate::error::Error::Validation(msg) => crate::error::ParseError::Nodes(msg),
             _ => crate::error::ParseError::Nodes("Validation error"),
         })?;
         // Construct directly (validation already done)
-        let mut node_array: [Option<&'a str>; crate::MAX_NODES] =
-            [const { None }; crate::MAX_NODES];
-        for (i, node) in node_refs.iter().take(count).enumerate() {
-            node_array[i] = Some(*node);
-        }
-        Ok(Self {
-            nodes: node_array,
-            count,
-        })
+        Ok(Self { nodes: node_names })
     }
 
     /// Returns an iterator over the node names.
@@ -232,10 +193,9 @@ impl<'a> Nodes<'a> {
     /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
-    pub fn iter(&self) -> impl Iterator<Item = &'a str> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &str> + '_ {
         NodesIter {
             nodes: &self.nodes,
-            count: self.count,
             pos: 0,
         }
     }
@@ -288,7 +248,7 @@ impl<'a> Nodes<'a> {
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.count
+        self.nodes.len()
     }
 
     /// Returns `true` if there are no nodes in the collection.
@@ -314,7 +274,7 @@ impl<'a> Nodes<'a> {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn is_empty(&self) -> bool {
-        self.count == 0
+        self.nodes.is_empty()
     }
 
     /// Gets a node by index.
@@ -343,11 +303,8 @@ impl<'a> Nodes<'a> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn at(&self, index: usize) -> Option<&'a str> {
-        if index >= self.count {
-            return None;
-        }
-        self.nodes[index]
+    pub fn at(&self, index: usize) -> Option<&str> {
+        self.nodes.get(index).map(|cow| cow.as_ref())
     }
 
     /// Converts the nodes to their DBC file representation.
@@ -387,14 +344,14 @@ impl<'a> Nodes<'a> {
     ///
     /// # Feature Requirements
     ///
-    /// This method requires the `alloc` feature to be enabled.
-    #[cfg(feature = "alloc")]
+    /// This method requires the `std` feature to be enabled.
+    #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> alloc::string::String {
-        use alloc::string::String;
+    pub fn to_dbc_string(&self) -> String {
+        use String;
         let mut result = String::from(crate::BU_);
         result.push(':');
-        let nodes_str = alloc::format!("{}", self);
+        let nodes_str = format!("{}", self);
         if !nodes_str.is_empty() {
             result.push(' ');
             result.push_str(&nodes_str);
@@ -403,10 +360,10 @@ impl<'a> Nodes<'a> {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "std")]
 impl<'a> core::fmt::Display for Nodes<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.count == 0 {
+        if self.nodes.is_empty() {
             return Ok(());
         }
         for (i, node) in self.iter().enumerate() {

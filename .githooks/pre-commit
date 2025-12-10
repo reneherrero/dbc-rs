@@ -37,24 +37,6 @@ fi
 # Track if any checks failed
 FAILED=0
 
-# Run tests with alloc feature
-echo -e "\n${YELLOW}Running tests with alloc feature...${NC}"
-if cargo test --features alloc --no-default-features -p dbc-rs 2>&1; then
-    echo -e "${GREEN}✓ alloc feature tests passed${NC}"
-else
-    echo -e "${RED}✗ alloc feature tests failed${NC}"
-    FAILED=1
-fi
-
-# Run tests with kernel feature
-echo -e "\n${YELLOW}Running tests with kernel feature...${NC}"
-if cargo test --features kernel --no-default-features -p dbc-rs 2>&1; then
-    echo -e "${GREEN}✓ kernel feature tests passed${NC}"
-else
-    echo -e "${RED}✗ kernel feature tests failed${NC}"
-    FAILED=1
-fi
-
 # Run clippy on dbc-rs using latest stable (for better linting)
 echo -e "\n${YELLOW}Running clippy on dbc-rs (using latest stable)...${NC}"
 if rustup run stable cargo clippy --all-targets -p dbc-rs -- -D warnings 2>&1; then

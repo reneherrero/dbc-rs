@@ -1,13 +1,13 @@
-use crate::compat::{Box, Vec, str_to_string};
 use crate::{
-    Dbc, Message, Nodes, Version,
-    error::{Error, Result},
+    Dbc, Message, MessageBuilder, MessageList, Nodes, NodesBuilder, ValueDescriptionsBuilder,
+    Version, VersionBuilder, error::Result,
 };
+use std::collections::BTreeMap;
 
 /// Builder for constructing `Dbc` instances programmatically.
 ///
 /// This builder allows you to create DBC files without parsing from a string.
-/// It requires the `alloc` feature to be enabled.
+/// It requires the `std` feature to be enabled.
 ///
 /// # Examples
 ///
@@ -16,25 +16,22 @@ use crate::{
 ///
 /// let nodes = NodesBuilder::new()
 ///     .add_node("ECM")
-///     .add_node("TCM")
-///     .build()?;
+///     .add_node("TCM");
 ///
 /// let signal = SignalBuilder::new()
 ///     .name("RPM")
 ///     .start_bit(0)
-///     .length(16)
-///     .build()?;
+///     .length(16);
 ///
 /// let message = MessageBuilder::new()
 ///     .id(256)
 ///     .name("EngineData")
 ///     .dlc(8)
 ///     .sender("ECM")
-///     .add_signal(signal)
-///     .build()?;
+///     .add_signal(signal);
 ///
-/// let dbc = DbcBuilder::new(None)
-///     .version(VersionBuilder::new().version("1.0").build()?)
+/// let dbc = DbcBuilder::new()
+///     .version(VersionBuilder::new().version("1.0"))
 ///     .nodes(nodes)
 ///     .add_message(message)
 ///     .build()?;
@@ -42,95 +39,79 @@ use crate::{
 /// ```
 #[derive(Debug, Default)]
 pub struct DbcBuilder {
-    version: Option<Version<'static>>,
-    nodes: Option<Nodes<'static>>,
-    messages: Vec<Message<'static>>,
-    value_descriptions: crate::dbc::ValueDescriptionsList<'static>,
+    version: VersionBuilder,
+    nodes: NodesBuilder,
+    messages: Vec<MessageBuilder>,
+    value_descriptions: std::collections::BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder>,
 }
 
 impl DbcBuilder {
-    /// Creates a new `DbcBuilder`.
-    ///
-    /// If a `Dbc` is provided, the builder is initialized with all data from it,
-    /// allowing you to modify an existing DBC file. If `None` is provided, an
-    /// empty builder is created.
-    ///
-    /// # Arguments
-    ///
-    /// * `dbc` - Optional reference to an existing `Dbc` to initialize from
+    /// Creates a new empty `DbcBuilder`.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use dbc_rs::DbcBuilder;
+    /// use dbc_rs::{DbcBuilder, VersionBuilder, NodesBuilder, MessageBuilder};
     ///
-    /// // Create empty builder
-    /// let builder = DbcBuilder::new(None);
-    /// ```
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::{Dbc, DbcBuilder, MessageBuilder};
-    ///
-    /// // Parse existing DBC
-    /// let dbc = Dbc::parse(r#"VERSION "1.0"
-    ///
-    /// BU_: ECM
-    ///
-    /// BO_ 256 Engine : 8 ECM
-    /// "#)?;
-    ///
-    /// // Create builder from existing DBC
-    /// let modified = DbcBuilder::new(Some(&dbc))
+    /// let dbc = DbcBuilder::new()
+    ///     .version(VersionBuilder::new().version("1.0"))
+    ///     .nodes(NodesBuilder::new().add_node("ECM"))
     ///     .add_message(MessageBuilder::new()
     ///         .id(512)
     ///         .name("Brake")
     ///         .dlc(4)
-    ///         .sender("ECM")
-    ///         .build()?)
+    ///         .sender("ECM"))
     ///     .build()?;
-    ///
-    /// assert_eq!(modified.messages().len(), 2);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn new(dbc: Option<&Dbc<'_>>) -> Self {
-        match dbc {
-            Some(dbc) => Self::from_dbc(dbc),
-            None => Self::default(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Creates a `DbcBuilder` from an existing `Dbc`.
     ///
-    /// This is a helper method used internally by `new()`. You can also call it
-    /// directly if you prefer.
+    /// This allows you to modify an existing DBC file by creating a builder
+    /// initialized with all data from the provided DBC.
     ///
     /// # Arguments
     ///
     /// * `dbc` - The existing `Dbc` to create a builder from
-    fn from_dbc(dbc: &Dbc<'_>) -> Self {
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{Dbc, DbcBuilder, MessageBuilder};
+    ///
+    /// let original = Dbc::parse(r#"VERSION "1.0"\nBU_: ECM\n"#)?;
+    /// let modified = DbcBuilder::from_dbc(&original)
+    ///     .add_message(MessageBuilder::new().id(256).name("Msg").dlc(8).sender("ECM"))
+    ///     .build()?;
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn from_dbc(dbc: &Dbc<'_>) -> Self {
+        #[cfg(feature = "std")]
         use crate::{
             MessageBuilder, NodesBuilder, ReceiversBuilder, SignalBuilder, VersionBuilder,
         };
 
-        // Convert version to 'static using VersionBuilder
-        let version = dbc.version().map(|v| {
+        // Convert version to builder (store builder, not final type)
+        let version = if let Some(v) = dbc.version() {
+            VersionBuilder::new().version(v.as_str())
+        } else {
             VersionBuilder::new()
-                .version(v.as_str())
-                .build()
-                .expect("Version conversion should always succeed")
-        });
+        };
 
-        // Convert nodes to 'static using NodesBuilder
+        // Convert nodes to builder (store builder, not final type)
         let nodes = {
             let mut builder = NodesBuilder::new();
             for node in dbc.nodes().iter() {
                 builder = builder.add_node(node);
             }
-            builder.build().expect("Nodes conversion should always succeed")
+            builder
         };
 
-        // Convert messages to 'static using MessageBuilder and SignalBuilder
-        let messages: Vec<Message<'static>> = dbc
+        // Convert messages to builders (store builders, not final types)
+        let messages: Vec<MessageBuilder> = dbc
             .messages()
             .iter()
             .map(|msg| {
@@ -158,50 +139,41 @@ impl DbcBuilder {
                     }
 
                     // Convert receivers using ReceiversBuilder
-                    let receivers = match sig.receivers() {
-                        crate::Receivers::Broadcast => {
-                            ReceiversBuilder::new().broadcast().build().unwrap()
-                        }
-                        crate::Receivers::None => ReceiversBuilder::new().none().build().unwrap(),
-                        crate::Receivers::Nodes(_, _) => {
-                            let mut recv_builder = ReceiversBuilder::new();
+                    let receivers_builder = match sig.receivers() {
+                        crate::Receivers::Broadcast => ReceiversBuilder::new().broadcast(),
+                        crate::Receivers::None => ReceiversBuilder::new().none(),
+                        crate::Receivers::Nodes(_) => {
+                            let mut rb = ReceiversBuilder::new();
                             for receiver in sig.receivers().iter() {
-                                recv_builder = recv_builder.add_node(receiver);
+                                rb = rb.add_node(receiver).unwrap(); // Can't fail for valid DBC
                             }
-                            recv_builder.build().unwrap()
+                            rb
                         }
                     };
-                    sig_builder = sig_builder.receivers(receivers);
+                    sig_builder = sig_builder.receivers(receivers_builder);
 
-                    msg_builder = msg_builder.add_signal(
-                        sig_builder.build().expect("Signal conversion should always succeed"),
-                    );
+                    msg_builder = msg_builder.add_signal(sig_builder);
                 }
 
-                msg_builder.build().expect("Message conversion should always succeed")
+                msg_builder
             })
             .collect();
 
-        // Convert value descriptions from Dbc to builder format
-        let mut value_descriptions = crate::dbc::ValueDescriptionsList::new();
+        // Convert value descriptions from Dbc to builder format (store builders, not final types)
+        let mut value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder> =
+            BTreeMap::new();
         for ((message_id, signal_name), vd) in dbc.value_descriptions().iter() {
-            // Convert &'a str to &'static str by leaking
-            let static_signal_name: &'static str = Box::leak(Box::from(str_to_string(signal_name)));
-            // Convert ValueDescriptions<'a> to ValueDescriptions<'static>
-            use crate::ValueDescriptionsBuilder;
+            // Store as String and ValueDescriptionsBuilder (no leak)
             let mut builder = ValueDescriptionsBuilder::new();
             for (value, desc) in vd.iter() {
-                let static_desc: &'static str = Box::leak(Box::from(str_to_string(desc)));
-                builder = builder.add_entry(value, static_desc);
+                builder = builder.add_entry(value, desc);
             }
-            let static_vd =
-                builder.build().expect("ValueDescriptions conversion should always succeed");
-            value_descriptions.insert((message_id, static_signal_name), static_vd);
+            value_descriptions.insert((message_id, signal_name.to_string()), builder);
         }
 
         Self {
             version,
-            nodes: Some(nodes),
+            nodes,
             messages,
             value_descriptions,
         }
@@ -214,13 +186,14 @@ impl DbcBuilder {
     /// ```rust,no_run
     /// use dbc_rs::{DbcBuilder, VersionBuilder};
     ///
-    /// let builder = DbcBuilder::new(None)
-    ///     .version(VersionBuilder::new().version("1.0").build()?);
+    /// let vb = VersionBuilder::new().version("1.0");
+    /// let builder = DbcBuilder::new()
+    ///     .version(vb);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
-    pub fn version(mut self, version: Version<'static>) -> Self {
-        self.version = Some(version);
+    pub fn version(mut self, version: VersionBuilder) -> Self {
+        self.version = version;
         self
     }
 
@@ -231,13 +204,13 @@ impl DbcBuilder {
     /// ```rust,no_run
     /// use dbc_rs::{DbcBuilder, NodesBuilder};
     ///
-    /// let builder = DbcBuilder::new(None)
-    ///     .nodes(NodesBuilder::new().add_node("ECM").build()?);
+    /// let builder = DbcBuilder::new()
+    ///     .nodes(NodesBuilder::new().add_node("ECM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
-    pub fn nodes(mut self, nodes: Nodes<'static>) -> Self {
-        self.nodes = Some(nodes);
+    pub fn nodes(mut self, nodes: NodesBuilder) -> Self {
+        self.nodes = nodes;
         self
     }
 
@@ -252,15 +225,14 @@ impl DbcBuilder {
     ///     .id(256)
     ///     .name("EngineData")
     ///     .dlc(8)
-    ///     .sender("ECM")
-    ///     .build()?;
+    ///     .sender("ECM");
     ///
-    /// let builder = DbcBuilder::new(None)
+    /// let builder = DbcBuilder::new()
     ///     .add_message(message);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
-    pub fn add_message(mut self, message: Message<'static>) -> Self {
+    pub fn add_message(mut self, message: MessageBuilder) -> Self {
         self.messages.push(message);
         self
     }
@@ -272,36 +244,16 @@ impl DbcBuilder {
     /// ```rust,no_run
     /// use dbc_rs::{DbcBuilder, MessageBuilder};
     ///
-    /// let msg1 = MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?;
-    /// let msg2 = MessageBuilder::new().id(512).name("Msg2").dlc(4).sender("TCM").build()?;
+    /// let msg1 = MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM");
+    /// let msg2 = MessageBuilder::new().id(512).name("Msg2").dlc(4).sender("TCM");
     ///
-    /// let builder = DbcBuilder::new(None)
-    ///     .add_message(msg1)
-    ///     .add_message(msg2);
+    /// let builder = DbcBuilder::new()
+    ///     .add_messages(vec![msg1, msg2]);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
-    pub fn add_messages(mut self, messages: impl IntoIterator<Item = Message<'static>>) -> Self {
+    pub fn add_messages(mut self, messages: impl IntoIterator<Item = MessageBuilder>) -> Self {
         self.messages.extend(messages);
-        self
-    }
-
-    /// Sets all messages for the DBC file, replacing any existing messages.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::{DbcBuilder, MessageBuilder};
-    ///
-    /// let msg = MessageBuilder::new().id(256).name("Msg1").dlc(8).sender("ECM").build()?;
-    ///
-    /// let builder = DbcBuilder::new(None)
-    ///     .add_message(msg);
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[must_use]
-    pub fn messages(mut self, messages: Vec<Message<'static>>) -> Self {
-        self.messages = messages;
         self
     }
 
@@ -312,7 +264,7 @@ impl DbcBuilder {
     /// ```rust,no_run
     /// use dbc_rs::DbcBuilder;
     ///
-    /// let builder = DbcBuilder::new(None)
+    /// let builder = DbcBuilder::new()
     ///     .clear_messages();
     /// ```
     #[must_use]
@@ -321,58 +273,93 @@ impl DbcBuilder {
         self
     }
 
-    fn extract_fields(
-        self,
-    ) -> Result<(
-        Version<'static>,
-        Nodes<'static>,
-        Vec<Message<'static>>,
-        crate::dbc::ValueDescriptionsList<'static>,
-    )> {
-        let version = self.version.ok_or(Error::dbc(crate::error::lang::DBC_VERSION_REQUIRED))?;
-        // Allow empty nodes (DBC spec allows empty BU_: line)
-        let nodes = self.nodes.unwrap_or_default();
-        Ok((version, nodes, self.messages, self.value_descriptions))
-    }
-
     /// Validates the builder without constructing the `Dbc`.
     ///
-    /// This method performs all validation checks but returns the builder
-    /// instead of constructing the `Dbc`. Useful for checking if the builder
-    /// is valid before calling `build()`.
+    /// This method performs all validation checks. Note that this consumes
+    /// the builder. If you want to keep the builder after validation, call
+    /// `build()` instead and check the result.
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// use dbc_rs::DbcBuilder;
     ///
-    /// let builder = DbcBuilder::new(None);
+    /// let builder = DbcBuilder::new();
     /// if builder.validate().is_err() {
     ///     // Handle validation error
     /// }
     /// ```
     #[must_use = "validation result should be checked"]
-    pub fn validate(mut self) -> Result<Self> {
-        // Extract value_descriptions before consuming self
-        let value_descriptions = core::mem::take(&mut self.value_descriptions);
-        let (version, nodes, messages, _) = self.extract_fields()?;
-        // Convert Vec to Option array for validation (all Some)
-        let messages_options: Vec<Option<Message<'static>>> =
-            messages.into_iter().map(Some).collect();
-        let messages_options_slice: &[Option<Message<'static>>] = &messages_options;
-        Dbc::validate(
-            &nodes,
-            messages_options_slice,
-            messages_options_slice.len(),
-            Some(&value_descriptions),
-        )?;
-        // Reconstruct builder with validated fields
-        Ok(Self {
-            version: Some(version),
-            nodes: Some(nodes),
-            messages: messages_options.into_iter().map(|opt| opt.unwrap()).collect(),
-            value_descriptions,
-        })
+    pub fn validate(self) -> Result<()> {
+        // Build and validate (extract_fields builds everything)
+        // We need to call extract_fields from the impl<'a> block
+        // Since validate doesn't need the lifetime, we can just build and drop
+        let (_version, nodes, messages, value_descriptions) = {
+            let version = self.version.build()?;
+            let nodes = self.nodes.build()?;
+            let messages: Vec<Message<'_>> = self
+                .messages
+                .into_iter()
+                .map(|builder| builder.build())
+                .collect::<Result<Vec<_>>>()?;
+            let mut value_descriptions_map: BTreeMap<
+                (Option<u32>, crate::Cow<'_, str>),
+                crate::ValueDescriptions<'_>,
+            > = BTreeMap::new();
+            for ((message_id, signal_name), vd_builder) in self.value_descriptions {
+                let vd = vd_builder.build()?;
+                let signal_name_cow: crate::Cow<'_, str> = crate::Cow::Owned(signal_name);
+                value_descriptions_map.insert((message_id, signal_name_cow), vd);
+            }
+            let value_descriptions =
+                crate::dbc::ValueDescriptionsList::from_map(value_descriptions_map);
+            (version, nodes, messages, value_descriptions)
+        };
+
+        // Validate messages
+        Dbc::validate(&nodes, &messages, Some(&value_descriptions))?;
+
+        Ok(())
+    }
+}
+
+impl<'a> DbcBuilder {
+    fn extract_fields(
+        self,
+    ) -> Result<(
+        Version<'a>,
+        Nodes<'a>,
+        Vec<Message<'a>>,
+        crate::dbc::ValueDescriptionsList<'a>,
+    )> {
+        // Build version
+        let version = self.version.build()?;
+
+        // Build nodes (allow empty - DBC spec allows empty BU_: line)
+        let nodes = self.nodes.build()?;
+
+        // Build messages
+        let messages: Vec<Message<'a>> = self
+            .messages
+            .into_iter()
+            .map(|builder| builder.build())
+            .collect::<Result<Vec<_>>>()?;
+
+        // Build value descriptions
+        let mut value_descriptions_map: BTreeMap<
+            (Option<u32>, crate::Cow<'a, str>),
+            crate::ValueDescriptions<'a>,
+        > = BTreeMap::new();
+        for ((message_id, signal_name), vd_builder) in self.value_descriptions {
+            let vd = vd_builder.build()?;
+            // Convert String to Cow::Owned (no leak)
+            let signal_name_cow: crate::Cow<'a, str> = crate::Cow::Owned(signal_name);
+            value_descriptions_map.insert((message_id, signal_name_cow), vd);
+        }
+        let value_descriptions =
+            crate::dbc::ValueDescriptionsList::from_map(value_descriptions_map);
+
+        Ok((version, nodes, messages, value_descriptions))
     }
 
     /// Builds the `Dbc` from the builder.
@@ -385,37 +372,25 @@ impl DbcBuilder {
     /// ```rust,no_run
     /// use dbc_rs::{DbcBuilder, VersionBuilder, NodesBuilder};
     ///
-    /// let dbc = DbcBuilder::new(None)
-    ///     .version(VersionBuilder::new().version("1.0").build()?)
-    ///     .nodes(NodesBuilder::new().add_node("ECM").build()?)
+    /// let dbc = DbcBuilder::new()
+    ///     .version(VersionBuilder::new().version("1.0"))
+    ///     .nodes(NodesBuilder::new().add_node("ECM"))
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(mut self) -> Result<Dbc<'static>> {
-        // Extract value_descriptions before consuming self
-        let value_descriptions = core::mem::take(&mut self.value_descriptions);
-        let (version, nodes, messages, _value_descriptions) = self.extract_fields()?;
-        // Convert Vec to Option array for validation (all Some)
-        let messages_options: Vec<Option<Message<'static>>> =
-            messages.into_iter().map(Some).collect();
-        let messages_options_slice: &[Option<Message<'static>>] = &messages_options;
+    pub fn build(self) -> Result<Dbc<'a>> {
+        let (version, nodes, messages, value_descriptions) = self.extract_fields()?;
         // Validate before construction
-        Dbc::validate(
-            &nodes,
-            messages_options_slice,
-            messages_options_slice.len(),
-            Some(&value_descriptions),
-        )?;
-        // Convert Option array back to Vec for slice creation
-        let messages: Vec<Message<'static>> =
-            messages_options.into_iter().map(|opt| opt.unwrap()).collect();
-        // Convert Vec to slice by leaking the boxed slice to get 'static lifetime
-        let messages_boxed: Box<[Message<'static>]> = messages.into_boxed_slice();
-        let messages_slice: &'static [Message<'static>] = Box::leak(messages_boxed);
+        Dbc::validate(&nodes, &messages, Some(&value_descriptions))?;
+        // Convert Vec to MessageList
+        let messages_list = MessageList::new(&messages).map_err(|e| match e {
+            crate::error::ParseError::Message(msg) => crate::Error::Validation(msg),
+            _ => crate::Error::Validation(crate::error::lang::NODES_TOO_MANY),
+        })?;
         Ok(Dbc::new(
             Some(version),
             nodes,
-            messages_slice,
+            messages_list,
             value_descriptions,
         ))
     }
@@ -426,15 +401,14 @@ mod tests {
     #![allow(clippy::float_cmp)]
     use super::DbcBuilder;
     use crate::{
-        ByteOrder, Dbc, Error, MessageBuilder, NodesBuilder, Parser, ReceiversBuilder,
-        SignalBuilder, Version, error::lang,
+        ByteOrder, Dbc, MessageBuilder, NodesBuilder, ReceiversBuilder, SignalBuilder,
+        VersionBuilder,
     };
 
     #[test]
     fn test_dbc_builder_valid() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
+        let version = VersionBuilder::new().version("1.0");
+        let nodes = NodesBuilder::new().add_nodes(["ECM"]);
         let signal = SignalBuilder::new()
             .name("RPM")
             .start_bit(0)
@@ -445,19 +419,15 @@ mod tests {
             .offset(0.0)
             .min(0.0)
             .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
+            .receivers(ReceiversBuilder::new().none());
         let message = MessageBuilder::new()
             .id(256)
             .name("EngineData")
             .dlc(8)
             .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
+            .add_signal(signal);
 
-        let dbc = DbcBuilder::new(None)
+        let dbc = DbcBuilder::new()
             .version(version)
             .nodes(nodes)
             .add_message(message)
@@ -470,7 +440,7 @@ mod tests {
 
     #[test]
     fn test_dbc_builder_missing_version() {
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
+        let nodes = NodesBuilder::new().add_nodes(["ECM"]);
         let signal = SignalBuilder::new()
             .name("RPM")
             .start_bit(0)
@@ -481,23 +451,20 @@ mod tests {
             .offset(0.0)
             .min(0.0)
             .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
+            .receivers(ReceiversBuilder::new().none());
         let message = MessageBuilder::new()
             .id(256)
             .name("EngineData")
             .dlc(8)
             .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
+            .add_signal(signal);
 
-        let result = DbcBuilder::new(None).nodes(nodes).add_message(message).build();
+        let result = DbcBuilder::new().nodes(nodes).add_message(message).build();
+        // VersionBuilder requires a version, so this should fail
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_VERSION_REQUIRED)),
-            _ => panic!("Expected Dbc error"),
+            crate::Error::Version(_) => {}
+            _ => panic!("Expected Version error"),
         }
     }
 
@@ -505,8 +472,7 @@ mod tests {
     fn test_dbc_builder_missing_nodes() {
         // Empty nodes are now allowed per DBC spec
         // When nodes are empty, sender validation is skipped
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
+        let version = VersionBuilder::new().version("1.0");
         let signal = SignalBuilder::new()
             .name("RPM")
             .start_bit(0)
@@ -517,20 +483,16 @@ mod tests {
             .offset(0.0)
             .min(0.0)
             .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
+            .receivers(ReceiversBuilder::new().none());
         let message = MessageBuilder::new()
             .id(256)
             .name("EngineData")
             .dlc(8)
             .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
+            .add_signal(signal);
 
         // Building without nodes should succeed (empty nodes allowed)
-        let result = DbcBuilder::new(None).version(version).add_message(message).build();
+        let result = DbcBuilder::new().version(version).add_message(message).build();
         assert!(result.is_ok());
         let dbc = result.unwrap();
         assert!(dbc.nodes().is_empty());
@@ -538,10 +500,9 @@ mod tests {
 
     #[test]
     fn test_dbc_builder_add_messages() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = SignalBuilder::new()
+        let version = VersionBuilder::new().version("1.0");
+        let nodes = NodesBuilder::new().add_nodes(["ECM"]);
+        let signal1 = SignalBuilder::new()
             .name("RPM")
             .start_bit(0)
             .length(16)
@@ -551,30 +512,35 @@ mod tests {
             .offset(0.0)
             .min(0.0)
             .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
+            .receivers(ReceiversBuilder::new().none());
+        let signal2 = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none());
         let message1 = MessageBuilder::new()
             .id(256)
             .name("EngineData")
             .dlc(8)
             .sender("ECM")
-            .add_signal(signal.clone())
-            .build()
-            .unwrap();
+            .add_signal(signal1);
         let message2 = MessageBuilder::new()
             .id(512)
             .name("BrakeData")
             .dlc(4)
             .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
+            .add_signal(signal2);
 
-        let dbc = DbcBuilder::new(None)
+        let dbc = DbcBuilder::new()
             .version(version)
             .nodes(nodes)
-            .add_messages([message1, message2].to_vec())
+            .add_messages(vec![message1, message2])
             .build()
             .unwrap();
 
@@ -583,10 +549,10 @@ mod tests {
 
     #[test]
     fn test_dbc_builder_messages() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let signal = SignalBuilder::new()
+        let version = VersionBuilder::new().version("1.0");
+        let nodes = NodesBuilder::new().add_nodes(["ECM"]);
+
+        let signal1 = SignalBuilder::new()
             .name("RPM")
             .start_bit(0)
             .length(16)
@@ -596,27 +562,33 @@ mod tests {
             .offset(0.0)
             .min(0.0)
             .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
+            .receivers(ReceiversBuilder::new().none());
         let message1 = MessageBuilder::new()
             .id(256)
             .name("EngineData")
             .dlc(8)
             .sender("ECM")
-            .add_signal(signal.clone())
-            .build()
-            .unwrap();
+            .add_signal(signal1);
+
+        let signal2 = SignalBuilder::new()
+            .name("RPM")
+            .start_bit(0)
+            .length(16)
+            .byte_order(ByteOrder::BigEndian)
+            .unsigned(true)
+            .factor(1.0)
+            .offset(0.0)
+            .min(0.0)
+            .max(100.0)
+            .receivers(ReceiversBuilder::new().none());
         let message2 = MessageBuilder::new()
             .id(512)
-            .name("BrakeData")
-            .dlc(4)
+            .name("EngineData2")
+            .dlc(8)
             .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
+            .add_signal(signal2);
 
-        let dbc = DbcBuilder::new(None)
+        let dbc = DbcBuilder::new()
             .version(version)
             .nodes(nodes)
             .add_message(message1)
@@ -629,9 +601,8 @@ mod tests {
 
     #[test]
     fn test_dbc_builder_clear_messages() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
+        let version = VersionBuilder::new().version("1.0");
+        let nodes = NodesBuilder::new().add_nodes(["ECM"]);
         let signal = SignalBuilder::new()
             .name("RPM")
             .start_bit(0)
@@ -642,19 +613,15 @@ mod tests {
             .offset(0.0)
             .min(0.0)
             .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
+            .receivers(ReceiversBuilder::new().none());
         let message = MessageBuilder::new()
             .id(256)
             .name("EngineData")
             .dlc(8)
             .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
+            .add_signal(signal);
 
-        let dbc = DbcBuilder::new(None)
+        let dbc = DbcBuilder::new()
             .version(version)
             .nodes(nodes)
             .add_message(message)
@@ -667,30 +634,29 @@ mod tests {
 
     #[test]
     fn test_dbc_builder_validate_missing_version() {
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
-        let result = DbcBuilder::new(None).nodes(nodes).validate();
+        let nodes = NodesBuilder::new().add_nodes(["ECM"]);
+        // VersionBuilder requires a version, so validation should fail
+        let result = DbcBuilder::new().nodes(nodes).validate();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => assert!(msg.contains(lang::DBC_VERSION_REQUIRED)),
-            _ => panic!("Expected Dbc error"),
+            crate::Error::Version(_) => {}
+            _ => panic!("Expected Version error"),
         }
     }
 
     #[test]
     fn test_dbc_builder_validate_missing_nodes() {
         // Empty nodes are now allowed per DBC spec
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let result = DbcBuilder::new(None).version(version).validate();
+        let version = VersionBuilder::new().version("1.0");
+        let result = DbcBuilder::new().version(version).validate();
         // Validation should succeed with empty nodes
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_dbc_builder_validate_valid() {
-        let mut parser = Parser::new(b"VERSION \"1.0\"").unwrap();
-        let version = Version::parse(&mut parser).unwrap();
-        let nodes = NodesBuilder::new().add_node("ECM").build().unwrap();
+        let version = VersionBuilder::new().version("1.0");
+        let nodes = NodesBuilder::new().add_nodes(["ECM"]);
         let signal = SignalBuilder::new()
             .name("RPM")
             .start_bit(0)
@@ -701,28 +667,19 @@ mod tests {
             .offset(0.0)
             .min(0.0)
             .max(100.0)
-            .receivers(ReceiversBuilder::new().none().build().unwrap())
-            .build()
-            .unwrap();
+            .receivers(ReceiversBuilder::new().none());
         let message = MessageBuilder::new()
             .id(256)
             .name("EngineData")
             .dlc(8)
             .sender("ECM")
-            .add_signal(signal)
-            .build()
-            .unwrap();
+            .add_signal(signal);
 
-        let result = DbcBuilder::new(None)
-            .version(version)
-            .nodes(nodes)
-            .add_message(message)
-            .validate();
+        // validate() consumes the builder, so we can't use it after
+        // But we can check it doesn't error
+        let builder = DbcBuilder::new().version(version).nodes(nodes).add_message(message);
+        let result = builder.validate();
         assert!(result.is_ok());
-        // Verify we can continue building after validation
-        let validated = result.unwrap();
-        let dbc = validated.build().unwrap();
-        assert_eq!(dbc.messages().len(), 1);
     }
 
     #[test]
@@ -738,16 +695,8 @@ BO_ 256 Engine : 8 ECM
         let original_dbc = Dbc::parse(dbc_content).unwrap();
 
         // Create builder from existing DBC
-        let modified_dbc = DbcBuilder::new(Some(&original_dbc))
-            .add_message(
-                MessageBuilder::new()
-                    .id(512)
-                    .name("Brake")
-                    .dlc(4)
-                    .sender("TCM")
-                    .build()
-                    .unwrap(),
-            )
+        let modified_dbc = DbcBuilder::from_dbc(&original_dbc)
+            .add_message(MessageBuilder::new().id(512).name("Brake").dlc(4).sender("TCM"))
             .build()
             .unwrap();
 
@@ -778,10 +727,8 @@ BU_:
         let original_dbc = Dbc::parse(dbc_content).unwrap();
 
         // Create builder from existing DBC
-        let modified_dbc = DbcBuilder::new(Some(&original_dbc))
-            .add_message(
-                MessageBuilder::new().id(256).name("Test").dlc(8).sender("ECM").build().unwrap(),
-            )
+        let modified_dbc = DbcBuilder::from_dbc(&original_dbc)
+            .add_message(MessageBuilder::new().id(256).name("Test").dlc(8).sender("ECM"))
             .build()
             .unwrap();
 

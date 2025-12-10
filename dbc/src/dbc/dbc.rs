@@ -1,9 +1,13 @@
 use crate::{
-    Error, Message, MessageList, Nodes, ParseError, ParseOptions, ParseResult, Parser, Result,
-    Signal, Signals, Version, error::lang,
+    Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, MessageList, Nodes, ParseError,
+    ParseResult, Parser, Result, Signal, Version, error::lang,
 };
-#[cfg(any(feature = "alloc", feature = "kernel"))]
-use crate::{ValueDescriptions, ValueDescriptionsList, compat::String};
+#[cfg(feature = "std")]
+use crate::{ValueDescriptions, ValueDescriptionsList};
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::{collections::BTreeMap, io::Read};
 
 /// Represents a complete DBC (CAN database) file.
 ///
@@ -34,51 +38,42 @@ pub struct Dbc<'a> {
     version: Option<Version<'a>>,
     nodes: Nodes<'a>,
     messages: MessageList<'a>,
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     value_descriptions: ValueDescriptionsList<'a>,
 }
 
 impl<'a> Dbc<'a> {
-    // Validate function for alloc/kernel features (with value_descriptions)
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    // Validate function for std feature (with value_descriptions)
+    #[cfg(feature = "std")]
     pub(crate) fn validate(
         nodes: &Nodes<'_>,
-        messages: &[Option<Message<'_>>],
-        message_count: usize,
+        messages: &[Message<'_>],
         value_descriptions: Option<&ValueDescriptionsList<'_>>,
     ) -> Result<()> {
-        Self::validate_common(nodes, messages, message_count)?;
+        Self::validate_common(nodes, messages)?;
 
         // Validate value descriptions if provided
         if let Some(value_descriptions) = value_descriptions {
-            let messages_slice = &messages[..message_count];
             // Validate that all value descriptions reference existing messages and signals
             for ((message_id_opt, signal_name), _) in value_descriptions.iter() {
                 // Check if message exists (for message-specific value descriptions)
                 if let Some(message_id) = message_id_opt {
-                    let message_exists = messages_slice
-                        .iter()
-                        .any(|msg_opt| msg_opt.as_ref().is_some_and(|msg| msg.id() == message_id));
+                    let message_exists = messages.iter().any(|msg| msg.id() == message_id);
                     if !message_exists {
                         return Err(Error::Validation(lang::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND));
                     }
 
                     // Check if signal exists in the message
-                    let signal_exists = messages_slice.iter().any(|msg_opt| {
-                        msg_opt.as_ref().is_some_and(|msg| {
-                            msg.id() == message_id && msg.signals().find(signal_name).is_some()
-                        })
+                    let signal_exists = messages.iter().any(|msg| {
+                        msg.id() == message_id && msg.signals().find(signal_name).is_some()
                     });
                     if !signal_exists {
                         return Err(Error::Validation(lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
                     }
                 } else {
                     // For global value descriptions (message_id is None), check if signal exists in any message
-                    let signal_exists = messages_slice.iter().any(|msg_opt| {
-                        msg_opt
-                            .as_ref()
-                            .is_some_and(|msg| msg.signals().find(signal_name).is_some())
-                    });
+                    let signal_exists =
+                        messages.iter().any(|msg| msg.signals().find(signal_name).is_some());
                     if !signal_exists {
                         return Err(Error::Validation(lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
                     }
@@ -90,33 +85,16 @@ impl<'a> Dbc<'a> {
     }
 
     // Validate function for no_std mode (without value_descriptions)
-    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-    pub(crate) fn validate(
-        nodes: &Nodes<'_>,
-        messages: &[Option<Message<'_>>],
-        message_count: usize,
-    ) -> Result<()> {
-        Self::validate_common(nodes, messages, message_count)
+    #[cfg(not(feature = "std"))]
+    pub(crate) fn validate(nodes: &Nodes<'_>, messages: &[Message<'_>]) -> Result<()> {
+        Self::validate_common(nodes, messages)
     }
 
     // Common validation logic shared by both versions
-    fn validate_common(
-        nodes: &Nodes<'_>,
-        messages: &[Option<Message<'_>>],
-        message_count: usize,
-    ) -> Result<()> {
+    fn validate_common(nodes: &Nodes<'_>, messages: &[Message<'_>]) -> Result<()> {
         // Check for duplicate message IDs
-        let messages_slice = &messages[..message_count];
-        for (i, msg1_opt) in messages_slice.iter().enumerate() {
-            let msg1 = match msg1_opt {
-                Some(m) => m,
-                None => continue, // Should not happen, but be safe
-            };
-            for msg2_opt in messages_slice.iter().skip(i + 1) {
-                let msg2 = match msg2_opt {
-                    Some(m) => m,
-                    None => continue, // Should not happen, but be safe
-                };
+        for (i, msg1) in messages.iter().enumerate() {
+            for msg2 in messages.iter().skip(i + 1) {
                 if msg1.id() == msg2.id() {
                     return Err(Error::Validation(lang::DUPLICATE_MESSAGE_ID));
                 }
@@ -126,11 +104,7 @@ impl<'a> Dbc<'a> {
         // Validate that all message senders are in the nodes list
         // Skip validation if nodes list is empty (empty nodes allowed per DBC spec)
         if !nodes.is_empty() {
-            for msg_opt in messages_slice {
-                let msg = match msg_opt {
-                    Some(m) => m,
-                    None => continue, // Should not happen, but be safe
-                };
+            for msg in messages {
                 if !nodes.contains(msg.sender()) {
                     return Err(Error::Validation(lang::SENDER_NOT_IN_NODES));
                 }
@@ -140,51 +114,19 @@ impl<'a> Dbc<'a> {
         Ok(())
     }
 
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     pub(crate) fn new(
         version: Option<Version<'a>>,
         nodes: Nodes<'a>,
-        messages: &'a [Message<'a>],
+        messages: MessageList<'a>,
         value_descriptions: crate::dbc::value_descriptions_list::ValueDescriptionsList<'a>,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
             version,
             nodes,
-            messages: MessageList::from_messages_slice(messages),
+            messages,
             value_descriptions,
-        }
-    }
-
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
-    fn new_from_options_with_value_descriptions(
-        version: Option<Version<'a>>,
-        nodes: Nodes<'a>,
-        messages: &[Option<Message<'a>>],
-        message_count: usize,
-        value_descriptions: crate::dbc::value_descriptions_list::ValueDescriptionsList<'a>,
-    ) -> Self {
-        // Validation should have been done prior (by parse)
-        Self {
-            version,
-            nodes,
-            messages: MessageList::from_options_slice(messages, message_count),
-            value_descriptions,
-        }
-    }
-
-    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-    fn new_from_options(
-        version: Option<Version<'a>>,
-        nodes: Nodes<'a>,
-        messages: &[Option<Message<'a>>],
-        message_count: usize,
-    ) -> Self {
-        // Validation should have been done prior (by parse)
-        Self {
-            version,
-            nodes,
-            messages: MessageList::from_options_slice(messages, message_count),
         }
     }
 
@@ -294,14 +236,14 @@ impl<'a> Dbc<'a> {
     /// assert_eq!(value_descriptions_list.len(), 1);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
     pub fn value_descriptions(&self) -> &ValueDescriptionsList<'a> {
         &self.value_descriptions
     }
 
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     #[must_use]
     pub fn value_descriptions_for_signal(
         &self,
@@ -330,35 +272,6 @@ impl<'a> Dbc<'a> {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse(data: &'a str) -> ParseResult<Self> {
-        Self::parse_with_options(data, ParseOptions::default())
-    }
-
-    /// Parses a DBC file from a string with custom parsing options.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - The DBC file content as a string
-    /// * `options` - Parsing options to control validation behavior
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::{Dbc, ParseOptions};
-    ///
-    /// let dbc_content = r#"VERSION "1.0"
-    ///
-    /// BU_: ECM
-    ///
-    /// BO_ 256 Test : 8 ECM
-    ///  SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
-    /// "#;
-    ///
-    /// // Use lenient mode to allow signals that extend beyond message boundaries
-    /// let options = ParseOptions::lenient();
-    /// let dbc = Dbc::parse_with_options(dbc_content, options)?;
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    pub fn parse_with_options(data: &'a str, options: ParseOptions) -> ParseResult<Self> {
         // FIRST PASS: Count messages (two-pass parsing to allocate correct sizes)
         let mut parser1 = Parser::new(data.as_bytes())?;
         let _ = MessageList::count_messages_and_signals(&mut parser1)?;
@@ -366,17 +279,7 @@ impl<'a> Dbc<'a> {
         // SECOND PASS: Parse into messages array
         let mut parser2 = Parser::new(data.as_bytes())?;
 
-        // Allocate messages buffer - MessageList will handle the size internally
-        // We use a temporary buffer that MessageList can work with (no alloc in no_std)
-        // MessageList handles capacity internally, we just need a buffer
-        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-        let mut messages_buffer = MessageList::new_parse_buffer();
-
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        let mut messages_buffer: alloc::vec::Vec<Option<Message<'a>>> = {
-            use crate::compat::vec_with_capacity;
-            vec_with_capacity(MessageList::max_capacity())
-        };
+        let mut messages_buffer: Vec<Message<'a>> = { Vec::with_capacity(MAX_MESSAGES) };
 
         let mut message_count_actual = 0;
 
@@ -390,13 +293,10 @@ impl<'a> Dbc<'a> {
         let mut nodes: Option<Nodes<'a>> = None;
 
         // Store value descriptions during parsing: (message_id, signal_name, value, description)
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        type ValueDescriptionsBufferEntry<'a> =
-            (Option<u32>, &'a str, alloc::vec::Vec<(u64, &'a str)>);
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        let mut value_descriptions_buffer: alloc::vec::Vec<
-            ValueDescriptionsBufferEntry<'a>,
-        > = alloc::vec::Vec::new();
+        #[cfg(feature = "std")]
+        type ValueDescriptionsBufferEntry<'a> = (Option<u32>, &'a str, Vec<(u64, &'a str)>);
+        #[cfg(feature = "std")]
+        let mut value_descriptions_buffer: Vec<ValueDescriptionsBufferEntry<'a>> = Vec::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -464,7 +364,7 @@ impl<'a> Dbc<'a> {
                     continue;
                 }
                 VAL_ => {
-                    #[cfg(any(feature = "alloc", feature = "kernel"))]
+                    #[cfg(feature = "std")]
                     {
                         // Consume VAL_ keyword
                         let _ = parser2.expect(crate::VAL_.as_bytes()).ok();
@@ -498,7 +398,7 @@ impl<'a> Dbc<'a> {
                             }
                         };
                         // Parse value-description pairs
-                        let mut entries = alloc::vec::Vec::new();
+                        let mut entries = Vec::new();
                         loop {
                             parser2.skip_newlines_and_spaces();
                             // Check for semicolon (end of VAL_ statement)
@@ -545,7 +445,7 @@ impl<'a> Dbc<'a> {
                             value_descriptions_buffer.push((message_id, signal_name, entries));
                         }
                     }
-                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
+                    #[cfg(not(feature = "std"))]
                     {
                         // In no_std mode, consume VAL_ keyword and skip the rest
                         let _ = parser2.expect(crate::VAL_.as_bytes()).ok();
@@ -567,8 +467,8 @@ impl<'a> Dbc<'a> {
                     continue;
                 }
                 BO_ => {
-                    // Check limit using Messages (which knows about the capacity)
-                    if message_count_actual >= MessageList::max_capacity() {
+                    // Check limit using MAX_MESSAGES constant
+                    if message_count_actual >= MAX_MESSAGES {
                         return Err(ParseError::Nodes(lang::NODES_TOO_MANY));
                     }
 
@@ -598,38 +498,22 @@ impl<'a> Dbc<'a> {
                     // Now parse signals from the original parser
                     parser2.skip_to_end_of_line(); // Skip past header line
 
-                    // Parse signals into fixed array
-                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-                    let mut signals_array = Signals::new_parse_buffer();
+                    let mut signals_array: Vec<Signal<'a>> =
+                        { Vec::with_capacity(MAX_SIGNALS_PER_MESSAGE) };
 
-                    #[cfg(any(feature = "alloc", feature = "kernel"))]
-                    let mut signals_array: alloc::vec::Vec<Option<Signal<'a>>> = {
-                        use crate::compat::vec_with_capacity;
-                        vec_with_capacity(Signals::max_capacity())
-                    };
-
-                    let mut signal_count = 0;
                     loop {
                         parser2.skip_newlines_and_spaces();
                         if parser2.starts_with(crate::SG_.as_bytes()) {
                             if let Some(next_byte) = parser2.peek_byte_at(3) {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
-                                    if signal_count >= Signals::max_capacity() {
+                                    if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
                                         return Err(ParseError::Receivers(
                                             lang::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }
                                     // Signal::parse expects SG_ keyword, which we've already verified with starts_with
                                     let signal = Signal::parse(&mut parser2)?;
-                                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-                                    {
-                                        signals_array[signal_count] = Some(signal);
-                                    }
-                                    #[cfg(any(feature = "alloc", feature = "kernel"))]
-                                    {
-                                        signals_array.push(Some(signal));
-                                    }
-                                    signal_count += 1;
+                                    signals_array.push(signal);
                                     continue;
                                 }
                             }
@@ -644,27 +528,9 @@ impl<'a> Dbc<'a> {
                     let mut message_parser = Parser::new(message_input)?;
 
                     // Use Message::parse which will parse the header and use our signals
-                    let signals_slice: &[Option<Signal<'a>>] = {
-                        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-                        {
-                            &signals_array[..signal_count]
-                        }
-                        #[cfg(any(feature = "alloc", feature = "kernel"))]
-                        {
-                            &signals_array[..]
-                        }
-                    };
-                    let message =
-                        Message::parse(&mut message_parser, signals_slice, signal_count, options)?;
+                    let message = Message::parse(&mut message_parser, &signals_array)?;
 
-                    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-                    {
-                        messages_buffer[message_count_actual] = Some(message);
-                    }
-                    #[cfg(any(feature = "alloc", feature = "kernel"))]
-                    {
-                        messages_buffer.push(Some(message));
-                    }
+                    messages_buffer.push(message);
                     message_count_actual += 1;
                     continue;
                 }
@@ -691,73 +557,45 @@ impl<'a> Dbc<'a> {
         });
 
         // Build value descriptions map for storage in Dbc
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
+        #[cfg(feature = "std")]
         let value_descriptions_list = {
-            use crate::value_descriptions::ValueDescriptions;
-            use alloc::collections::BTreeMap;
-            let mut map = BTreeMap::new();
+            use crate::Cow;
+            let mut map: BTreeMap<(Option<u32>, Cow<'a, str>), ValueDescriptions<'a>> =
+                BTreeMap::new();
             for (message_id, signal_name, entries) in value_descriptions_buffer {
-                let key = (message_id, signal_name);
+                let key = (message_id, Cow::Borrowed(signal_name));
                 let value_descriptions = ValueDescriptions::from_slice(&entries);
                 map.insert(key, value_descriptions);
             }
-            crate::dbc::value_descriptions_list::ValueDescriptionsList::from_map(map)
+            ValueDescriptionsList::from_map(map)
         };
 
         // Convert messages buffer to slice for validation and construction
-        let messages_slice: &[Option<Message<'a>>] = {
-            #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-            {
-                &messages_buffer[..message_count_actual]
-            }
-            #[cfg(any(feature = "alloc", feature = "kernel"))]
-            {
-                &messages_buffer[..]
-            }
-        };
+        let messages_slice: &[Message<'a>] = &messages_buffer[..];
 
         // Validate messages (duplicate IDs, sender in nodes, etc.)
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        {
-            Self::validate(
-                &nodes,
-                messages_slice,
-                message_count_actual,
-                Some(&value_descriptions_list),
-            )
-            .map_err(|e| match e {
+        #[cfg(feature = "std")]
+        Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(
+            |e| match e {
                 Error::Validation(msg) => ParseError::Message(msg),
                 _ => ParseError::Message("Validation error"),
-            })?;
-        }
-        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-        {
-            Self::validate(&nodes, messages_slice, message_count_actual).map_err(|e| match e {
-                Error::Validation(msg) => ParseError::Message(msg),
-                _ => ParseError::Message("Validation error"),
-            })?;
-        }
+            },
+        )?;
+        #[cfg(not(feature = "std"))]
+        Self::validate(&nodes, messages_slice).map_err(|e| match e {
+            Error::Validation(msg) => ParseError::Message(msg),
+            _ => ParseError::Message("Validation error"),
+        })?;
 
         // Construct directly (validation already done)
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        {
-            Ok(Self::new_from_options_with_value_descriptions(
-                version,
-                nodes,
-                messages_slice,
-                message_count_actual,
-                value_descriptions_list,
-            ))
-        }
-        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-        {
-            Ok(Self::new_from_options(
-                version,
-                nodes,
-                messages_slice,
-                message_count_actual,
-            ))
-        }
+        let messages = MessageList::new(messages_slice)?;
+        Ok(Self {
+            version,
+            nodes,
+            messages,
+            #[cfg(feature = "std")]
+            value_descriptions: value_descriptions_list,
+        })
     }
 
     /// Parse a DBC file from a byte slice
@@ -772,11 +610,11 @@ impl<'a> Dbc<'a> {
     /// println!("Parsed {} messages", dbc.messages().len());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     pub fn parse_bytes(data: &[u8]) -> Result<Dbc<'static>> {
-        let content = core::str::from_utf8(data).map_err(|_e| Error::dbc(lang::INVALID_UTF8))?;
+        let content =
+            core::str::from_utf8(data).map_err(|_e| Error::Dbc(lang::INVALID_UTF8.to_string()))?;
         // Convert to owned string, box it, and leak to get 'static lifetime
-        use alloc::boxed::Box;
         let owned = String::from(content);
         let boxed = owned.into_boxed_str();
         let content_ref: &'static str = Box::leak(boxed);
@@ -806,7 +644,8 @@ impl<'a> Dbc<'a> {
     /// ```
     #[cfg(feature = "std")]
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Dbc<'static>> {
-        let file = std::fs::File::open(path).map_err(|_e| Error::dbc(lang::READ_FAILED))?;
+        let file =
+            std::fs::File::open(path).map_err(|_e| Error::Dbc(lang::READ_FAILED.to_string()))?;
         Self::from_reader(file)
     }
 
@@ -827,11 +666,10 @@ impl<'a> Dbc<'a> {
     #[cfg(feature = "std")]
     pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Dbc<'static>> {
         let mut buffer = String::new();
-        std::io::Read::read_to_string(&mut reader, &mut buffer)
-            .map_err(|_e| Error::dbc(lang::READ_FAILED))?;
+        Read::read_to_string(&mut reader, &mut buffer)
+            .map_err(|_e| Error::Dbc(lang::READ_FAILED.to_string()))?;
         // Convert to boxed str and leak to get 'static lifetime
         // The leaked memory will live for the duration of the program
-        use alloc::boxed::Box;
         let boxed = buffer.into_boxed_str();
         let content_ref: &'static str = Box::leak(boxed);
         Dbc::parse(content_ref).map_err(Error::ParseError)
@@ -850,10 +688,9 @@ impl<'a> Dbc<'a> {
     /// assert!(dbc_string.contains("VERSION"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> alloc::string::String {
-        use alloc::string::String;
+    pub fn to_dbc_string(&self) -> String {
         // Pre-allocate with estimated capacity
         // Estimate: ~50 chars per message + ~100 chars per signal
         let signal_count: usize = self.messages().iter().map(|m| m.signals().len()).sum();
@@ -880,7 +717,7 @@ impl<'a> Dbc<'a> {
     }
 }
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "std")]
 impl<'a> core::fmt::Display for Dbc<'a> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_dbc_string())
@@ -1018,7 +855,7 @@ BO_ 256 Engine : 8 ECM
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_parse_from_string() {
         let data = String::from(
             r#"VERSION "1.0"
@@ -1053,7 +890,7 @@ BO_ 256 Engine : 8 ECM
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_save_basic() {
         // Use parsing instead of builders
         let dbc_content = r#"VERSION "1.0"
@@ -1121,7 +958,7 @@ BO_ 512 BrakeData : 4 TCM
     }
 
     #[test]
-    #[cfg(feature = "alloc")]
+    #[cfg(feature = "std")]
     fn test_save_multiple_messages() {
         // Use parsing instead of builders
         let dbc_content = r#"VERSION "1.0"
@@ -1233,30 +1070,6 @@ BU_: ECM
     }
 
     #[test]
-    fn test_parse_with_lenient_boundary_check() {
-        // Test that lenient mode allows signals that extend beyond message boundaries
-        let data = r#"VERSION "1.0"
-
-BU_: ECM
-
-BO_ 256 Test : 8 ECM
- SG_ CHECKSUM : 63|8@1+ (1,0) [0|255] ""
-"#;
-
-        // Strict mode should fail
-        let result = Dbc::parse(data);
-        assert!(result.is_err());
-
-        // Lenient mode should succeed
-        let options = ParseOptions::lenient();
-        let dbc = Dbc::parse_with_options(data, options).unwrap();
-        assert_eq!(dbc.messages().len(), 1);
-        let message = dbc.messages().at(0).unwrap();
-        assert_eq!(message.signals().len(), 1);
-        assert_eq!(message.signals().at(0).unwrap().name(), "CHECKSUM");
-    }
-
-    #[test]
     fn test_parse_with_strict_boundary_check() {
         // Test that strict mode (default) rejects signals that extend beyond boundaries
         let data = r#"VERSION "1.0"
@@ -1272,13 +1085,12 @@ BO_ 256 Test : 8 ECM
         assert!(result.is_err());
 
         // Explicit strict mode should also fail
-        let options = ParseOptions::new();
-        let result = Dbc::parse_with_options(data, options);
+        let result = Dbc::parse(data);
         assert!(result.is_err());
     }
 
     #[test]
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     fn test_parse_val_value_descriptions() {
         let data = r#"VERSION ""
 
@@ -1345,7 +1157,7 @@ VAL_ 100 Signal -1 "Reverse" 0 "Neutral" 1 "First" 2 "Second" 3 "Third" 4 "Fourt
     }
 
     #[test]
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
+    #[cfg(feature = "std")]
     fn test_parse_val_global_value_descriptions() {
         // Test global value descriptions (VAL_ -1) that apply to all signals with the same name
         let data = r#"VERSION "1.0"

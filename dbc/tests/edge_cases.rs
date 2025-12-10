@@ -1,6 +1,6 @@
 //! Edge case tests for DBC parsing and validation.
 
-#![cfg(feature = "alloc")]
+#![cfg(feature = "std")]
 
 use dbc_rs::{ByteOrder, Dbc};
 

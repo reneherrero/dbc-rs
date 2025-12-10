@@ -1,10 +1,10 @@
 #[path = "version.rs"]
 mod version_impl;
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
+#[cfg(feature = "std")]
 mod version_builder;
 
-#[cfg(any(feature = "alloc", feature = "kernel"))]
+#[cfg(feature = "std")]
 pub use version_builder::VersionBuilder;
 
 pub use version_impl::Version;

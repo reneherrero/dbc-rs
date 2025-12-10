@@ -1,11 +1,9 @@
-use crate::compat::{Box, String, display_to_string, format_two};
-use crate::{Error, Result, Version, error};
+use crate::{Result, Version};
 
 /// Builder for creating `Version` programmatically.
 ///
 /// This builder allows you to construct version strings when building DBC files
-/// programmatically. You can either specify a complete version string or build
-/// it incrementally using semantic version components.
+/// programmatically by specifying a complete version string.
 ///
 /// # Examples
 ///
@@ -14,12 +12,11 @@ use crate::{Error, Result, Version, error};
 ///
 /// // Direct version string
 /// let version = VersionBuilder::new().version("1.0").build()?;
+/// assert_eq!(version.as_str(), "1.0");
 ///
-/// // Semantic versioning
+/// // Semantic versioning (as a string)
 /// let version2 = VersionBuilder::new()
-///     .major(1)
-///     .minor(2)
-///     .patch(3)
+///     .version("1.2.3")
 ///     .build()?;
 /// assert_eq!(version2.as_str(), "1.2.3");
 /// # Ok::<(), dbc_rs::Error>(())
@@ -27,8 +24,8 @@ use crate::{Error, Result, Version, error};
 ///
 /// # Feature Requirements
 ///
-/// This builder requires the `alloc` feature to be enabled.
-#[derive(Debug, Default)]
+/// This builder requires the `std` feature to be enabled.
+#[derive(Debug)]
 pub struct VersionBuilder {
     version: Option<String>,
 }
@@ -47,12 +44,10 @@ impl VersionBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new() -> Self {
-        Self::default()
+        Self { version: None }
     }
 
     /// Sets the complete version string.
-    ///
-    /// This method overrides any previously set version components (major, minor, patch).
     ///
     /// # Arguments
     ///
@@ -67,136 +62,16 @@ impl VersionBuilder {
     ///     .version("1.2.3")
     ///     .build()?;
     /// assert_eq!(version.as_str(), "1.2.3");
-    ///
-    /// // Overrides previous components
-    /// let version2 = VersionBuilder::new()
-    ///     .major(1)
-    ///     .minor(2)
-    ///     .version("3.0") // Overrides previous
-    ///     .build()?;
-    /// assert_eq!(version2.as_str(), "3.0");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
-    pub fn version(mut self, version: &str) -> Self {
-        self.version = Some(String::from(version));
+    pub fn version(mut self, version: impl AsRef<str>) -> Self {
+        self.version = Some(version.as_ref().to_string());
         self
     }
+}
 
-    /// Sets the major version number.
-    ///
-    /// If `minor()` or `patch()` are called after this, they will append to the version string.
-    /// If `version()` is called after this, it will override this value.
-    ///
-    /// # Arguments
-    ///
-    /// * `major` - The major version number (0-255)
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::VersionBuilder;
-    ///
-    /// let version = VersionBuilder::new()
-    ///     .major(1)
-    ///     .build()?;
-    /// assert_eq!(version.as_str(), "1");
-    ///
-    /// // Combine with minor and patch
-    /// let version2 = VersionBuilder::new()
-    ///     .major(1)
-    ///     .minor(2)
-    ///     .patch(3)
-    ///     .build()?;
-    /// assert_eq!(version2.as_str(), "1.2.3");
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[must_use]
-    pub fn major(mut self, major: u8) -> Self {
-        self.version = Some(display_to_string(major));
-        self
-    }
-
-    /// Sets the minor version number.
-    ///
-    /// If a version string already exists (from `major()` or `version()`), this appends
-    /// the minor version. Otherwise, it creates a new version string with just the minor number.
-    ///
-    /// # Arguments
-    ///
-    /// * `minor` - The minor version number (0-255)
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::VersionBuilder;
-    ///
-    /// // With major
-    /// let version = VersionBuilder::new()
-    ///     .major(1)
-    ///     .minor(2)
-    ///     .build()?;
-    /// assert_eq!(version.as_str(), "1.2");
-    ///
-    /// // Without major (creates version "2")
-    /// let version2 = VersionBuilder::new()
-    ///     .minor(2)
-    ///     .build()?;
-    /// assert_eq!(version2.as_str(), "2");
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[must_use]
-    pub fn minor(mut self, minor: u8) -> Self {
-        if let Some(ref mut v) = self.version {
-            *v = format_two(v.as_str(), ".", minor);
-        } else {
-            // If major wasn't called, treat this as just the version string
-            self.version = Some(display_to_string(minor));
-        }
-        self
-    }
-
-    /// Sets the patch version number.
-    ///
-    /// If a version string already exists (from `major()`, `minor()`, or `version()`),
-    /// this appends the patch version. Otherwise, it creates a new version string with
-    /// just the patch number.
-    ///
-    /// # Arguments
-    ///
-    /// * `patch` - The patch version number (0-255)
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::VersionBuilder;
-    ///
-    /// // Full semantic version
-    /// let version = VersionBuilder::new()
-    ///     .major(1)
-    ///     .minor(2)
-    ///     .patch(3)
-    ///     .build()?;
-    /// assert_eq!(version.as_str(), "1.2.3");
-    ///
-    /// // Without major/minor (creates version "3")
-    /// let version2 = VersionBuilder::new()
-    ///     .patch(3)
-    ///     .build()?;
-    /// assert_eq!(version2.as_str(), "3");
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[must_use]
-    pub fn patch(mut self, patch: u8) -> Self {
-        if let Some(ref mut v) = self.version {
-            *v = crate::compat::format_two(v.as_str(), ".", patch);
-        } else {
-            // If major/minor weren't called, treat this as just the version string
-            self.version = Some(display_to_string(patch));
-        }
-        self
-    }
-
+impl<'a> VersionBuilder {
     /// Builds the `Version` from the builder configuration.
     ///
     /// This validates that a version has been set and constructs a `Version` instance
@@ -217,14 +92,6 @@ impl VersionBuilder {
     ///     .version("1.0")
     ///     .build()?;
     /// assert_eq!(version.as_str(), "1.0");
-    ///
-    /// // Build with semantic versioning
-    /// let version2 = VersionBuilder::new()
-    ///     .major(1)
-    ///     .minor(2)
-    ///     .patch(3)
-    ///     .build()?;
-    /// assert_eq!(version2.as_str(), "1.2.3");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     ///
@@ -242,13 +109,21 @@ impl VersionBuilder {
     /// assert_eq!(version.as_str(), "");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(self) -> Result<Version<'static>> {
-        let version = self.version.ok_or(Error::version(error::lang::VERSION_EMPTY))?;
+    pub fn build(self) -> Result<Version<'a>> {
+        match self.version {
+            Some(v) => Ok(Version::new(crate::Cow::Owned(v))),
+            None => Err(crate::Error::Version(
+                crate::error::lang::VERSION_EMPTY.to_string(),
+            )),
+        }
 
-        // Convert owned String to static reference by leaking Box<str>
-        let boxed: Box<str> = version.into_boxed_str();
-        let static_ref: &'static str = Box::leak(boxed);
-        Ok(Version::new(static_ref))
+        // Use Cow::Owned for owned strings (no leak needed)
+    }
+}
+
+impl Default for VersionBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -261,24 +136,6 @@ mod tests {
     fn test_version_builder_version_string() {
         let version = VersionBuilder::new().version("1.0").build().unwrap();
         assert_eq!(version.as_str(), "1.0");
-    }
-
-    #[test]
-    fn test_version_builder_major_only() {
-        let version = VersionBuilder::new().major(1).build().unwrap();
-        assert_eq!(version.as_str(), "1");
-    }
-
-    #[test]
-    fn test_version_builder_major_minor() {
-        let version = VersionBuilder::new().major(1).minor(0).build().unwrap();
-        assert_eq!(version.as_str(), "1.0");
-    }
-
-    #[test]
-    fn test_version_builder_full() {
-        let version = VersionBuilder::new().major(1).minor(2).patch(3).build().unwrap();
-        assert_eq!(version.as_str(), "1.2.3");
     }
 
     #[test]
@@ -297,42 +154,6 @@ mod tests {
     fn test_version_builder_with_special_chars() {
         let version = VersionBuilder::new().version("1.0-beta").build().unwrap();
         assert_eq!(version.as_str(), "1.0-beta");
-    }
-
-    #[test]
-    fn test_version_builder_minor_without_major() {
-        let version = VersionBuilder::new().minor(2).build().unwrap();
-        assert_eq!(version.as_str(), "2");
-    }
-
-    #[test]
-    fn test_version_builder_patch_without_major_minor() {
-        let version = VersionBuilder::new().patch(3).build().unwrap();
-        assert_eq!(version.as_str(), "3");
-    }
-
-    #[test]
-    fn test_version_builder_patch_without_major() {
-        let version = VersionBuilder::new().minor(2).patch(3).build().unwrap();
-        assert_eq!(version.as_str(), "2.3");
-    }
-
-    #[test]
-    fn test_version_builder_version_overrides_major() {
-        let version = VersionBuilder::new().major(1).version("2.0").build().unwrap();
-        assert_eq!(version.as_str(), "2.0");
-    }
-
-    #[test]
-    fn test_version_builder_version_overrides_major_minor() {
-        let version = VersionBuilder::new().major(1).minor(2).version("3.0").build().unwrap();
-        assert_eq!(version.as_str(), "3.0");
-    }
-
-    #[test]
-    fn test_version_builder_major_minor_patch_sequence() {
-        let version = VersionBuilder::new().major(1).minor(2).patch(3).build().unwrap();
-        assert_eq!(version.as_str(), "1.2.3");
     }
 
     #[test]

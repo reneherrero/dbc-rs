@@ -180,7 +180,6 @@ dbc-rs/
 │   ├── examples/        # Example code (std, no_std, builder)
 │   └── benches/         # Benchmark tests
 ├── dbc-cli/             # Command-line interface
-├── kernel-driver-example/ # Linux kernel driver example (experimental)
 └── .github/workflows/   # CI/CD workflows
 ```
 
@@ -195,7 +194,6 @@ dbc-rs/
 
 ### Medium Priority
 
-- Additional language translations for error messages
 - More example code
 - Benchmarking and performance analysis
 - Additional DBC file test cases
@@ -205,16 +203,6 @@ dbc-rs/
 - CLI enhancements
 - Additional tooling
 - Website/documentation site
-
-## Internationalization (i18n)
-
-If you're contributing translations for error messages:
-
-1. Add your language module in `dbc/src/error/lang/`
-2. Add the language feature to `dbc/Cargo.toml`
-3. Update `dbc/src/error/lang/mod.rs` to include your language
-4. Add all required constants (see `en.rs` for reference)
-5. Update the README to document the new language option
 
 ## Questions?
 

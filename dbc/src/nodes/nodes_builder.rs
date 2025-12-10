@@ -1,4 +1,3 @@
-use crate::compat::{Box, String, Vec, str_to_string};
 use crate::{error::Result, nodes::Nodes};
 
 /// Builder for creating `Nodes` programmatically.
@@ -30,8 +29,8 @@ use crate::{error::Result, nodes::Nodes};
 ///
 /// # Feature Requirements
 ///
-/// This builder requires the `alloc` feature to be enabled.
-#[derive(Debug, Default)]
+/// This builder requires the `std` feature to be enabled.
+#[derive(Debug)]
 pub struct NodesBuilder {
     nodes: Vec<String>,
 }
@@ -50,7 +49,7 @@ impl NodesBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new() -> Self {
-        Self::default()
+        Self { nodes: Vec::new() }
     }
 
     /// Adds a single node to the list.
@@ -73,7 +72,7 @@ impl NodesBuilder {
     /// ```
     #[must_use]
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
-        self.nodes.push(str_to_string(node));
+        self.nodes.push(node.as_ref().to_string());
         self
     }
 
@@ -108,7 +107,7 @@ impl NodesBuilder {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        self.nodes.extend(nodes.into_iter().map(str_to_string));
+        self.nodes.extend(nodes.into_iter().map(|s| s.as_ref().to_string()));
         self
     }
 
@@ -137,10 +136,9 @@ impl NodesBuilder {
     }
 
     fn extract_and_validate_nodes(self) -> Result<Vec<String>> {
-        let node_strs: Vec<String> = crate::compat::strings_from_iter(self.nodes);
-        let node_refs: Vec<&str> = node_strs.iter().map(|s| s.as_str()).collect();
+        let node_refs: Vec<&str> = self.nodes.iter().map(|s| s.as_str()).collect();
         super::Nodes::validate(&node_refs)?;
-        Ok(node_strs)
+        Ok(self.nodes)
     }
 
     /// Validates the current builder state without building.
@@ -177,7 +175,9 @@ impl NodesBuilder {
         let node_strs = self.extract_and_validate_nodes()?;
         Ok(Self { nodes: node_strs })
     }
+}
 
+impl<'a> NodesBuilder {
     /// Builds the `Nodes` from the builder configuration.
     ///
     /// This validates the nodes and constructs a `Nodes` instance with static lifetime.
@@ -225,18 +225,20 @@ impl NodesBuilder {
     /// }
     /// assert!(builder.build().is_err());
     /// ```
-    pub fn build(self) -> Result<Nodes<'static>> {
+    pub fn build(self) -> Result<Nodes<'a>> {
         let node_strs = self.extract_and_validate_nodes()?;
-        // Convert owned Strings to static references by leaking Box<str>
-        // This is acceptable for builder pattern where the caller owns the data
-        let mut node_refs: Vec<&'static str> = Vec::new();
-        for s in node_strs {
-            let boxed: Box<str> = s.into_boxed_str();
-            node_refs.push(Box::leak(boxed));
-        }
+        // Use Cow::Owned for owned strings (no leak needed)
+        let node_cows: Vec<crate::Cow<'a, str>> =
+            node_strs.into_iter().map(crate::Cow::Owned).collect();
         // Validate before construction
-        super::Nodes::validate(&node_refs)?;
-        Ok(Nodes::new(&node_refs))
+        super::Nodes::validate(&node_cows)?;
+        Ok(Nodes::new(&node_cows))
+    }
+}
+
+impl Default for NodesBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -245,7 +247,6 @@ mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
     use crate::{error::Error, error::lang};
-    use alloc::format;
 
     #[test]
     fn test_nodes_builder_duplicate() {

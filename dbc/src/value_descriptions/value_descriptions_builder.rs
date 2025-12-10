@@ -1,6 +1,5 @@
-use crate::compat::{Box, String, Vec, str_to_string};
-use crate::value_descriptions::{MAX_VALUE_DESCRIPTIONS, ValueDescriptions};
 use crate::{Error, Result};
+use crate::{MAX_VALUE_DESCRIPTIONS, value_descriptions::ValueDescriptions};
 
 /// Builder for creating `ValueDescriptions` programmatically.
 ///
@@ -31,8 +30,8 @@ use crate::{Error, Result};
 ///
 /// # Feature Requirements
 ///
-/// This builder requires the `alloc` or `kernel` feature to be enabled.
-#[derive(Debug, Clone, Default)]
+/// This builder requires the `std` feature to be enabled.
+#[derive(Debug)]
 pub struct ValueDescriptionsBuilder {
     entries: Vec<(u64, String)>,
 }
@@ -51,7 +50,9 @@ impl ValueDescriptionsBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            entries: Vec::new(),
+        }
     }
 
     /// Adds a value-description pair to the builder.
@@ -74,11 +75,13 @@ impl ValueDescriptionsBuilder {
     #[must_use]
     pub fn add_entry(mut self, value: u64, description: impl AsRef<str>) -> Self {
         if self.entries.len() < MAX_VALUE_DESCRIPTIONS {
-            self.entries.push((value, str_to_string(description)));
+            self.entries.push((value, description.as_ref().to_string()));
         }
         self
     }
+}
 
+impl<'a> ValueDescriptionsBuilder {
     /// Builds the `ValueDescriptions` from the builder.
     ///
     /// # Errors
@@ -96,22 +99,26 @@ impl ValueDescriptionsBuilder {
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(self) -> Result<ValueDescriptions<'static>> {
+    pub fn build(self) -> Result<ValueDescriptions<'a>> {
         if self.entries.len() > MAX_VALUE_DESCRIPTIONS {
-            return Err(Error::InvalidData(crate::error::str_to_error_string(
-                "Too many value descriptions",
-            )));
+            return Err(Error::InvalidData(
+                "Too many value descriptions".to_string(),
+            ));
         }
 
-        // Convert Vec<(u64, String)> to Vec<(u64, &'static str)>
-        // We need to leak the strings to get 'static lifetime
-        let mut static_entries: Vec<(u64, &'static str)> = Vec::new();
-        for (value, description) in self.entries {
-            let boxed: Box<str> = description.into_boxed_str();
-            let leaked: &'static str = Box::leak(boxed);
-            static_entries.push((value, leaked));
-        }
+        // Use Cow::Owned for owned strings (no leak needed)
+        let cow_entries: Vec<(u64, crate::Cow<'a, str>)> = self
+            .entries
+            .into_iter()
+            .map(|(value, description)| (value, crate::Cow::Owned(description)))
+            .collect();
 
-        Ok(ValueDescriptions::from_slice(&static_entries))
+        Ok(ValueDescriptions::from_slice(&cow_entries))
+    }
+}
+
+impl Default for ValueDescriptionsBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }

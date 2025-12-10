@@ -1,9 +1,11 @@
 use crate::Message;
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 /// Iterator over messages in a MessageList collection
 struct MessageListIter<'a, 'b> {
-    messages: &'b [Option<Message<'a>>],
-    count: usize,
+    messages: &'b [Message<'a>],
     pos: usize,
 }
 
@@ -12,14 +14,13 @@ impl<'a, 'b> Iterator for MessageListIter<'a, 'b> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        while self.pos < self.count {
-            let result = self.messages[self.pos].as_ref();
+        if self.pos < self.messages.len() {
+            let result = Some(&self.messages[self.pos]);
             self.pos += 1;
-            if let Some(msg) = result {
-                return Some(msg);
-            }
+            result
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -37,79 +38,26 @@ include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 
 /// Encapsulates the messages array and count for a DBC
 ///
-/// Storage strategy:
-/// - `no_std`: Uses fixed-size array `[Option<Message>; MAX_MESSAGES]`
-/// - `alloc`: Uses heap-allocated `Box<[Option<Message>]>` for dynamic sizing
+/// Uses `Vec<Message>` for dynamic sizing.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MessageList<'a> {
-    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-    messages: [Option<Message<'a>>; MAX_MESSAGES],
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
-    messages: alloc::boxed::Box<[Option<Message<'a>>]>,
-    message_count: usize,
+    messages: Vec<Message<'a>>,
 }
 
 impl<'a> MessageList<'a> {
-    /// Create Messages from a slice of messages by cloning them
-    #[cfg(any(feature = "alloc", feature = "kernel"))]
-    pub(crate) fn from_messages_slice(messages: &[Message<'a>]) -> Self {
-        let count = messages.len().min(MAX_MESSAGES);
-
-        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-        {
-            let mut messages_array: [Option<Message<'a>>; MAX_MESSAGES] =
-                [const { None }; MAX_MESSAGES];
-            for (i, message) in messages.iter().take(MAX_MESSAGES).enumerate() {
-                messages_array[i] = Some(message.clone());
-            }
-            Self {
-                messages: messages_array,
-                message_count: count,
-            }
+    /// Create MessageList from a slice of messages by cloning them
+    pub(crate) fn new(messages: &[Message<'a>]) -> crate::error::ParseResult<Self> {
+        if messages.len() > MAX_MESSAGES {
+            return Err(crate::error::ParseError::Message(
+                crate::error::lang::NODES_TOO_MANY,
+            ));
         }
-
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        {
-            use alloc::vec::Vec;
-            let messages_vec: Vec<Option<Message<'a>>> =
-                messages.iter().take(count).map(|message| Some(message.clone())).collect();
-            Self {
-                messages: messages_vec.into_boxed_slice(),
-                message_count: count,
-            }
-        }
-    }
-
-    /// Create MessageList from a slice of `Option<Message>` and count
-    pub(crate) fn from_options_slice(
-        messages: &[Option<Message<'a>>],
-        message_count: usize,
-    ) -> Self {
-        let count = message_count.min(MAX_MESSAGES).min(messages.len());
-
-        #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-        {
-            let mut messages_array: [Option<Message<'a>>; MAX_MESSAGES] =
-                [const { None }; MAX_MESSAGES];
-            for (i, message_opt) in messages.iter().take(count).enumerate() {
-                messages_array[i] = message_opt.clone();
-            }
-            Self {
-                messages: messages_array,
-                message_count: count,
-            }
-        }
-
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        {
-            use alloc::vec::Vec;
-            let messages_vec: Vec<Option<Message<'a>>> =
-                messages.iter().take(count).cloned().collect();
-            Self {
-                messages: messages_vec.into_boxed_slice(),
-                message_count: count,
-            }
-        }
+        // Use iter().cloned().collect() for no_std compatibility (to_vec() requires std)
+        #[allow(clippy::iter_cloned_collect)]
+        let messages_vec: Vec<Message<'a>> = messages.iter().cloned().collect();
+        Ok(Self {
+            messages: messages_vec,
+        })
     }
 
     /// Get an iterator over the messages
@@ -130,10 +78,8 @@ impl<'a> MessageList<'a> {
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &Message<'a>> + '_ {
-        let messages_slice: &[Option<Message<'a>>] = &self.messages;
         MessageListIter {
-            messages: messages_slice,
-            count: self.message_count,
+            messages: &self.messages,
             pos: 0,
         }
     }
@@ -152,7 +98,7 @@ impl<'a> MessageList<'a> {
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
-        self.message_count
+        self.messages.len()
     }
 
     /// Returns `true` if there are no messages
@@ -188,10 +134,7 @@ impl<'a> MessageList<'a> {
     #[inline]
     #[must_use]
     pub fn at(&self, index: usize) -> Option<&Message<'a>> {
-        if index >= self.message_count {
-            return None;
-        }
-        self.messages[index].as_ref()
+        self.messages.get(index)
     }
 
     /// Find a message by name, or None if not found
@@ -232,18 +175,6 @@ impl<'a> MessageList<'a> {
         self.iter().find(|m| m.id() == id)
     }
 
-    /// Get the maximum capacity (for limit checking during parsing)
-    pub(crate) const fn max_capacity() -> usize {
-        MAX_MESSAGES
-    }
-
-    /// Create a temporary buffer for parsing (no alloc in no_std)
-    /// Returns a buffer that can hold up to MAX_MESSAGES messages
-    #[cfg(not(any(feature = "alloc", feature = "kernel")))]
-    pub(crate) fn new_parse_buffer<'b>() -> [Option<Message<'b>>; MAX_MESSAGES] {
-        [const { None }; MAX_MESSAGES]
-    }
-
     /// Count messages and signals per message without storing (first pass of two-pass parsing)
     /// Returns message_count (signal counts are not needed after counting pass)
     pub(crate) fn count_messages_and_signals<'b>(
@@ -254,7 +185,7 @@ impl<'a> MessageList<'a> {
             SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
         };
 
-        // Use fixed-size array for counting (no alloc)
+        // Count messages without storing them
         let mut message_count = 0;
 
         loop {
@@ -350,7 +281,7 @@ impl<'a> MessageList<'a> {
                         if parser.starts_with(crate::SG_.as_bytes()) {
                             if let Some(next_byte) = parser.peek_byte_at(3) {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
-                                    if signal_count >= crate::Signals::max_capacity() {
+                                    if signal_count >= MAX_SIGNALS_PER_MESSAGE {
                                         return Err(crate::error::ParseError::Message(
                                             crate::error::lang::MESSAGE_TOO_MANY_SIGNALS,
                                         ));

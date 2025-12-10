@@ -1,5 +1,5 @@
 use crate::{
-    Parser,
+    Cow, Parser,
     error::{ParseError, ParseResult, lang},
 };
 
@@ -40,7 +40,7 @@ use crate::{
 /// - `""` - Empty version string (allowed)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Version<'a> {
-    version: &'a str,
+    version: Cow<'a, str>,
 }
 
 impl<'a> Version<'a> {
@@ -50,14 +50,16 @@ impl<'a> Version<'a> {
     ///
     /// This method is intended for internal use. For parsing from DBC content,
     /// use `Version::parse()`. For programmatic construction, use `VersionBuilder`
-    /// (requires `alloc` feature).
+    /// (requires `std` feature).
     ///
     /// # Arguments
     ///
     /// * `version` - The version string (should be validated before calling this)
-    pub(crate) fn new(version: &'a str) -> Self {
+    pub(crate) fn new(version: impl Into<Cow<'a, str>>) -> Self {
         // Validation should have been done prior (by builder or parse)
-        Self { version }
+        Self {
+            version: version.into(),
+        }
     }
 
     /// Parses a `VERSION` statement from a DBC file.
@@ -122,7 +124,7 @@ impl<'a> Version<'a> {
             .map_err(|_| ParseError::Version(lang::VERSION_INVALID))?;
 
         // Construct directly (validation already done during parsing)
-        Ok(Version::new(version_str))
+        Ok(Version::new(Cow::Borrowed(version_str)))
     }
 
     /// Returns the version string as a `&str`.
@@ -143,8 +145,8 @@ impl<'a> Version<'a> {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
-    pub fn as_str(&self) -> &'a str {
-        self.version
+    pub fn as_str(&self) -> &str {
+        &self.version
     }
 
     /// Converts the version to its DBC file representation.
@@ -188,16 +190,15 @@ impl<'a> Version<'a> {
     ///
     /// # Feature Requirements
     ///
-    /// This method requires the `alloc` feature to be enabled.
+    /// This method requires the `std` feature to be enabled.
     #[must_use]
-    #[cfg(feature = "alloc")]
-    pub fn to_dbc_string(&self) -> alloc::string::String {
+    #[cfg(feature = "std")]
+    pub fn to_dbc_string(&self) -> String {
         use crate::VERSION;
-        use alloc::format;
         if self.version.is_empty() {
             format!("{} \"\"", VERSION)
         } else {
-            format!("{} \"{}\"", VERSION, self.version)
+            format!("{} \"{}\"", VERSION, &self.version)
         }
     }
 }
@@ -219,8 +220,8 @@ impl<'a> Version<'a> {
 /// if let Some(version) = dbc.version() {
 ///     // Display trait formats as just the version string
 ///     assert_eq!(format!("{}", version), "1.2.3");
-///     // Use to_dbc_string() for full DBC format (requires alloc feature)
-///     #[cfg(feature = "alloc")]
+///     // Use to_dbc_string() for full DBC format (requires std feature)
+///     #[cfg(feature = "std")]
 ///     assert_eq!(version.to_dbc_string(), "VERSION \"1.2.3\"");
 /// }
 /// # Ok::<(), dbc_rs::Error>(())
@@ -240,20 +241,8 @@ mod tests {
     // Helper function to assert version string (works in all configurations)
     fn assert_version_str(version: &Version, expected: &str) {
         assert_eq!(version.as_str(), expected);
-        #[cfg(any(feature = "alloc", feature = "kernel"))]
-        {
-            #[cfg(feature = "alloc")]
-            use alloc::string::ToString;
-            #[cfg(all(feature = "kernel", not(feature = "alloc")))]
-            {
-                // In kernel mode, Display works but to_string() requires alloc
-                use alloc::format;
-                let formatted = format!("{}", version);
-                assert_eq!(formatted, expected);
-            }
-            #[cfg(feature = "alloc")]
-            assert_eq!(version.to_string(), expected);
-        }
+        #[cfg(feature = "std")]
+        assert_eq!(version.to_string(), expected);
     }
 
     // Tests that work in all configurations
@@ -381,9 +370,9 @@ mod tests {
         assert_version_str(&version, "1.0-beta");
     }
 
-    // Tests that require alloc (to_dbc_string is only available with alloc)
-    #[cfg(feature = "alloc")]
-    mod tests_with_alloc {
+    // Tests that require std (to_dbc_string is only available with std)
+    #[cfg(feature = "std")]
+    mod tests_with_std {
         use super::*;
 
         #[test]

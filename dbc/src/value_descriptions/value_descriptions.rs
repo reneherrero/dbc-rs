@@ -1,3 +1,8 @@
+use crate::{Cow, MAX_VALUE_DESCRIPTIONS};
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 /// Value descriptions for a signal.
 ///
 /// Maps numeric signal values to human-readable text descriptions.
@@ -35,27 +40,20 @@
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ValueDescriptions<'a> {
-    entries: alloc::boxed::Box<[Option<(u64, &'a str)>]>,
-    count: usize,
+    entries: Vec<(u64, Cow<'a, str>)>,
 }
-
-// Maximum value descriptions per signal
-// Most signals have 2-10 value descriptions, but some can have more
-pub(crate) const MAX_VALUE_DESCRIPTIONS: usize = 64;
 
 impl<'a> ValueDescriptions<'a> {
     /// Create ValueDescriptions from a slice of (value, description) pairs
-    pub(crate) fn from_slice(entries: &[(u64, &'a str)]) -> Self {
-        use alloc::vec;
+    pub(crate) fn from_slice(entries: &[(u64, impl Into<Cow<'a, str>> + Clone)]) -> Self {
         let count = entries.len().min(MAX_VALUE_DESCRIPTIONS);
-        let mut vec_entries: alloc::vec::Vec<Option<(u64, &'a str)>> =
-            vec![None; MAX_VALUE_DESCRIPTIONS];
-        for (i, (value, desc)) in entries.iter().take(count).enumerate() {
-            vec_entries[i] = Some((*value, *desc));
-        }
+        let vec_entries: Vec<(u64, Cow<'a, str>)> = entries
+            .iter()
+            .take(count)
+            .map(|(value, desc)| (*value, desc.clone().into()))
+            .collect();
         Self {
-            entries: vec_entries.into_boxed_slice(),
-            count,
+            entries: vec_entries,
         }
     }
 
@@ -76,10 +74,10 @@ impl<'a> ValueDescriptions<'a> {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use]
-    pub fn get(&self, value: u64) -> Option<&'a str> {
-        for (v, desc) in self.entries.iter().take(self.count).flatten() {
+    pub fn get(&self, value: u64) -> Option<&str> {
+        for (v, desc) in &self.entries {
             if *v == value {
-                return Some(desc);
+                return Some(desc.as_ref());
             }
         }
         None
@@ -88,13 +86,13 @@ impl<'a> ValueDescriptions<'a> {
     /// Get the number of value descriptions
     #[must_use]
     pub fn len(&self) -> usize {
-        self.count
+        self.entries.len()
     }
 
     /// Check if there are any value descriptions
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.count == 0
+        self.entries.is_empty()
     }
 
     /// Iterate over all value descriptions
@@ -116,7 +114,6 @@ impl<'a> ValueDescriptions<'a> {
     pub fn iter(&self) -> ValueDescriptionsIter<'_> {
         ValueDescriptionsIter {
             entries: &self.entries,
-            count: self.count,
             pos: 0,
         }
     }
@@ -124,8 +121,7 @@ impl<'a> ValueDescriptions<'a> {
 
 /// Iterator over value descriptions
 pub struct ValueDescriptionsIter<'a> {
-    entries: &'a [Option<(u64, &'a str)>],
-    count: usize,
+    entries: &'a [(u64, Cow<'a, str>)],
     pos: usize,
 }
 
@@ -133,14 +129,13 @@ impl<'a> Iterator for ValueDescriptionsIter<'a> {
     type Item = (u64, &'a str);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.pos < self.count {
-            if let Some(entry) = &self.entries[self.pos] {
-                let result = *entry;
-                self.pos += 1;
-                return Some(result);
-            }
+        if self.pos < self.entries.len() {
+            let entry = &self.entries[self.pos];
+            let result = (entry.0, entry.1.as_ref());
             self.pos += 1;
+            Some(result)
+        } else {
+            None
         }
-        None
     }
 }

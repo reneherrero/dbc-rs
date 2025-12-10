@@ -1,6 +1,6 @@
 //! Property-based tests using proptest for fuzz testing and edge case coverage.
 
-#![cfg(feature = "alloc")]
+#![cfg(feature = "std")]
 
 use dbc_rs::Dbc;
 use proptest::prelude::*;
@@ -79,7 +79,7 @@ proptest! {
                 assert!(dbc.messages().len() <= 10);
 
                 // Test round-trip: parse -> to_string -> parse
-                #[cfg(feature = "alloc")]
+                #[cfg(feature = "std")]
                 {
                     let dbc_string = dbc.to_dbc_string();
                     let dbc2 = Dbc::parse(&dbc_string).expect("Round-trip parse should succeed");
