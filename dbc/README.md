@@ -332,7 +332,7 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 ### Error Handling
 
 - **Result-based**: All fallible operations return `Result<T>`
-- **Categorized errors**:
+- **Categorized errors**: 
   - High-level (`std` only): `Error::Signal`, `Error::Message`, `Error::Dbc`, `Error::Version`, `Error::Nodes`, `Error::InvalidData`
   - Low-level (`no_std` compatible): `Error::ParseError(ParseError::...)` with variants like `Expected`, `UnexpectedEof`, `InvalidChar`
   - Other: `Error::Decoding`, `Error::Validation`
