@@ -13,11 +13,20 @@ This checklist ensures all steps are completed before publishing a new release o
 
 - [ ] **Clippy checks pass (all targets)**
   ```bash
-  # Default target (with std) - matches CI workflow
-  cargo clippy --all-targets -p dbc-rs -- -D warnings
+  # std (default) - use --lib --bins to exclude benchmarks
+  cargo clippy --lib --bins -p dbc-rs -- -D warnings
   
-  # no_std target (clippy only checks, doesn't build, so debug build issues don't apply)
-  cargo clippy --no-default-features --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
+  # alloc only
+  cargo clippy --no-default-features --features alloc -p dbc-rs --lib --bins -- -D warnings
+  
+  # heapless (x86_64)
+  cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings
+  
+  # heapless (embedded)
+  cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
+  
+  # alloc (embedded)
+  cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
   
   # dbc-cli
   cargo clippy --all-targets -p dbc-cli -- -D warnings
@@ -33,12 +42,13 @@ This checklist ensures all steps are completed before publishing a new release o
 - [ ] **Documentation builds without warnings**
   ```bash
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dbc-rs
+  # Note: dbc-cli may have intra-doc link warnings, check if acceptable
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dbc-cli
   ```
 
 - [ ] **Code coverage meets threshold (80%)**
   ```bash
-  cargo llvm-cov --workspace --tests --lib --ignore-filename-regex "^(tests|examples|benches)/" --fail-under-lines 80
+  cargo llvm-cov --workspace --fail-under-lines 80
   ```
 
 ### 2. Build Verification
@@ -55,10 +65,13 @@ This checklist ensures all steps are completed before publishing a new release o
 
 - [ ] **Builds successfully in `no_std` + `heapless` mode**
   ```bash
-  // You need to reduce message capacity for embedded devices 
+  # x86_64
+  DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --package dbc-rs
+  
+  # Embedded target (requires DBC_MAX_MESSAGES reduction)
   DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf --package dbc-rs
   ```
-  Note: For embedded targets, the default of 10000 can causes a stack overflow with heapless Vec. Override with `DBC_MAX_MESSAGES` if needed.
+  Note: For embedded targets, the default of 10000 causes stack overflow with heapless Vec. Override with `DBC_MAX_MESSAGES` (recommended: 100-500).
 
 - [ ] **Builds successfully on MSRV (1.85.0)**
   ```bash
@@ -196,8 +209,10 @@ This checklist ensures all steps are completed before publishing a new release o
 
 ### 9. Publishing to crates.io
 
-- [ ] **Dry-run successful**
+- [ ] **Dry-run successful** (requires all changes committed)
   ```bash
+  # Note: This will fail if there are uncommitted changes
+  # Commit all changes first, or use --allow-dirty for testing
   cargo publish --dry-run -p dbc-rs
   ```
 
@@ -250,22 +265,31 @@ For pre-releases:
 # 1. Update version in Cargo.toml
 # 2. Update CHANGELOG.md
 # 3. Run all checks locally (matches CI workflows)
+
+# Tests - all configurations
 cargo test --workspace
-# Note: The following may fail if there are compilation errors - fix before release
 cargo test --no-default-features --features alloc -p dbc-rs
-# Note: heapless tests require increased stack size due to Debug formatting
-# Use --lib to skip examples (parse_no_std example has linker issues with heapless on x86_64)
 RUST_MIN_STACK=8388608 cargo test --no-default-features --features heapless -p dbc-rs --lib
 
-RUST_MIN_STACK=8388608 cargo build --no-default-features --target thumbv7em-none-eabihf --features heapless -p dbc-rs
+# Builds - all configurations
+cargo build --release -p dbc-rs  # std (default)
+cargo build --release --no-default-features --features alloc -p dbc-rs  # alloc only
+DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless -p dbc-rs  # heapless (x86_64)
+DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs  # heapless (embedded)
+cargo build --release --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs  # alloc (embedded)
 
-cargo clippy --all-targets -p dbc-rs -- -D warnings
-cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
-cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
+# Clippy - all configurations
+cargo clippy --lib --bins -p dbc-rs -- -D warnings  # std (default)
+cargo clippy --no-default-features --features alloc -p dbc-rs --lib --bins -- -D warnings  # alloc only
+cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings  # heapless (x86_64)
+cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings  # heapless (embedded)
+cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings  # alloc (embedded)
 cargo clippy --all-targets -p dbc-cli -- -D warnings
 
+# Formatting
 cargo fmt -- --check
 
+# Coverage
 cargo llvm-cov --workspace --fail-under-lines 80
 
 cargo publish --dry-run -p dbc-rs

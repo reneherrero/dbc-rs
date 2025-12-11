@@ -175,7 +175,7 @@ dbc-rs/
 │   │   ├── nodes/       # Node/ECU management & builder
 │   │   ├── receivers/   # Signal receivers & builder
 │   │   ├── version/     # Version information & builder
-│   │   └── error/       # Error types & i18n (en, de, es, fr, ja)
+│   │   └── error/       # Error types
 │   ├── tests/           # Integration tests & test data
 │   ├── examples/        # Example code (std, no_std, builder)
 │   └── benches/         # Benchmark tests

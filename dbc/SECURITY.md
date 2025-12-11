@@ -66,7 +66,7 @@ The codebase demonstrates strong security practices with comprehensive input val
   - Maximum 64 signals per message (`MAX_SIGNALS_PER_MESSAGE = 64`, configurable via `DBC_MAX_SIGNALS_PER_MESSAGE`)
   - Maximum 256 characters for unit strings (`MAX_UNIT_LENGTH = 256`)
 - **Impact**: Prevents resource exhaustion attacks
-- **Implementation**: All limits enforced during validation with internationalized error messages
+- **Implementation**: All limits enforced during validation with error messages
 - **Flexibility**: All limits can be overridden at build time via environment variables (DBC_MAX_*) for specialized use cases while maintaining security
 
 ## Security Issues Found
@@ -82,7 +82,7 @@ The codebase demonstrates strong security practices with comprehensive input val
 **Fix Applied**: 
 - Added maximum limit of **256 nodes** in `Nodes::validate()`
 - Added maximum limit of **64 receiver nodes per signal** in `Signal::parse_receivers()`
-- Added internationalized error messages for both limits
+- Added error messages for both limits
 - Updated documentation to reflect limits
 
 **Risk Level**: 🟢 **RESOLVED**
@@ -212,7 +212,6 @@ The codebase demonstrates strong security practices with comprehensive input val
 - ✅ Proper use of `Result<T>` types
 - ✅ Descriptive error messages
 - ✅ Error categorization
-- ✅ Internationalized error messages
 
 ### ✅ Information Disclosure
 - ✅ Error messages don't leak sensitive information

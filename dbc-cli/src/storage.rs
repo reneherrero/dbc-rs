@@ -160,7 +160,7 @@ pub fn describe_stored() -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// # Arguments
 ///
-/// * `input` - CAN message in candump format (e.g., "can0 123 [8] 11 22 33 44 55 66 77 88")
+/// * `input` - CAN message in (compact) candump format (e.g., "1F334455#1122334455667788")
 ///
 /// # Returns
 ///
