@@ -1,7 +1,7 @@
 # Security Audit Report
 
 **Date**: 2025-12-07  
-**Version**: 0.1.0-beta.2  
+**Version**: 0.1.0-beta.3  
 **Auditor**: Automated Security Review  
 **Previous Audit**: 2025-12-06
 
@@ -51,21 +51,23 @@ The codebase demonstrates strong security practices with comprehensive input val
 - **Evidence**: 
   - Uses Rust's ownership system
   - No manual memory management
-  - Uses `Box<str>` for efficient string storage
+  - Uses `Vec<T>` (via `alloc`) for dynamic collections in both `std` and `no_std`
   - Pre-allocated vectors with capacity hints
+  - No memory leaks (removed `Box::leak` from `parse_bytes`)
 - **Impact**: Prevents memory corruption, use-after-free, and buffer overflows
 
 ### ✅ 6. DoS Protection
 - **Status**: ✅ **PASS** (Verified 2025-12-06)
 - **Evidence**:
-  - Maximum 256 nodes per DBC file (`MAX_NODES = 256`)
-  - Maximum 64 receiver nodes per signal (`MAX_RECEIVER_NODES = 64`)
-  - Maximum 10,000 messages per DBC file (`MAX_MESSAGES = 10,000`, configurable via build.rs)
-  - Maximum 64 signals per message (`MAX_SIGNALS_PER_MESSAGE = 64`, configurable via build.rs)
+  - Maximum 256 nodes per DBC file (`MAX_NODES = 256`, configurable via `DBC_MAX_NODES`)
+  - Maximum 64 receiver nodes per signal (`MAX_RECEIVER_NODES = 64`, configurable via `DBC_MAX_RECEIVER_NODES`)
+  - Maximum 64 value descriptions per signal (`MAX_VALUE_DESCRIPTIONS = 64`, configurable via `DBC_MAX_VALUE_DESCRIPTIONS`)
+  - Maximum 10,000 messages per DBC file (`MAX_MESSAGES = 10,000`, configurable via `DBC_MAX_MESSAGES`)
+  - Maximum 64 signals per message (`MAX_SIGNALS_PER_MESSAGE = 64`, configurable via `DBC_MAX_SIGNALS_PER_MESSAGE`)
   - Maximum 256 characters for unit strings (`MAX_UNIT_LENGTH = 256`)
 - **Impact**: Prevents resource exhaustion attacks
 - **Implementation**: All limits enforced during validation with internationalized error messages
-- **Flexibility**: MAX_MESSAGES and MAX_SIGNALS_PER_MESSAGE can be overridden at build time via environment variables for specialized use cases while maintaining security
+- **Flexibility**: All limits can be overridden at build time via environment variables (DBC_MAX_*) for specialized use cases while maintaining security
 
 ## Security Issues Found
 
@@ -222,6 +224,7 @@ The codebase demonstrates strong security practices with comprehensive input val
 - ✅ No infinite loops in parsing logic
 - ✅ Node limits enforced (256 max)
 - ✅ Receiver node limits enforced (64 max per signal)
+- ✅ Value description limits enforced (64 max per signal)
 - ✅ Message limits enforced (10,000 max)
 - ✅ Signal limits enforced (64 max per message)
 - ✅ Unit string limits enforced (256 chars max)
@@ -309,10 +312,11 @@ All security controls remain in place and verified. No new security issues intro
 
 - ✅ **No unsafe code**: Verified - zero unsafe blocks in codebase (grep search confirmed)
 - ✅ **DoS limits**: All limits verified and enforced:
-  - MAX_NODES = 256 ✅
-  - MAX_RECEIVER_NODES = 64 ✅
-  - MAX_MESSAGES = 10,000 (configurable via build.rs) ✅
-  - MAX_SIGNALS_PER_MESSAGE = 64 (configurable via build.rs) ✅
+  - MAX_NODES = 256 (configurable via DBC_MAX_NODES) ✅
+  - MAX_RECEIVER_NODES = 64 (configurable via DBC_MAX_RECEIVER_NODES) ✅
+  - MAX_VALUE_DESCRIPTIONS = 64 (configurable via DBC_MAX_VALUE_DESCRIPTIONS) ✅
+  - MAX_MESSAGES = 10,000 (configurable via DBC_MAX_MESSAGES) ✅
+  - MAX_SIGNALS_PER_MESSAGE = 64 (configurable via DBC_MAX_SIGNALS_PER_MESSAGE) ✅
   - MAX_UNIT_LENGTH = 256 ✅
 - ✅ **Input validation**: All validation checks confirmed
 - ✅ **Error handling**: All `unwrap()`/`expect()` calls verified to be in test code only (576 instances found, all in `#[test]` functions)
@@ -322,7 +326,7 @@ All security controls remain in place and verified. No new security issues intro
 
 ### Code Quality Improvements
 
-- ✅ **Build-time limits**: MAX_MESSAGES and MAX_SIGNALS_PER_MESSAGE now configurable via build.rs
+- ✅ **Build-time limits**: All MAX_* constants now configurable via build.rs (MAX_NODES, MAX_RECEIVER_NODES, MAX_VALUE_DESCRIPTIONS, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE)
 - ✅ **Comprehensive testing**: 576 test cases with unwrap/expect (all in test code, as expected)
 - ✅ **Documentation**: Security considerations documented in README and contributing guidelines
 - ✅ **Code quality**: All clippy warnings resolved, unused imports removed, use statements optimized

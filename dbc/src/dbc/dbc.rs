@@ -7,7 +7,7 @@ use crate::{ValueDescriptions, ValueDescriptionsList};
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 #[cfg(feature = "std")]
-use std::{collections::BTreeMap, io::Read};
+use std::collections::BTreeMap;
 
 /// Represents a complete DBC (CAN database) file.
 ///
@@ -605,69 +605,14 @@ impl<'a> Dbc<'a> {
     /// println!("Parsed {} messages", dbc.messages().len());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[cfg(feature = "std")]
-    pub fn parse_bytes(data: &[u8]) -> Result<Dbc<'static>> {
-        let content =
-            core::str::from_utf8(data).map_err(|_e| Error::Dbc(lang::INVALID_UTF8.to_string()))?;
-        // Convert to owned string, box it, and leak to get 'static lifetime
-        let owned = String::from(content);
-        let boxed = owned.into_boxed_str();
-        let content_ref: &'static str = Box::leak(boxed);
-        Dbc::parse(content_ref).map_err(Error::ParseError)
-    }
-
-    /// Parse a DBC file from a file path
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run,ignore
-    /// use dbc_rs::Dbc;
-    ///
-    /// // Create a temporary file for the example
-    /// let dbc_content = r#"VERSION "1.0"
-    ///
-    /// BU_: ECM
-    ///
-    /// BO_ 256 Engine : 8 ECM
-    ///  SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
-    /// "#;
-    /// std::fs::write("/tmp/example.dbc", dbc_content)?;
-    ///
-    /// let dbc = Dbc::from_file("/tmp/example.dbc")?;
-    /// println!("Parsed {} messages", dbc.messages().len());
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// ```
-    #[cfg(feature = "std")]
-    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> Result<Dbc<'static>> {
-        let file =
-            std::fs::File::open(path).map_err(|_e| Error::Dbc(lang::READ_FAILED.to_string()))?;
-        Self::from_reader(file)
-    }
-
-    /// Parse a DBC file from a reader
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    /// use std::io::Cursor;
-    ///
-    /// let data = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM";
-    /// let reader = Cursor::new(data);
-    /// let dbc = Dbc::from_reader(reader)?;
-    /// println!("Parsed {} messages", dbc.messages().len());
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[cfg(feature = "std")]
-    pub fn from_reader<R: std::io::Read>(mut reader: R) -> Result<Dbc<'static>> {
-        let mut buffer = String::new();
-        Read::read_to_string(&mut reader, &mut buffer)
-            .map_err(|_e| Error::Dbc(lang::READ_FAILED.to_string()))?;
-        // Convert to boxed str and leak to get 'static lifetime
-        // The leaked memory will live for the duration of the program
-        let boxed = buffer.into_boxed_str();
-        let content_ref: &'static str = Box::leak(boxed);
-        Dbc::parse(content_ref).map_err(Error::ParseError)
+    pub fn parse_bytes<'b>(data: &'b [u8]) -> Result<Dbc<'b>> {
+        let content = core::str::from_utf8(data).map_err(|_e| {
+            #[cfg(feature = "std")]
+            return Error::Dbc(lang::INVALID_UTF8.to_string());
+            #[cfg(not(feature = "std"))]
+            return Error::ParseError(ParseError::Expected("Invalid UTF-8"));
+        })?;
+        Dbc::parse(content).map_err(Error::ParseError)
     }
 
     /// Serialize this DBC to a DBC format string

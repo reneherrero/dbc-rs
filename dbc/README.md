@@ -43,12 +43,12 @@ The crate supports multiple levels of functionality through feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| *(none)* | ❌ | **`no_std`**: Bare bones parsing only. No dynamic memory allocation. Uses fixed-size arrays. |
+| *(none)* | ❌ | **`no_std`**: Parsing with `alloc` crate. Uses `Vec` for dynamic collections (heap-allocated). |
 | `std`   | ✅ | Adds standard library integration (I/O helpers, file operations, builders, string formatting). |
 
 **Feature Hierarchy:**
-- **`no_std`** (no features): Minimal parsing, fixed-size arrays
-- **`std`**: Adds I/O helpers, file operations, builders, string formatting, dynamic allocation
+- **`no_std`** (no features): Parsing with `alloc` crate, uses `Vec` for dynamic collections
+- **`std`**: Adds I/O helpers, file operations, builders, string formatting
 
 **Examples:**
 
@@ -285,13 +285,19 @@ let dbc_string = dbc.to_dbc_string();
 
 ```rust
 use dbc_rs::Dbc;
+use std::io::Read;
 
-// Read from file
-let dbc = Dbc::from_file("example.dbc")?;
+// Read from file - you manage the buffer
+let mut buffer = Vec::new();
+std::fs::File::open("example.dbc")?
+    .read_to_end(&mut buffer)
+    .map_err(|e| dbc_rs::Error::Dbc(format!("{}", e)))?;
+let dbc = Dbc::parse_bytes(&buffer)?;
 
-// Or read from any std::io::Read source
-let file = std::fs::File::open("example.dbc")?;
-let dbc = Dbc::from_reader(file)?;
+// Or read directly with std::fs::read
+let buffer = std::fs::read("example.dbc")
+    .map_err(|e| dbc_rs::Error::Dbc(format!("{}", e)))?;
+let dbc = Dbc::parse_bytes(&buffer)?;
 
 // All std features available
 let dbc_string = dbc.to_dbc_string();
@@ -364,7 +370,7 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 2. **Validation**: Input validation occurs at construction time
 3. **no_std First**: Designed for `no_std` environments, with optional `std` feature
 4. **Zero Dependencies**: No external dependencies
-5. **Memory Efficiency**: Uses fixed arrays in `no_std`, `Box<[T]>` with `std`
+5. **Memory Efficiency**: Uses `Vec` (via `alloc`) for dynamic collections in both `std` and `no_std` builds
 
 ### Error Handling
 
@@ -379,8 +385,7 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 ## Performance Notes
 
 - **Memory Usage**: 
-  - `no_std`: Fixed-size arrays (stack-allocated)
-  - `std`: `Box<[T]>` (heap-allocated, dynamic sizing)
+  - Both `std` and `no_std`: Uses `Vec<T>` (heap-allocated via `alloc`, dynamic sizing)
 - **Parsing**: O(n) complexity, entire file parsed into memory
 - **Recommendations**: For very large DBC files (>10MB), consider splitting into multiple files
 

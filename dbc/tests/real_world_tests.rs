@@ -245,7 +245,11 @@ fn test_parse_file(path: &Path, stats: &mut TestStats) {
     let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
 
     // Try to parse directly from file
-    match Dbc::from_file(path) {
+    let buffer = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(_) => return,
+    };
+    match Dbc::parse_bytes(&buffer) {
         Ok(dbc) => {
             stats.parsed_successfully += 1;
             stats.total_messages += dbc.messages().len();

@@ -15,7 +15,6 @@ pub const VERSION_EMPTY: &str = "Empty version string";
 
 // DBC file-related error messages
 pub const INVALID_UTF8: &str = "Invalid UTF-8";
-pub const READ_FAILED: &str = "Failed to read";
 pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &str =
     "Value description references non-existent message";
 pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &str =
