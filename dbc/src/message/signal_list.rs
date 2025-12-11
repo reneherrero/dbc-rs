@@ -11,26 +11,26 @@ pub struct SignalList {
 
 impl From<&[Signal]> for SignalList {
     fn from(signals: &[Signal]) -> Self {
-        Self::from_signals_slice(signals)
+        Self::from_slice(signals)
     }
 }
 
 #[cfg(feature = "std")]
 impl From<std::vec::Vec<Signal>> for SignalList {
     fn from(signals: std::vec::Vec<Signal>) -> Self {
-        Self::from_signals_slice(&signals)
+        Self::from_slice(&signals)
     }
 }
 
 impl From<Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }>> for SignalList {
     fn from(signals: Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }>) -> Self {
-        Self::from_signals_slice(&signals)
+        Self::from_slice(&signals)
     }
 }
 
 impl SignalList {
     /// Create SignalList from a slice of signals by cloning them
-    pub(crate) fn from_signals_slice(signals: &[Signal]) -> Self {
+    pub(crate) fn from_slice(signals: &[Signal]) -> Self {
         let count = signals.len().min(MAX_SIGNALS_PER_MESSAGE);
         let signals_vec: Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }> =
             signals.iter().take(count).cloned().collect();
@@ -141,13 +141,13 @@ mod tests {
     use super::SignalList;
     use crate::{Parser, Signal};
 
-    // Tests that require std feature (for from_signals_slice)
+    // Tests that require std feature (for from_slice)
     #[cfg(feature = "std")]
     mod tests_with_std {
         use super::*;
 
         #[test]
-        fn test_signals_from_signals_slice() {
+        fn test_signals_from_slice() {
             let signal1 = Signal::parse(
                 &mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap(),
             )
@@ -157,7 +157,7 @@ mod tests {
             )
             .unwrap();
 
-            let signals = SignalList::from_signals_slice(&[signal1, signal2]);
+            let signals = SignalList::from_slice(&[signal1, signal2]);
             assert_eq!(signals.len(), 2);
             assert!(!signals.is_empty());
             assert_eq!(signals.at(0).unwrap().name(), "Signal1");
@@ -166,14 +166,14 @@ mod tests {
 
         #[test]
         fn test_signals_from_signals_slice_empty() {
-            let signals = SignalList::from_signals_slice(&[]);
+            let signals = SignalList::from_slice(&[]);
             assert_eq!(signals.len(), 0);
             assert!(signals.is_empty());
             assert!(signals.at(0).is_none());
         }
 
         #[test]
-        fn test_signals_from_signals_slice_multiple() {
+        fn test_signals_from_slice_multiple() {
             // Test with multiple signals to verify capacity handling
             let signal1 = Signal::parse(
                 &mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap(),
@@ -188,7 +188,7 @@ mod tests {
             )
             .unwrap();
 
-            let signals = SignalList::from_signals_slice(&[signal1, signal2, signal3]);
+            let signals = SignalList::from_slice(&[signal1, signal2, signal3]);
             assert_eq!(signals.len(), 3);
             assert_eq!(signals.at(0).unwrap().name(), "Signal1");
             assert_eq!(signals.at(1).unwrap().name(), "Signal2");
@@ -202,7 +202,7 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
-        let signals = SignalList::from_signals_slice(&[signal1]);
+        let signals = SignalList::from_slice(&[signal1]);
         assert!(signals.find("Nonexistent").is_none());
         assert!(signals.find("").is_none());
         assert!(signals.find("signal1").is_none()); // Case sensitive
@@ -217,7 +217,7 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal1 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap(); // Same name (shouldn't happen in practice but test the behavior)
 
-        let signals = SignalList::from_signals_slice(&[signal1, signal2]);
+        let signals = SignalList::from_slice(&[signal1, signal2]);
         // Should find the first match
         let found = signals.find("Signal1");
         assert!(found.is_some());

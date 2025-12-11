@@ -67,8 +67,12 @@ impl Nodes {
     // Shared validation function
     pub(crate) fn validate(nodes: &[impl AsRef<str>]) -> Result<()> {
         // Check for too many nodes (DoS protection)
-        if nodes.len() > MAX_NODES {
-            return Err(Error::Validation(lang::NODES_TOO_MANY));
+        if let Some(err) = crate::check_max_limit(
+            nodes.len(),
+            MAX_NODES,
+            Error::Validation(lang::NODES_TOO_MANY),
+        ) {
+            return Err(err);
         }
 
         // Check for duplicate node names (case-sensitive)
@@ -116,11 +120,14 @@ impl Nodes {
             // parse_identifier() will fail if we're at EOF
             match parser.parse_identifier() {
                 Ok(node) => {
-                    if node_names.len() >= MAX_NODES {
-                        return Err(ParseError::Nodes(lang::NODES_TOO_MANY));
+                    if let Some(err) = crate::check_max_limit(
+                        node_names.len(),
+                        MAX_NODES - 1,
+                        ParseError::Nodes(lang::NODES_TOO_MANY),
+                    ) {
+                        return Err(err);
                     }
-                    let node_str: String<{ MAX_NAME_SIZE }> = String::try_from(node)
-                        .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+                    let node_str = crate::validate_name(node)?;
                     node_names
                         .push(node_str)
                         .map_err(|_| ParseError::Nodes(lang::NODES_TOO_MANY))?;
@@ -137,9 +144,10 @@ impl Nodes {
         }
 
         // Validate before construction
-        Self::validate(&node_names).map_err(|e| match e {
-            Error::Validation(msg) => ParseError::Nodes(msg),
-            _ => ParseError::Nodes("Validation error"),
+        Self::validate(&node_names).map_err(|e| {
+            crate::error::map_val_error(e, ParseError::Nodes, || {
+                ParseError::Nodes(lang::NODES_ERROR_PREFIX)
+            })
         })?;
         // Construct directly (validation already done)
         Ok(Self { nodes: node_names })

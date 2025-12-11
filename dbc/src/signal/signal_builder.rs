@@ -164,16 +164,15 @@ impl SignalBuilder {
         }
 
         // Validate that start_bit + length doesn't exceed CAN FD maximum (512 bits)
-        // Note: This is a basic sanity check. Full validation (including message DLC bounds
-        // and overlap detection) happens when the signal is added to a message.
+        // Note: This is a basic sanity check. Full validation (including name, min/max,
+        // message DLC bounds, and overlap detection) happens in build() when the signal
+        // is actually constructed, to avoid duplicate validation calls.
         let end_bit = start_bit + length - 1; // -1 because length includes the start bit
         if end_bit >= 512 {
             return Err(Error::Signal(
                 lang::SIGNAL_EXTENDS_BEYOND_MESSAGE.to_string(),
             ));
         }
-
-        Signal::validate(&name, length, min, max)?;
         Ok(Self {
             name: Some(name),
             start_bit: Some(start_bit),

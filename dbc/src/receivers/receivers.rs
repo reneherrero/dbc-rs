@@ -110,11 +110,14 @@ impl Receivers {
             let pos_before = parser.pos();
             match parser.parse_identifier() {
                 Ok(node) => {
-                    if nodes.len() >= MAX_RECEIVER_NODES {
-                        return Err(ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY));
+                    if let Some(err) = crate::check_max_limit(
+                        nodes.len(),
+                        MAX_RECEIVER_NODES - 1,
+                        ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY),
+                    ) {
+                        return Err(err);
                     }
-                    let node: String<{ MAX_NAME_SIZE }> = String::try_from(node)
-                        .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+                    let node = crate::validate_name(node)?;
                     nodes
                         .push(node)
                         .map_err(|_| ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY))?;

@@ -366,13 +366,13 @@ impl Signal {
         let receivers = Receivers::parse(parser)?;
 
         // Validate before construction
-        Self::validate(name, length, min, max).map_err(|e| match e {
-            Error::Validation(msg) => ParseError::Signal(msg),
-            _ => ParseError::Signal("Validation error"),
+        Self::validate(name, length, min, max).map_err(|e| {
+            crate::error::map_val_error(e, ParseError::Signal, || {
+                ParseError::Signal(crate::error::lang::SIGNAL_ERROR_PREFIX)
+            })
         })?;
 
-        let name: String<{ MAX_NAME_SIZE }> = String::try_from(name)
-            .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+        let name = crate::validate_name(name)?;
 
         // Construct directly (validation already done)
         Ok(Self {
@@ -605,16 +605,17 @@ impl Signal {
 
         // Factor and offset: (factor,offset)
         result.push_str(" (");
-        result.push_str(&format!("{}", self.factor()));
+        use core::fmt::Write;
+        write!(result, "{}", self.factor()).unwrap();
         result.push(',');
-        result.push_str(&format!("{}", self.offset()));
+        write!(result, "{}", self.offset()).unwrap();
         result.push(')');
 
         // Min and max: [min|max]
         result.push_str(" [");
-        result.push_str(&format!("{}", self.min()));
+        write!(result, "{}", self.min()).unwrap();
         result.push('|');
-        result.push_str(&format!("{}", self.max()));
+        write!(result, "{}", self.max()).unwrap();
         result.push(']');
 
         // Unit: "unit" or ""

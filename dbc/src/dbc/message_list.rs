@@ -12,8 +12,12 @@ pub struct MessageList {
 impl MessageList {
     /// Create MessageList from a slice of messages by cloning them
     pub(crate) fn new(messages: &[Message]) -> ParseResult<Self> {
-        if messages.len() > MAX_MESSAGES {
-            return Err(ParseError::Message(lang::NODES_TOO_MANY));
+        if let Some(err) = crate::check_max_limit(
+            messages.len(),
+            MAX_MESSAGES,
+            ParseError::Message(lang::NODES_TOO_MANY),
+        ) {
+            return Err(err);
         }
         let messages_vec: Vec<Message, { MAX_MESSAGES }> = messages.iter().cloned().collect();
         Ok(Self {

@@ -255,8 +255,12 @@ impl ReceiversBuilder {
             Ok(Receivers::new_none())
         } else {
             // Make sure the number of nodes is not greater than the maximum allowed
-            if self.nodes.len() > MAX_RECEIVER_NODES {
-                return Err(Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY.to_string()));
+            if let Some(err) = crate::check_max_limit(
+                self.nodes.len(),
+                MAX_RECEIVER_NODES,
+                Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY.to_string()),
+            ) {
+                return Err(err);
             }
 
             // Make sure the nodes are not duplicated
@@ -268,8 +272,12 @@ impl ReceiversBuilder {
             // Make sure the node names are not too long and convert to mayheap::String
             let mut mayheap_nodes = Vec::with_capacity(self.nodes.len());
             for node in &self.nodes {
-                if node.len() > MAX_NAME_SIZE {
-                    return Err(Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED.to_string()));
+                if let Some(err) = crate::check_max_limit(
+                    node.len(),
+                    MAX_NAME_SIZE,
+                    Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED.to_string()),
+                ) {
+                    return Err(err);
                 }
                 let mayheap_str = mayheap::String::try_from(node.as_str())
                     .map_err(|_| Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED.to_string()))?;

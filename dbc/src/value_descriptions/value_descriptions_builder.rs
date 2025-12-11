@@ -97,10 +97,12 @@ impl ValueDescriptionsBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<ValueDescriptions> {
-        if self.entries.len() > MAX_VALUE_DESCRIPTIONS {
-            return Err(Error::InvalidData(
-                "Too many value descriptions".to_string(),
-            ));
+        if let Some(err) = crate::check_max_limit(
+            self.entries.len(),
+            MAX_VALUE_DESCRIPTIONS,
+            Error::InvalidData("Too many value descriptions".to_string()),
+        ) {
+            return Err(err);
         }
 
         // Use Cow::Owned for owned strings (no leak needed)

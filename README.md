@@ -26,7 +26,7 @@ dbc-rs provides a comprehensive, type-safe solution for working with DBC files i
 
 ## Projects
 
-### [`dbc-rs`](./dbc/) - Core Library
+### DBC Core Library - [`dbc-rs`](./dbc/)
 
 A flexible DBC parser and editor that works across environments, from microcontrollers to servers.
 
@@ -60,7 +60,7 @@ if let Some(msg) = dbc.messages().find_by_id(256) {
 - DBC file manipulation and conversion tools
 - Educational and research projects
 
-### [`dbc-cli`](./dbc-cli/) - Command-Line Interface
+### Command-Line Interface - [`dbc-cli`](./dbc-cli/)
 
 A command-line tool for working with DBC files. Aims to be a `candump` replacement in Rust with scripting support (Python FFI).
 

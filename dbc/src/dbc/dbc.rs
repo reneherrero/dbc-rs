@@ -577,16 +577,16 @@ impl Dbc {
 
         // Validate messages (duplicate IDs, sender in nodes, etc.)
         #[cfg(feature = "std")]
-        Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(
-            |e| match e {
-                Error::Validation(msg) => ParseError::Message(msg),
-                _ => ParseError::Message("Validation error"),
-            },
-        )?;
+        Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(|e| {
+            crate::error::map_val_error(e, ParseError::Message, || {
+                ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            })
+        })?;
         #[cfg(not(feature = "std"))]
-        Self::validate(&nodes, messages_slice).map_err(|e| match e {
-            Error::Validation(msg) => ParseError::Message(msg),
-            _ => ParseError::Message("Validation error"),
+        Self::validate(&nodes, messages_slice).map_err(|e| {
+            crate::error::map_val_error(e, ParseError::Message, || {
+                ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            })
         })?;
 
         // Construct directly (validation already done)
@@ -653,7 +653,7 @@ impl Dbc {
         // BO_ and SG_ lines for each message
         for message in self.messages().iter() {
             result.push('\n');
-            result.push_str(&message.to_dbc_string_with_signals());
+            result.push_str(&message.to_string_full());
         }
 
         result

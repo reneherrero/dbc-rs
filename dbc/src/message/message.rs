@@ -43,7 +43,7 @@ pub struct Message {
 
 impl Message {
     #[allow(clippy::similar_names)] // physical_lsb and physical_msb are intentionally similar
-    fn calculate_bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
+    fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
         let start = start_bit;
         let len = length;
 
@@ -106,8 +106,12 @@ impl Message {
         const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF; // 536870911
 
         // Check signal count limit per message (DoS protection)
-        if signals.len() > MAX_SIGNALS_PER_MESSAGE {
-            return Err(Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS));
+        if let Some(err) = crate::check_max_limit(
+            signals.len(),
+            MAX_SIGNALS_PER_MESSAGE,
+            Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS),
+        ) {
+            return Err(err);
         }
 
         if name.trim().is_empty() {
@@ -145,7 +149,7 @@ impl Message {
         for signal in signals.iter() {
             // Calculate the actual bit range for this signal (accounting for byte order)
             let (lsb, msb) =
-                Self::calculate_bit_range(signal.start_bit(), signal.length(), signal.byte_order());
+                Self::bit_range(signal.start_bit(), signal.length(), signal.byte_order());
             // Check if the signal extends beyond the message boundary
             // The signal's highest bit position must be less than max_bits
             let signal_max_bit = lsb.max(msb);
@@ -161,11 +165,11 @@ impl Message {
         // We iterate over pairs without collecting to avoid alloc
         for (i, sig1) in signals.iter().enumerate() {
             let (sig1_lsb, sig1_msb) =
-                Self::calculate_bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
+                Self::bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
 
             for sig2 in signals.iter().skip(i + 1) {
                 let (sig2_lsb, sig2_msb) =
-                    Self::calculate_bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
+                    Self::bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
 
                 // Check if ranges overlap
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
@@ -216,7 +220,7 @@ impl Message {
             name: name_str,
             dlc,
             sender: sender_str,
-            signals: SignalList::from_signals_slice(signals),
+            signals: SignalList::from_slice(signals),
         }
     }
 
@@ -277,9 +281,10 @@ impl Message {
         }
 
         // Validate before construction
-        Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| match e {
-            crate::error::Error::Validation(msg) => crate::error::ParseError::Message(msg),
-            _ => crate::error::ParseError::Message("Validation error"),
+        Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| {
+            crate::error::map_val_error(e, crate::error::ParseError::Message, || {
+                crate::error::ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            })
         })?;
         // Construct directly (validation already done)
         Ok(Self::new_from_signals(id, name, dlc, sender, signals))
@@ -369,7 +374,7 @@ impl Message {
 
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string_with_signals(&self) -> std::string::String {
+    pub fn to_string_full(&self) -> std::string::String {
         let mut result = std::string::String::with_capacity(200 + (self.signals.len() * 100));
         result.push_str(&self.to_dbc_string());
         result.push('\n');
@@ -386,7 +391,7 @@ impl Message {
 #[cfg(feature = "std")]
 impl core::fmt::Display for Message {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.to_dbc_string_with_signals())
+        write!(f, "{}", self.to_string_full())
     }
 }
 
@@ -828,7 +833,7 @@ mod tests {
         }
 
         #[test]
-        fn test_message_to_dbc_string_with_signals() {
+        fn test_message_to_string_full() {
             let data = b"BO_ 256 EngineData : 8 ECM";
             let mut parser = Parser::new(data).unwrap();
 
@@ -842,7 +847,7 @@ mod tests {
             .unwrap();
 
             let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
-            let dbc_string = message.to_dbc_string_with_signals();
+            let dbc_string = message.to_string_full();
             assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
             assert!(dbc_string.contains("SG_ RPM"));
             assert!(dbc_string.contains("SG_ Temp"));
@@ -858,7 +863,7 @@ mod tests {
             let dbc_string = message.to_dbc_string();
             assert_eq!(dbc_string, "BO_ 256 EngineData : 8 ECM");
 
-            let dbc_string_with_signals = message.to_dbc_string_with_signals();
+            let dbc_string_with_signals = message.to_string_full();
             assert_eq!(dbc_string_with_signals, "BO_ 256 EngineData : 8 ECM\n");
         }
 
@@ -924,7 +929,7 @@ mod tests {
         }
 
         #[test]
-        fn test_message_to_dbc_string_with_signals_multiple() {
+        fn test_message_to_string_full_multiple() {
             let data = b"BO_ 256 EngineData : 8 ECM";
             let mut parser = Parser::new(data).unwrap();
 
@@ -941,7 +946,7 @@ mod tests {
 
             let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
 
-            let dbc_string = message.to_dbc_string_with_signals();
+            let dbc_string = message.to_string_full();
             assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
             assert!(dbc_string.contains("SG_ RPM"));
             assert!(dbc_string.contains("SG_ Temp"));
