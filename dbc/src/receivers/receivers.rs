@@ -1,10 +1,5 @@
-use crate::{
-    Cow, MAX_RECEIVER_NODES, Parser,
-    error::{self, ParseError, ParseResult},
-};
-
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use crate::{MAX_NAME_SIZE, MAX_RECEIVER_NODES, ParseError, ParseResult, Parser, error::lang};
+use mayheap::{String, Vec};
 
 /// Represents the receiver nodes for a signal in a DBC file.
 ///
@@ -47,16 +42,17 @@ use alloc::vec::Vec;
 /// - Space-separated node names indicate specific receivers
 /// - No receivers means `None`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Receivers<'a> {
+#[allow(clippy::large_enum_variant)]
+pub enum Receivers {
     /// Broadcast receiver - signal is sent to all nodes on the bus.
     Broadcast,
     /// Specific receiver nodes - vector of node names.
-    Nodes(Vec<Cow<'a, str>>),
+    Nodes(Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }>),
     /// No explicit receivers specified.
     None,
 }
 
-impl<'a> Receivers<'a> {
+impl Receivers {
     pub(crate) fn new_broadcast() -> Self {
         Receivers::Broadcast
     }
@@ -66,14 +62,14 @@ impl<'a> Receivers<'a> {
     }
 
     #[cfg(feature = "std")]
-    pub(crate) fn new_nodes(nodes: &[impl Into<Cow<'a, str>> + Clone]) -> Self {
+    pub(crate) fn new_nodes(nodes: &[String<{ MAX_NAME_SIZE }>]) -> Self {
         // Validation should have been done prior (by builder or parse)
-        let vec_nodes: Vec<Cow<'a, str>> =
-            nodes.iter().take(MAX_RECEIVER_NODES).map(|node| node.clone().into()).collect();
+        let vec_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }> =
+            nodes.iter().take(MAX_RECEIVER_NODES).cloned().collect();
         Receivers::Nodes(vec_nodes)
     }
 
-    pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
         // Skip any leading spaces (but not newlines - newlines indicate end of line)
         // If we get UnexpectedEof, we're at EOF, so return None
         match parser.skip_whitespace() {
@@ -93,7 +89,7 @@ impl<'a> Receivers<'a> {
         }
 
         // Parse space-separated identifiers into Vec
-        let mut nodes: Vec<Cow<'a, str>> = Vec::new();
+        let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }> = Vec::new();
 
         loop {
             // Skip spaces (but not newlines)
@@ -115,11 +111,13 @@ impl<'a> Receivers<'a> {
             match parser.parse_identifier() {
                 Ok(node) => {
                     if nodes.len() >= MAX_RECEIVER_NODES {
-                        return Err(ParseError::Receivers(
-                            error::lang::SIGNAL_RECEIVERS_TOO_MANY,
-                        ));
+                        return Err(ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY));
                     }
-                    nodes.push(Cow::Borrowed(node));
+                    let node: String<{ MAX_NAME_SIZE }> = String::try_from(node)
+                        .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+                    nodes
+                        .push(node)
+                        .map_err(|_| ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY))?;
                 }
                 Err(ParseError::UnexpectedEof) => break,
                 Err(_) => {
@@ -163,8 +161,8 @@ impl<'a> Receivers<'a> {
     ///
     /// // Iterate over receiver nodes
     /// let mut iter = signal.receivers().iter();
-    /// assert_eq!(iter.next(), Some("TCM"));
-    /// assert_eq!(iter.next(), Some("BCM"));
+    /// assert_eq!(iter.next().map(|s| s.to_string()), Some("TCM".to_string()));
+    /// assert_eq!(iter.next().map(|s| s.to_string()), Some("BCM".to_string()));
     /// assert_eq!(iter.next(), None);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -191,32 +189,10 @@ impl<'a> Receivers<'a> {
     /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
-    pub fn iter(&self) -> impl Iterator<Item = &str> + '_ {
-        struct ReceiversIter<'a> {
-            nodes: Option<&'a Vec<Cow<'a, str>>>,
-            pos: usize,
-        }
-
-        impl<'a> Iterator for ReceiversIter<'a> {
-            type Item = &'a str;
-            fn next(&mut self) -> Option<Self::Item> {
-                if let Some(nodes) = self.nodes {
-                    if self.pos < nodes.len() {
-                        let result = nodes[self.pos].as_ref();
-                        self.pos += 1;
-                        Some(result)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            }
-        }
-
+    pub fn iter(&self) -> impl Iterator<Item = String<{ MAX_NAME_SIZE }>> {
         match self {
             Receivers::Nodes(nodes) => ReceiversIter {
-                nodes: Some(nodes),
+                nodes: Some(nodes.clone()),
                 pos: 0,
             },
             _ => ReceiversIter {
@@ -320,7 +296,7 @@ impl<'a> Receivers<'a> {
     #[inline]
     #[must_use]
     pub fn contains(&self, node: &str) -> bool {
-        self.iter().any(|n| n == node)
+        self.iter().any(|n| n.as_str() == node)
     }
 
     /// Gets a receiver node by index.
@@ -358,8 +334,30 @@ impl<'a> Receivers<'a> {
     #[must_use]
     pub fn at(&self, index: usize) -> Option<&str> {
         match self {
-            Receivers::Nodes(nodes) => nodes.get(index).map(|cow| cow.as_ref()),
+            Receivers::Nodes(nodes) => nodes.get(index).map(|s| s.as_str()),
             Receivers::Broadcast | Receivers::None => None,
+        }
+    }
+}
+
+struct ReceiversIter {
+    nodes: Option<Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }>>,
+    pos: usize,
+}
+
+impl Iterator for ReceiversIter {
+    type Item = String<{ MAX_NAME_SIZE }>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(nodes) = &self.nodes {
+            if self.pos < nodes.len() {
+                let result: String<{ MAX_NAME_SIZE }> = nodes[self.pos].clone();
+                self.pos += 1;
+                Some(result)
+            } else {
+                None
+            }
+        } else {
+            None
         }
     }
 }
@@ -399,7 +397,7 @@ mod tests {
                 let node_count = result.len();
                 assert_eq!(node_count, 1);
                 let first_node = result.iter().next().unwrap();
-                assert_eq!(first_node, "TCM");
+                assert_eq!(first_node.as_str(), "TCM");
             }
             _ => panic!("Expected Nodes variant"),
         }
@@ -414,9 +412,9 @@ mod tests {
             let node_count = result.len();
             assert_eq!(node_count, 3);
             let mut iter = result.iter();
-            assert_eq!(iter.next().unwrap(), "TCM");
-            assert_eq!(iter.next().unwrap(), "BCM");
-            assert_eq!(iter.next().unwrap(), "ECM");
+            assert_eq!(iter.next().unwrap().as_str(), "TCM");
+            assert_eq!(iter.next().unwrap().as_str(), "BCM");
+            assert_eq!(iter.next().unwrap().as_str(), "ECM");
             assert!(iter.next().is_none());
         }
     }
@@ -437,51 +435,57 @@ mod tests {
         let node_count = result.len();
         assert_eq!(node_count, 2);
         let mut iter = result.iter();
-        assert_eq!(iter.next(), Some("TCM"));
-        assert_eq!(iter.next(), Some("BCM"));
-        assert_eq!(iter.next(), None);
+        let node1 = iter.next().unwrap();
+        assert_eq!(node1.as_str(), "TCM");
+        let node2 = iter.next().unwrap();
+        assert_eq!(node2.as_str(), "BCM");
+        assert!(iter.next().is_none());
     }
 
-    #[test]
+    // Tests that require std (for format! macro)
     #[cfg(feature = "std")]
-    fn test_parse_receivers_too_many() {
-        // Create a string with 65 receiver nodes (exceeds limit of 64)
-        // Use a simple approach: create byte array directly
-        let mut receivers_bytes = Vec::new();
-        for i in 0..65 {
-            if i > 0 {
-                receivers_bytes.push(b' ');
-            }
-            let node_str = format!("Node{i}");
-            receivers_bytes.extend_from_slice(node_str.as_bytes());
-        }
-        let mut parser = Parser::new(&receivers_bytes).unwrap();
-        let result = Receivers::parse(&mut parser);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            ParseError::Receivers(msg) => {
-                assert!(msg.contains(crate::error::lang::SIGNAL_RECEIVERS_TOO_MANY));
-            }
-            _ => panic!("Expected ParseError"),
-        }
-    }
+    mod tests_std {
+        use super::*;
 
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_parse_receivers_at_limit() {
-        // Create a string with exactly 64 receiver nodes (at the limit)
-        // Use a simple approach: create byte array directly
-        let mut receivers_bytes = Vec::new();
-        for i in 0..64 {
-            if i > 0 {
-                receivers_bytes.push(b' ');
+        #[test]
+        fn test_parse_receivers_too_many() {
+            // Create a string with 65 receiver nodes (exceeds limit of 64)
+            // Use a simple approach: create byte array directly
+            let mut receivers_bytes: Vec<u8, { MAX_RECEIVER_NODES }> = Vec::new();
+            for i in 0..65 {
+                if i > 0 {
+                    receivers_bytes.push(b' ').unwrap();
+                }
+                let node_str = format!("Node{i}");
+                receivers_bytes.extend_from_slice(node_str.as_bytes()).unwrap();
             }
-            let node_str = format!("Node{i}");
-            receivers_bytes.extend_from_slice(node_str.as_bytes());
+            let mut parser = Parser::new(&receivers_bytes).unwrap();
+            let result = Receivers::parse(&mut parser);
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                ParseError::Receivers(msg) => {
+                    assert_eq!(msg, lang::SIGNAL_RECEIVERS_TOO_MANY);
+                }
+                _ => panic!("Expected ParseError::Receivers"),
+            }
         }
-        let mut parser = Parser::new(&receivers_bytes).unwrap();
-        let result = Receivers::parse(&mut parser).unwrap();
-        let node_count = result.len();
-        assert_eq!(node_count, 64);
+
+        #[test]
+        fn test_parse_receivers_at_limit() {
+            // Create a string with exactly 64 receiver nodes (at the limit)
+            // Use a simple approach: create byte array directly
+            let mut receivers_bytes: Vec<u8, { MAX_RECEIVER_NODES }> = Vec::new();
+            for i in 0..MAX_RECEIVER_NODES {
+                if i > 0 {
+                    receivers_bytes.push(b' ').unwrap();
+                }
+                let node_str = format!("Node{i}");
+                receivers_bytes.extend_from_slice(node_str.as_bytes()).unwrap();
+            }
+            let mut parser = Parser::new(&receivers_bytes).unwrap();
+            let result = Receivers::parse(&mut parser).unwrap();
+            let node_count = result.len();
+            assert_eq!(node_count, 64);
+        }
     }
 }

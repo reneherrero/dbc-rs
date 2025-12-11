@@ -1,5 +1,6 @@
 use super::Receivers;
-use crate::{Error, MAX_RECEIVER_NODES, Result};
+use crate::{Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Result, error::lang};
+use std::{collections::HashSet, string::String};
 
 /// Builder for creating `Receivers` programmatically.
 ///
@@ -16,8 +17,8 @@ use crate::{Error, MAX_RECEIVER_NODES, Result};
 ///
 /// // Specific nodes
 /// let specific = ReceiversBuilder::new()
-///     .add_node("TCM").unwrap()
-///     .add_node("BCM").unwrap()
+///     .add_node("TCM")
+///     .add_node("BCM")
 ///     .build()?;
 ///
 /// // No receivers
@@ -34,7 +35,7 @@ use crate::{Error, MAX_RECEIVER_NODES, Result};
 ///     .offset(0.0)
 ///     .min(0.0)
 ///     .max(8000.0)
-///     .receivers(ReceiversBuilder::new().add_node("TCM").unwrap().add_node("BCM").unwrap())
+///     .receivers(ReceiversBuilder::new().add_node("TCM").add_node("BCM"))
 ///     .build()?;
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
@@ -78,7 +79,7 @@ impl ReceiversBuilder {
     /// use dbc_rs::ReceiversBuilder;
     ///
     /// let receivers = ReceiversBuilder::new()
-    ///     .add_node("TCM").unwrap()  // This will be cleared
+    ///     .add_node("TCM")  // This will be cleared
     ///     .broadcast()
     ///     .build()?;
     /// assert_eq!(receivers, dbc_rs::Receivers::Broadcast);
@@ -101,7 +102,7 @@ impl ReceiversBuilder {
     /// use dbc_rs::ReceiversBuilder;
     ///
     /// let receivers = ReceiversBuilder::new()
-    ///     .add_node("TCM").unwrap()  // This will be cleared
+    ///     .add_node("TCM")  // This will be cleared
     ///     .none()
     ///     .build()?;
     /// assert_eq!(receivers, dbc_rs::Receivers::None);
@@ -128,32 +129,19 @@ impl ReceiversBuilder {
     /// use dbc_rs::ReceiversBuilder;
     ///
     /// let receivers = ReceiversBuilder::new()
-    ///     .add_node("TCM").unwrap()
-    ///     .add_node("BCM").unwrap()
+    ///     .add_node("TCM")
+    ///     .add_node("BCM")
     ///     .build()?;
     /// assert_eq!(receivers.len(), 2);
     /// assert!(receivers.contains("TCM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn add_node(mut self, node: impl AsRef<str>) -> Result<Self> {
-        // Validate before construction
-        if self.nodes.len() >= MAX_RECEIVER_NODES {
-            return Err(Error::Signal(
-                crate::error::lang::SIGNAL_RECEIVERS_TOO_MANY.to_string(),
-            ));
-        }
-        for existing_node in &self.nodes {
-            if node.as_ref() == existing_node {
-                return Err(Error::Signal(
-                    crate::error::lang::RECEIVERS_DUPLICATE_NAME.to_string(),
-                ));
-            }
-        }
-
+    pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
+        let node = node.as_ref().to_string();
         self.is_broadcast = false;
-        self.nodes.push(node.as_ref().to_string());
+        self.nodes.push(node);
 
-        Ok(self)
+        self
     }
 
     /// Adds multiple receiver nodes from an iterator.
@@ -171,28 +159,28 @@ impl ReceiversBuilder {
     ///
     /// // From a slice
     /// let receivers = ReceiversBuilder::new()
-    ///     .add_nodes(&["TCM", "BCM", "ECM"]).unwrap()
+    ///     .add_nodes(&["TCM", "BCM", "ECM"])
     ///     .build()?;
     /// assert_eq!(receivers.len(), 3);
     ///
     /// // From a vector
     /// let node_vec = vec!["Node1", "Node2"];
     /// let receivers2 = ReceiversBuilder::new()
-    ///     .add_nodes(node_vec.iter()).unwrap()
+    ///     .add_nodes(node_vec.iter())
     ///     .build()?;
     /// assert_eq!(receivers2.len(), 2);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn add_nodes<I, S>(mut self, nodes: I) -> Result<Self>
+    pub fn add_nodes<I, S>(mut self, nodes: I) -> Self
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
         for node in nodes {
-            self = self.add_node(node)?;
+            self = self.add_node(node);
         }
 
-        Ok(self)
+        self
     }
 
     /// Clears all receiver nodes and resets to default state (none).
@@ -203,10 +191,10 @@ impl ReceiversBuilder {
     /// use dbc_rs::ReceiversBuilder;
     ///
     /// let receivers = ReceiversBuilder::new()
-    ///     .add_node("TCM").unwrap()
-    ///     .add_node("BCM").unwrap()
+    ///     .add_node("TCM")
+    ///     .add_node("BCM")
     ///     .clear()
-    ///     .add_node("ECM").unwrap()
+    ///     .add_node("ECM")
     ///     .build()?;
     /// assert_eq!(receivers.len(), 1);
     /// assert!(receivers.contains("ECM"));
@@ -221,7 +209,7 @@ impl ReceiversBuilder {
     }
 }
 
-impl<'a> ReceiversBuilder {
+impl ReceiversBuilder {
     /// Builds the `Receivers` from the builder configuration.
     ///
     /// # Returns
@@ -239,8 +227,8 @@ impl<'a> ReceiversBuilder {
     ///
     /// // Specific nodes
     /// let nodes = ReceiversBuilder::new()
-    ///     .add_node("TCM").unwrap()
-    ///     .add_node("BCM").unwrap()
+    ///     .add_node("TCM")
+    ///     .add_node("BCM")
     ///     .build()?;
     ///
     /// // None (default)
@@ -256,19 +244,39 @@ impl<'a> ReceiversBuilder {
     /// // Too many nodes (limit is 64)
     /// let mut builder = ReceiversBuilder::new();
     /// for i in 0..65 {
-    ///     builder = builder.add_node(format!("Node{i}")).unwrap();
+    ///     builder = builder.add_node(format!("Node{i}"));
     /// }
     /// assert!(builder.build().is_err());
     /// ```
-    pub fn build(self) -> Result<Receivers<'a>> {
+    pub fn build(&self) -> Result<Receivers> {
         if self.is_broadcast {
             Ok(Receivers::new_broadcast())
         } else if self.nodes.is_empty() {
             Ok(Receivers::new_none())
         } else {
-            let node_cows: Vec<crate::Cow<'a, str>> =
-                self.nodes.into_iter().map(crate::Cow::Owned).collect();
-            Ok(Receivers::new_nodes(&node_cows))
+            // Make sure the number of nodes is not greater than the maximum allowed
+            if self.nodes.len() > MAX_RECEIVER_NODES {
+                return Err(Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY.to_string()));
+            }
+
+            // Make sure the nodes are not duplicated
+            let mut seen = HashSet::new();
+            if !self.nodes.iter().all(|item| seen.insert(item)) {
+                return Err(Error::Signal(lang::RECEIVERS_DUPLICATE_NAME.to_string()));
+            }
+
+            // Make sure the node names are not too long and convert to mayheap::String
+            let mut mayheap_nodes = Vec::with_capacity(self.nodes.len());
+            for node in &self.nodes {
+                if node.len() > MAX_NAME_SIZE {
+                    return Err(Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED.to_string()));
+                }
+                let mayheap_str = mayheap::String::try_from(node.as_str())
+                    .map_err(|_| Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED.to_string()))?;
+                mayheap_nodes.push(mayheap_str);
+            }
+
+            Ok(Receivers::new_nodes(&mayheap_nodes))
         }
     }
 }
@@ -304,7 +312,7 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_single_node() {
-        let receivers = ReceiversBuilder::new().add_node("TCM").unwrap().build().unwrap();
+        let receivers = ReceiversBuilder::new().add_node("TCM").build().unwrap();
         match &receivers {
             Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 1),
             _ => panic!("Expected Nodes variant"),
@@ -315,11 +323,8 @@ mod tests {
     fn test_receivers_builder_multiple_nodes() {
         let receivers = ReceiversBuilder::new()
             .add_node("TCM")
-            .unwrap()
             .add_node("BCM")
-            .unwrap()
             .add_node("ECM")
-            .unwrap()
             .build()
             .unwrap();
         match &receivers {
@@ -331,15 +336,14 @@ mod tests {
     #[test]
     fn test_receivers_builder_too_many() {
         let mut builder = ReceiversBuilder::new();
-        for i in 0..64 {
-            builder = builder.add_node(format!("Node{i}")).unwrap();
+        for i in 0..MAX_RECEIVER_NODES {
+            builder = builder.add_node(format!("Node{i}"));
         }
-        // The 65th node should fail
-        let result = builder.add_node("Node64");
+        let result = builder.add_node(format!("Node{}", MAX_RECEIVER_NODES)).build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => {
-                assert!(msg.contains(crate::error::lang::SIGNAL_RECEIVERS_TOO_MANY));
+                assert!(msg.contains(lang::SIGNAL_RECEIVERS_TOO_MANY));
             }
             _ => panic!("Expected Signal error"),
         }
@@ -347,11 +351,7 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_add_nodes() {
-        let receivers = ReceiversBuilder::new()
-            .add_nodes(["ECM", "TCM", "BCM"])
-            .unwrap()
-            .build()
-            .unwrap();
+        let receivers = ReceiversBuilder::new().add_nodes(["ECM", "TCM", "BCM"]).build().unwrap();
         match &receivers {
             Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 3),
             _ => panic!("Expected Nodes variant"),
@@ -364,8 +364,7 @@ mod tests {
     #[test]
     fn test_receivers_builder_add_nodes_iterator() {
         let node_vec = ["Node1", "Node2", "Node3"];
-        let receivers =
-            ReceiversBuilder::new().add_nodes(node_vec.iter()).unwrap().build().unwrap();
+        let receivers = ReceiversBuilder::new().add_nodes(node_vec.iter()).build().unwrap();
         match &receivers {
             Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 3),
             _ => panic!("Expected Nodes variant"),
@@ -376,12 +375,9 @@ mod tests {
     fn test_receivers_builder_clear() {
         let receivers = ReceiversBuilder::new()
             .add_node("ECM")
-            .unwrap()
             .add_node("TCM")
-            .unwrap()
             .clear()
             .add_node("BCM")
-            .unwrap()
             .build()
             .unwrap();
         match &receivers {
@@ -398,9 +394,7 @@ mod tests {
     fn test_receivers_builder_broadcast_clears_nodes() {
         let receivers = ReceiversBuilder::new()
             .add_node("ECM")
-            .unwrap()
             .add_node("TCM")
-            .unwrap()
             .broadcast()
             .build()
             .unwrap();
@@ -410,22 +404,15 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_none_clears_nodes() {
-        let receivers = ReceiversBuilder::new()
-            .add_node("ECM")
-            .unwrap()
-            .add_node("TCM")
-            .unwrap()
-            .none()
-            .build()
-            .unwrap();
+        let receivers =
+            ReceiversBuilder::new().add_node("ECM").add_node("TCM").none().build().unwrap();
         assert_eq!(receivers, Receivers::None);
         assert_eq!(receivers.len(), 0);
     }
 
     #[test]
     fn test_receivers_builder_add_node_clears_broadcast() {
-        let receivers =
-            ReceiversBuilder::new().broadcast().add_node("ECM").unwrap().build().unwrap();
+        let receivers = ReceiversBuilder::new().broadcast().add_node("ECM").build().unwrap();
         match &receivers {
             Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 1),
             _ => panic!("Expected Nodes variant"),
@@ -434,7 +421,7 @@ mod tests {
 
     #[test]
     fn test_receivers_builder_add_node_clears_none() {
-        let receivers = ReceiversBuilder::new().none().add_node("ECM").unwrap().build().unwrap();
+        let receivers = ReceiversBuilder::new().none().add_node("ECM").build().unwrap();
         match &receivers {
             Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 1),
             _ => panic!("Expected Nodes variant"),
@@ -444,12 +431,13 @@ mod tests {
     #[test]
     fn test_receivers_builder_at_limit() {
         let mut builder = ReceiversBuilder::new();
-        for i in 0..64 {
-            builder = builder.add_node(format!("Node{i}")).unwrap();
+        for i in 0..MAX_RECEIVER_NODES {
+            let node_str = format!("Node{i}");
+            builder = builder.add_node(node_str);
         }
         let receivers = builder.build().unwrap();
         match &receivers {
-            Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 64),
+            Receivers::Nodes(nodes) => assert_eq!(nodes.len(), MAX_RECEIVER_NODES),
             _ => panic!("Expected Nodes variant"),
         }
     }

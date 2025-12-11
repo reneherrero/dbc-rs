@@ -48,7 +48,7 @@ fi
 
 # Run clippy on dbc-rs in no_std mode
 echo -e "\n${YELLOW}Running clippy on dbc-rs (no_std mode)...${NC}"
-if rustup run stable cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings 2>&1; then
+if rustup run stable cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings 2>&1; then
     echo -e "${GREEN}✓ dbc-rs no_std clippy check passed${NC}"
 else
     echo -e "${RED}✗ dbc-rs no_std clippy check failed${NC}"

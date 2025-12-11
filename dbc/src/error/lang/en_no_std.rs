@@ -5,10 +5,23 @@
 // Parser error messages
 pub const EXPECTED_WHITESPACE: &str = "Expected whitespace";
 pub const EXPECTED_PATTERN: &str = "Expected pattern";
+pub const EXPECTED_KEYWORD: &str = "Expected keyword";
+pub const EXPECTED_NUMBER: &str = "Expected number";
+pub const EXPECTED_IDENTIFIER: &str = "Expected identifier";
+pub const INVALID_UTF8: &str = "Invalid UTF-8";
+pub const INVALID_NUMBER_FORMAT: &str = "Invalid number format";
 pub const PARSE_NUMBER_FAILED: &str = "Failed to parse number";
-
-// Version parsing errors
-pub const VERSION_INVALID: &str = "Invalid version string";
+pub const UNEXPECTED_EOF: &str = "Unexpected end of input";
+pub const INVALID_CHARACTER: &str = "Invalid character";
+pub const STRING_LENGTH_EXCEEDS_MAX: &str = "String length exceeds maximum";
+pub const PARSE_ERROR_PREFIX: &str = "Parse Error";
+pub const DECODING_ERROR_PREFIX: &str = "Decoding Error";
+pub const VALIDATION_ERROR_PREFIX: &str = "Validation Error";
+pub const VERSION_ERROR_PREFIX: &str = "Version error";
+pub const MESSAGE_ERROR_PREFIX: &str = "Message error";
+pub const RECEIVERS_ERROR_PREFIX: &str = "Receivers error";
+pub const NODES_ERROR_PREFIX: &str = "Nodes error";
+pub const SIGNAL_ERROR_PREFIX: &str = "Signal error";
 
 // Signal parsing error messages
 pub const SIGNAL_PARSE_INVALID_START_BIT: &str = "Invalid start_bit";
@@ -18,6 +31,7 @@ pub const SIGNAL_PARSE_INVALID_OFFSET: &str = "Invalid offset";
 pub const SIGNAL_PARSE_INVALID_MIN: &str = "Invalid min";
 pub const SIGNAL_PARSE_INVALID_MAX: &str = "Invalid max";
 pub const SIGNAL_PARSE_UNIT_TOO_LONG: &str = "Unit string exceeds maximum length of 256 characters";
+pub const MAX_NAME_SIZE_EXCEEDED: &str = "Exceeded the maximum name length";
 
 // Validation and decoding errors (available in no_std)
 pub const NODES_DUPLICATE_NAME: &str = "Duplicate node name";

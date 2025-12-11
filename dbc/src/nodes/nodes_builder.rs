@@ -1,4 +1,5 @@
-use crate::{error::Result, nodes::Nodes};
+use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Nodes, Result, error::lang};
+use std::{string::String, vec::Vec};
 
 /// Builder for creating `Nodes` programmatically.
 ///
@@ -107,7 +108,10 @@ impl NodesBuilder {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        self.nodes.extend(nodes.into_iter().map(|s| s.as_ref().to_string()));
+        for node in nodes {
+            self = self.add_node(node.as_ref());
+        }
+
         self
     }
 
@@ -136,8 +140,7 @@ impl NodesBuilder {
     }
 
     fn extract_and_validate_nodes(self) -> Result<Vec<String>> {
-        let node_refs: Vec<&str> = self.nodes.iter().map(|s| s.as_str()).collect();
-        super::Nodes::validate(&node_refs)?;
+        Nodes::validate(&self.nodes)?;
         Ok(self.nodes)
     }
 
@@ -172,15 +175,13 @@ impl NodesBuilder {
     /// ```
     #[must_use = "validation result should be checked"]
     pub fn validate(self) -> Result<Self> {
-        let node_strs = self.extract_and_validate_nodes()?;
-        Ok(Self { nodes: node_strs })
+        let nodes = self.extract_and_validate_nodes()?;
+        Ok(Self { nodes })
     }
-}
 
-impl<'a> NodesBuilder {
     /// Builds the `Nodes` from the builder configuration.
     ///
-    /// This validates the nodes and constructs a `Nodes` instance with static lifetime.
+    /// This validates the nodes and constructs a `Nodes` instance.
     ///
     /// # Returns
     ///
@@ -217,22 +218,19 @@ impl<'a> NodesBuilder {
     ///     .add_node("ECM") // Duplicate
     ///     .build();
     /// assert!(result.is_err());
-    ///
-    /// // Too many nodes (limit is 256)
-    /// let mut builder = NodesBuilder::new();
-    /// for i in 0..257 {
-    ///     builder = builder.add_node(format!("Node{i}"));
-    /// }
-    /// assert!(builder.build().is_err());
+    /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(self) -> Result<Nodes<'a>> {
-        let node_strs = self.extract_and_validate_nodes()?;
-        // Use Cow::Owned for owned strings (no leak needed)
-        let node_cows: Vec<crate::Cow<'a, str>> =
-            node_strs.into_iter().map(crate::Cow::Owned).collect();
-        // Validate before construction
-        super::Nodes::validate(&node_cows)?;
-        Ok(Nodes::new(&node_cows))
+    pub fn build(self) -> Result<Nodes> {
+        let nodes = self.extract_and_validate_nodes()?;
+        // Convert std::vec::Vec<String> to mayheap::Vec<String<MAX_NAME_SIZE>, MAX_NODES>
+        let mut result: mayheap::Vec<mayheap::String<{ MAX_NAME_SIZE }>, { MAX_NODES }> =
+            mayheap::Vec::new();
+        for node_str in nodes {
+            let mayheap_str = mayheap::String::try_from(node_str.as_str())
+                .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))?;
+            result.push(mayheap_str).map_err(|_| Error::Validation(lang::NODES_TOO_MANY))?;
+        }
+        Ok(Nodes::new(&result))
     }
 }
 
@@ -246,7 +244,7 @@ impl Default for NodesBuilder {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{error::Error, error::lang};
+    use crate::{Error, error::lang};
 
     #[test]
     fn test_nodes_builder_duplicate() {
@@ -261,10 +259,12 @@ mod tests {
     #[test]
     fn test_nodes_builder_too_many() {
         let mut builder = NodesBuilder::new();
-        for i in 0..257 {
-            builder = builder.add_node(format!("Node{i}"));
+        for i in 0..MAX_NODES {
+            let node_str = format!("Node{i}");
+            builder = builder.add_node(node_str);
         }
-        let result = builder.build();
+        let node = "NodeLast".to_string();
+        let result = builder.add_node(node).build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Validation(msg) => {
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_nodes_builder_validate() {
-        let builder = NodesBuilder::new().add_node("ECM").add_node("TCM");
+        let builder = NodesBuilder::new().add_node("TCM").add_node("BCM");
         let validated = builder.validate().unwrap();
         let nodes = validated.build().unwrap();
         assert_eq!(nodes.len(), 2);
@@ -316,8 +316,7 @@ mod tests {
 
     #[test]
     fn test_nodes_builder_validate_duplicate() {
-        let builder = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM");
-        let result = builder.validate();
+        let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Validation(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
@@ -328,10 +327,17 @@ mod tests {
     #[test]
     fn test_nodes_builder_validate_too_many() {
         let mut builder = NodesBuilder::new();
-        for i in 0..257 {
-            builder = builder.add_node(format!("Node{i}"));
+        for i in 0..MAX_NODES {
+            let node_str = format!("Node{i}");
+            builder = builder.add_node(node_str);
         }
+
         let result = builder.validate();
+        assert!(result.is_ok());
+
+        // Try to adding one past the limit
+        builder = result.unwrap();
+        let result = builder.add_node("NodeLast").build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Validation(msg) => assert!(msg.contains(lang::NODES_TOO_MANY)),

@@ -1,4 +1,4 @@
-use crate::error::{ParseError, ParseResult, lang};
+use crate::{DBC_KEYWORDS, ParseError, ParseResult, error::lang};
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -82,7 +82,7 @@ impl<'a> Parser<'a> {
         // Try to match each keyword (checking longer ones first)
         // Note: This function does NOT advance the position - it only peeks at the keyword
         // Callers must consume the keyword themselves using expect()
-        for keyword in crate::DBC_KEYWORDS {
+        for keyword in DBC_KEYWORDS {
             let keyword_bytes = keyword.as_bytes();
             if self.starts_with(keyword_bytes) {
                 // Check if the next character after the keyword is a valid delimiter
@@ -103,7 +103,7 @@ impl<'a> Parser<'a> {
         }
 
         // No keyword matched
-        Err(ParseError::Expected("Expected keyword"))
+        Err(ParseError::Expected(lang::EXPECTED_KEYWORD))
     }
 
     pub fn expect(&mut self, expected: &[u8]) -> ParseResult<&mut Self> {
@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
     pub fn take_until_quote(
         &mut self,
         c_identifier: bool,
-        max_str_length: u16,
+        max_str_length: usize,
     ) -> ParseResult<&'a [u8]> {
         let start_pos = self.pos;
         let mut is_first_char = true;
@@ -163,7 +163,7 @@ impl<'a> Parser<'a> {
             let byte = self.input[self.pos];
 
             // Check if we've exceeded max length before processing the byte
-            let current_length = (self.pos - start_pos) as u16;
+            let current_length = self.pos - start_pos;
             if current_length > max_str_length {
                 return Err(ParseError::MaxStrLength(max_str_length));
             }
@@ -263,6 +263,32 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub(crate) fn parse_u8(&mut self) -> ParseResult<u8> {
+        let start_pos = self.pos;
+        // Read until whitespace, colon, or end of input
+        while self.pos < self.input.len() {
+            let byte = self.input[self.pos];
+            if byte.is_ascii_digit() {
+                self.pos += 1;
+            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
+                break;
+            } else {
+                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+            }
+        }
+
+        if self.pos == start_pos {
+            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+        }
+
+        let num_bytes = &self.input[start_pos..self.pos];
+        let num_str = core::str::from_utf8(num_bytes)
+            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
+        num_str
+            .parse::<u8>()
+            .map_err(|_| ParseError::Expected(lang::INVALID_NUMBER_FORMAT))
+    }
+
     pub(crate) fn parse_u32(&mut self) -> ParseResult<u32> {
         let start_pos = self.pos;
         // Read until whitespace, colon, pipe, @, or end of input
@@ -273,18 +299,20 @@ impl<'a> Parser<'a> {
             } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@') {
                 break;
             } else {
-                return Err(ParseError::Expected("Expected number"));
+                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
             }
         }
 
         if self.pos == start_pos {
-            return Err(ParseError::Expected("Expected number"));
+            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
         let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected("Invalid UTF-8 in number"))?;
-        num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
+            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
+        num_str
+            .parse::<u32>()
+            .map_err(|_| ParseError::Expected(lang::INVALID_NUMBER_FORMAT))
     }
 
     #[cfg(feature = "std")]
@@ -309,42 +337,20 @@ impl<'a> Parser<'a> {
             ) {
                 break;
             } else {
-                return Err(ParseError::Expected("Expected number"));
+                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
             }
         }
 
         if self.pos == start_pos || (has_sign && self.pos == start_pos + 1) {
-            return Err(ParseError::Expected("Expected number"));
+            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
         let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected("Invalid UTF-8 in number"))?;
-        num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
-    }
-
-    pub(crate) fn parse_u8(&mut self) -> ParseResult<u8> {
-        let start_pos = self.pos;
-        // Read until whitespace, colon, or end of input
-        while self.pos < self.input.len() {
-            let byte = self.input[self.pos];
-            if byte.is_ascii_digit() {
-                self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
-                break;
-            } else {
-                return Err(ParseError::Expected("Expected number"));
-            }
-        }
-
-        if self.pos == start_pos {
-            return Err(ParseError::Expected("Expected number"));
-        }
-
-        let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected("Invalid UTF-8 in number"))?;
-        num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
+            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
+        num_str
+            .parse::<i64>()
+            .map_err(|_| ParseError::Expected(lang::INVALID_NUMBER_FORMAT))
     }
 
     pub(crate) fn parse_f64(&mut self) -> ParseResult<f64> {
@@ -383,18 +389,20 @@ impl<'a> Parser<'a> {
             ) {
                 break;
             } else {
-                return Err(ParseError::Expected("Expected number"));
+                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
             }
         }
 
         if self.pos == start_pos {
-            return Err(ParseError::Expected("Expected number"));
+            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
         let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected("Invalid UTF-8 in number"))?;
-        num_str.parse().map_err(|_| ParseError::Expected("Invalid number format"))
+            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
+        num_str
+            .parse::<f64>()
+            .map_err(|_| ParseError::Expected(lang::PARSE_NUMBER_FAILED))
     }
 
     pub(crate) fn parse_identifier(&mut self) -> ParseResult<&'a str> {
@@ -422,19 +430,16 @@ impl<'a> Parser<'a> {
         }
 
         if self.pos == start_pos {
-            return Err(ParseError::Expected("Expected identifier"));
+            return Err(ParseError::Expected(lang::EXPECTED_IDENTIFIER));
         }
 
         let id_bytes = &self.input[start_pos..self.pos];
-        core::str::from_utf8(id_bytes)
-            .map_err(|_| ParseError::Expected("Invalid UTF-8 in identifier"))
+        core::str::from_utf8(id_bytes).map_err(|_| ParseError::Expected(lang::INVALID_UTF8))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    // All parser tests work in all configurations (no_std, std)
-    // Parser only uses core functionality and doesn't require alloc
     use super::*;
 
     mod new {

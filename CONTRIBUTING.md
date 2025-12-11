@@ -61,7 +61,7 @@ This installs a pre-commit hook that automatically runs clippy and formatting ch
 ```bash
 # Build
 cargo check --all-targets
-cargo check --target thumbv7m-none-eabi --no-default-features --package dbc-rs
+cargo check --target thumbv7em-none-eabihf --no-default-features --package dbc-rs
 
 # Test
 cargo test
@@ -71,7 +71,7 @@ cargo fmt
 
 # Lint
 cargo clippy --all-targets --all-features -- -D warnings
-cargo clippy --no-default-features --target thumbv7m-none-eabi --package dbc-rs -- -D warnings
+cargo clippy --no-default-features --target thumbv7em-none-eabihf --package dbc-rs -- -D warnings
 ```
 
 **Note**: The pre-commit hook automatically runs clippy and formatting checks.

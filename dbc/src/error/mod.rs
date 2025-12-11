@@ -57,7 +57,7 @@ pub enum ParseError {
     InvalidChar(char),
 
     /// String length exceeds the maximum allowed length.
-    MaxStrLength(u16),
+    MaxStrLength(usize),
 
     /// Version-related parse error.
     Version(&'static str),
@@ -78,15 +78,17 @@ pub enum ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::UnexpectedEof => write!(f, "Unexpected end of input"),
+            ParseError::UnexpectedEof => write!(f, "{}", lang::UNEXPECTED_EOF),
             ParseError::Expected(msg) => write!(f, "Expected {}", msg),
-            ParseError::InvalidChar(c) => write!(f, "Invalid character: {}", c),
-            ParseError::MaxStrLength(max) => write!(f, "String length exceeds maximum: {}", max),
-            ParseError::Version(msg) => write!(f, "Version error: {}", msg),
-            ParseError::Message(msg) => write!(f, "Message error: {}", msg),
-            ParseError::Receivers(msg) => write!(f, "Receivers error: {}", msg),
-            ParseError::Nodes(msg) => write!(f, "Nodes error: {}", msg),
-            ParseError::Signal(msg) => write!(f, "Signal error: {}", msg),
+            ParseError::InvalidChar(c) => write!(f, "{}: {}", lang::INVALID_CHARACTER, c),
+            ParseError::MaxStrLength(max) => {
+                write!(f, "{}: {}", lang::STRING_LENGTH_EXCEEDS_MAX, max)
+            }
+            ParseError::Version(msg) => write!(f, "{}: {}", lang::VERSION_ERROR_PREFIX, msg),
+            ParseError::Message(msg) => write!(f, "{}: {}", lang::MESSAGE_ERROR_PREFIX, msg),
+            ParseError::Receivers(msg) => write!(f, "{}: {}", lang::RECEIVERS_ERROR_PREFIX, msg),
+            ParseError::Nodes(msg) => write!(f, "{}: {}", lang::NODES_ERROR_PREFIX, msg),
+            ParseError::Signal(msg) => write!(f, "{}: {}", lang::SIGNAL_ERROR_PREFIX, msg),
         }
     }
 }
@@ -113,9 +115,9 @@ impl fmt::Display for Error {
             Error::Version(msg) => write!(f, "{}: {}", lang::VERSION_ERROR_CATEGORY, msg),
             #[cfg(feature = "std")]
             Error::Nodes(msg) => write!(f, "{}: {}", lang::NODES_ERROR_CATEGORY, msg),
-            Error::ParseError(msg) => write!(f, "Parse Error: {}", msg),
-            Error::Decoding(msg) => write!(f, "Decoding Error: {}", msg),
-            Error::Validation(msg) => write!(f, "Validation Error: {}", msg),
+            Error::ParseError(msg) => write!(f, "{}: {}", lang::PARSE_ERROR_PREFIX, msg),
+            Error::Decoding(msg) => write!(f, "{}: {}", lang::DECODING_ERROR_PREFIX, msg),
+            Error::Validation(msg) => write!(f, "{}: {}", lang::VALIDATION_ERROR_PREFIX, msg),
         }
     }
 }

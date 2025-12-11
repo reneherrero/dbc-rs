@@ -1,7 +1,5 @@
-use crate::{Cow, MAX_VALUE_DESCRIPTIONS};
-
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use crate::MAX_VALUE_DESCRIPTIONS;
+use std::{string::String, vec::Vec};
 
 /// Value descriptions for a signal.
 ///
@@ -39,19 +37,16 @@ use alloc::vec::Vec;
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ValueDescriptions<'a> {
-    entries: Vec<(u64, Cow<'a, str>)>,
+pub struct ValueDescriptions {
+    entries: Vec<(u64, String)>,
 }
 
-impl<'a> ValueDescriptions<'a> {
+impl ValueDescriptions {
     /// Create ValueDescriptions from a slice of (value, description) pairs
-    pub(crate) fn from_slice(entries: &[(u64, impl Into<Cow<'a, str>> + Clone)]) -> Self {
+    pub(crate) fn from_slice(entries: &[(u64, String)]) -> Self {
         let count = entries.len().min(MAX_VALUE_DESCRIPTIONS);
-        let vec_entries: Vec<(u64, Cow<'a, str>)> = entries
-            .iter()
-            .take(count)
-            .map(|(value, desc)| (*value, desc.clone().into()))
-            .collect();
+        let vec_entries: Vec<(u64, String)> =
+            entries.iter().take(count).map(|(value, desc)| (*value, desc.clone())).collect();
         Self {
             entries: vec_entries,
         }
@@ -121,17 +116,17 @@ impl<'a> ValueDescriptions<'a> {
 
 /// Iterator over value descriptions
 pub struct ValueDescriptionsIter<'a> {
-    entries: &'a [(u64, Cow<'a, str>)],
+    entries: &'a [(u64, String)],
     pos: usize,
 }
 
 impl<'a> Iterator for ValueDescriptionsIter<'a> {
-    type Item = (u64, &'a str);
+    type Item = (u64, String);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos < self.entries.len() {
             let entry = &self.entries[self.pos];
-            let result = (entry.0, entry.1.as_ref());
+            let result = (entry.0, entry.1.clone());
             self.pos += 1;
             Some(result)
         } else {

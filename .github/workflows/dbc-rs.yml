@@ -39,13 +39,13 @@ jobs:
       - name: Setup Rust toolchain (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
-          target: thumbv7m-none-eabi
+          target: thumbv7em-none-eabihf
       - name: Install target standard library
-        run: rustup target add thumbv7m-none-eabi
+        run: rustup target add thumbv7em-none-eabihf
       - name: Check library without std (no_std mode)
-        run: cargo check --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+        run: cargo check --verbose --no-default-features --target thumbv7em-none-eabihf -p dbc-rs
       - name: Build library without std (no_std mode, release)
-        run: cargo build --release --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+        run: cargo build --release --verbose --no-default-features --target thumbv7em-none-eabihf -p dbc-rs
 
 
   test-std-msrv:
@@ -70,13 +70,13 @@ jobs:
       - name: Setup Rust toolchain (MSRV 1.85.0)
         uses: dtolnay/rust-toolchain@1.85.0
         with:
-          target: thumbv7m-none-eabi
+          target: thumbv7em-none-eabihf
       - name: Install target standard library
-        run: rustup target add thumbv7m-none-eabi
+        run: rustup target add thumbv7em-none-eabihf
       - name: Check library without std (no_std mode, MSRV)
-        run: cargo check --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+        run: cargo check --verbose --no-default-features --target thumbv7em-none-eabihf -p dbc-rs
       - name: Build library without std (no_std mode, MSRV, release)
-        run: cargo build --release --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+        run: cargo build --release --verbose --no-default-features --target thumbv7em-none-eabihf -p dbc-rs
 
   lint:
     name: Lint (clippy)
@@ -89,11 +89,11 @@ jobs:
         with:
           components: clippy
       - name: Install target standard library
-        run: rustup target add thumbv7m-none-eabi
+        run: rustup target add thumbv7em-none-eabihf
       - name: Run clippy linter (std feature)
         run: rustup run stable cargo clippy --verbose --all-targets -p dbc-rs -- -D warnings
       - name: Run clippy linter (no_std mode)
-        run: rustup run stable cargo clippy --verbose --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
+        run: rustup run stable cargo clippy --verbose --no-default-features --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
 
   fmt:
     name: Format check

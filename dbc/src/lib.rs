@@ -33,7 +33,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
 
 mod byte_order;
@@ -76,12 +76,6 @@ pub use version::VersionBuilder;
 
 pub(crate) use parser::Parser;
 
-// Re-export Cow for internal use
-#[cfg(not(feature = "std"))]
-pub(crate) use alloc::borrow::Cow;
-#[cfg(feature = "std")]
-pub(crate) use std::borrow::Cow;
-
 /// The version of this crate as specified in `Cargo.toml`.
 ///
 /// This constant is only available when the `std` feature is enabled.
@@ -96,6 +90,7 @@ pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // - DBC_MAX_NODES (default: 256)
 // - DBC_MAX_VALUE_DESCRIPTIONS (default: 64)
 // - DBC_MAX_RECEIVER_NODES (default: 64)
+// - DBC_MAX_NAME_SIZE (default: 64)
 include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 
 // DBC file format keywords

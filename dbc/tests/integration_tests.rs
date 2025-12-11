@@ -1,14 +1,13 @@
 //! Integration tests for DBC file parsing and manipulation.
-#![allow(clippy::float_cmp)]
 
 #[cfg(feature = "std")]
 mod std {
     use dbc_rs::Dbc;
+    use std::fs::read_to_string;
 
     #[test]
     fn test_parse_simple_dbc() {
-        let content =
-            std::fs::read_to_string("tests/data/simple.dbc").expect("Failed to read simple.dbc");
+        let content = read_to_string("tests/data/simple.dbc").expect("Failed to read simple.dbc");
         let dbc = Dbc::parse(&content).expect("Failed to parse simple.dbc");
 
         // Verify version
@@ -46,8 +45,8 @@ mod std {
 
     #[test]
     fn test_parse_multiplexed_dbc() {
-        let content = std::fs::read_to_string("tests/data/multiplexed.dbc")
-            .expect("Failed to read multiplexed.dbc");
+        let content =
+            read_to_string("tests/data/multiplexed.dbc").expect("Failed to read multiplexed.dbc");
         let dbc = Dbc::parse(&content).expect("Failed to parse multiplexed.dbc");
 
         // Verify version
@@ -87,8 +86,7 @@ mod std {
 
     #[test]
     fn test_parse_minimal_dbc() {
-        let content =
-            std::fs::read_to_string("tests/data/minimal.dbc").expect("Failed to read minimal.dbc");
+        let content = read_to_string("tests/data/minimal.dbc").expect("Failed to read minimal.dbc");
         let dbc = Dbc::parse(&content).expect("Failed to parse minimal.dbc");
 
         // Verify version (just major, no minor/patch)
@@ -114,8 +112,8 @@ mod std {
 
     #[test]
     fn test_parse_extended_ids_dbc() {
-        let content = std::fs::read_to_string("tests/data/extended_ids.dbc")
-            .expect("Failed to read extended_ids.dbc");
+        let content =
+            read_to_string("tests/data/extended_ids.dbc").expect("Failed to read extended_ids.dbc");
         let dbc = Dbc::parse(&content).expect("Failed to parse extended_ids.dbc");
 
         // Verify version
@@ -147,7 +145,7 @@ mod std {
 
     #[test]
     fn test_parse_broadcast_signals_dbc() {
-        let content = std::fs::read_to_string("tests/data/broadcast_signals.dbc")
+        let content = read_to_string("tests/data/broadcast_signals.dbc")
             .expect("Failed to read broadcast_signals.dbc");
         let dbc = Dbc::parse(&content).expect("Failed to parse broadcast_signals.dbc");
 
@@ -172,9 +170,10 @@ mod std {
         match data1.receivers() {
             dbc_rs::Receivers::Nodes(nodes) => {
                 assert_eq!(nodes.len(), 2);
-                let nodes: Vec<&str> = data1.receivers().iter().collect();
-                assert!(nodes.contains(&"RECEIVER1"));
-                assert!(nodes.contains(&"RECEIVER2"));
+                let node_vec: Vec<String> =
+                    data1.receivers().iter().map(|s| s.to_string()).collect();
+                assert!(node_vec.iter().any(|s| s == "RECEIVER1"));
+                assert!(node_vec.iter().any(|s| s == "RECEIVER2"));
             }
             _ => panic!("Data1 should have specific receivers"),
         }
@@ -183,8 +182,9 @@ mod std {
         match data2.receivers() {
             dbc_rs::Receivers::Nodes(nodes) => {
                 assert_eq!(nodes.len(), 1);
-                let nodes: Vec<&str> = data2.receivers().iter().collect();
-                assert_eq!(nodes[0], "RECEIVER1");
+                let node_vec: Vec<String> =
+                    data2.receivers().iter().map(|s| s.to_string()).collect();
+                assert_eq!(node_vec[0], "RECEIVER1");
             }
             _ => panic!("Data2 should have specific receivers"),
         }
@@ -194,8 +194,8 @@ mod std {
     #[ignore = "VAL_TABLE_ not implemented"]
     fn test_parse_complete_dbc_file() {
         // Parse the complete.dbc file
-        let content = std::fs::read_to_string("tests/data/complete.dbc")
-            .expect("Failed to read complete.dbc");
+        let content =
+            read_to_string("tests/data/complete.dbc").expect("Failed to read complete.dbc");
         let dbc = Dbc::parse(&content).expect("Failed to parse complete.dbc");
 
         // Verify basic structure

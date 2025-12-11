@@ -130,7 +130,8 @@ pub fn describe_stored() -> Result<(), Box<dyn std::error::Error>> {
                 let receivers_str = match signal.receivers() {
                     dbc_rs::Receivers::Broadcast => " (broadcasted)".to_string(),
                     dbc_rs::Receivers::Nodes(nodes) if !nodes.is_empty() => {
-                        let nodes: Vec<&str> = signal.receivers().iter().collect();
+                        let nodes: Vec<String> =
+                            signal.receivers().iter().map(|s| s.to_string()).collect();
                         format!(" (receivers: {})", nodes.join(", "))
                     }
                     _ => String::new(), // None or empty

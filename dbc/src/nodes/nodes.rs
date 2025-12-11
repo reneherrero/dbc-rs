@@ -1,31 +1,7 @@
 use crate::{
-    Cow, MAX_NODES, Parser,
-    error::{ParseError, ParseResult},
+    BU_, Error, MAX_NAME_SIZE, MAX_NODES, ParseError, ParseResult, Parser, Result, error::lang,
 };
-
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
-/// Iterator over nodes in a Nodes collection
-struct NodesIter<'a> {
-    nodes: &'a [Cow<'a, str>],
-    pos: usize,
-}
-
-impl<'a> Iterator for NodesIter<'a> {
-    type Item = &'a str;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.nodes.len() {
-            let result = self.nodes[self.pos].as_ref();
-            self.pos += 1;
-            Some(result)
-        } else {
-            None
-        }
-    }
-}
+use mayheap::{String, Vec};
 
 /// Represents a collection of node (ECU) names from a DBC file.
 ///
@@ -83,16 +59,15 @@ impl<'a> Iterator for NodesIter<'a> {
 /// - Maximum of 256 nodes (DoS protection)
 /// - Duplicate node names are not allowed (case-sensitive)
 #[derive(Debug, Default, PartialEq, Eq, Hash)]
-pub struct Nodes<'a> {
-    nodes: Vec<Cow<'a, str>>,
+pub struct Nodes {
+    nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }>,
 }
 
-impl<'a> Nodes<'a> {
+impl Nodes {
     // Shared validation function
-    pub(crate) fn validate(nodes: &[impl AsRef<str>]) -> crate::error::Result<()> {
-        use crate::error::{Error, lang};
+    pub(crate) fn validate(nodes: &[impl AsRef<str>]) -> Result<()> {
         // Check for too many nodes (DoS protection)
-        if nodes.len() > crate::MAX_NODES {
+        if nodes.len() > MAX_NODES {
             return Err(Error::Validation(lang::NODES_TOO_MANY));
         }
 
@@ -108,18 +83,18 @@ impl<'a> Nodes<'a> {
     }
 
     #[cfg(feature = "std")]
-    pub(crate) fn new(nodes: &[impl Into<Cow<'a, str>> + Clone]) -> Self {
+    pub(crate) fn new(nodes: &[impl AsRef<str>]) -> Self {
         // Validation should have been done prior (by builder)
-        let nodes_vec: Vec<Cow<'a, str>> =
-            nodes.iter().take(MAX_NODES).map(|node| node.clone().into()).collect();
+        let nodes_vec: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> =
+            nodes.iter().take(MAX_NODES).map(|n| n.as_ref().to_string().into()).collect();
         Self { nodes: nodes_vec }
     }
 
     #[must_use = "parse result should be checked"]
-    pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
         // Nodes parsing must always start with "BU_" keyword
         parser
-            .expect(crate::BU_.as_bytes())
+            .expect(BU_.as_bytes())
             .map_err(|_| ParseError::Expected("Expected BU_ keyword"))?;
 
         // Expect ":" after "BU_"
@@ -131,7 +106,7 @@ impl<'a> Nodes<'a> {
         parser.skip_newlines_and_spaces();
 
         // Parse node names into Vec
-        let mut node_names: Vec<Cow<'a, str>> = Vec::new();
+        let mut node_names: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
 
         loop {
             // Skip whitespace before each node name
@@ -142,9 +117,13 @@ impl<'a> Nodes<'a> {
             match parser.parse_identifier() {
                 Ok(node) => {
                     if node_names.len() >= MAX_NODES {
-                        return Err(ParseError::Nodes(crate::error::lang::NODES_TOO_MANY));
+                        return Err(ParseError::Nodes(lang::NODES_TOO_MANY));
                     }
-                    node_names.push(Cow::Borrowed(node));
+                    let node_str: String<{ MAX_NAME_SIZE }> = String::try_from(node)
+                        .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+                    node_names
+                        .push(node_str)
+                        .map_err(|_| ParseError::Nodes(lang::NODES_TOO_MANY))?;
                 }
                 Err(_) => {
                     // No more identifiers, break
@@ -159,8 +138,8 @@ impl<'a> Nodes<'a> {
 
         // Validate before construction
         Self::validate(&node_names).map_err(|e| match e {
-            crate::error::Error::Validation(msg) => crate::error::ParseError::Nodes(msg),
-            _ => crate::error::ParseError::Nodes("Validation error"),
+            Error::Validation(msg) => ParseError::Nodes(msg),
+            _ => ParseError::Nodes("Validation error"),
         })?;
         // Construct directly (validation already done)
         Ok(Self { nodes: node_names })
@@ -194,10 +173,7 @@ impl<'a> Nodes<'a> {
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = &str> + '_ {
-        NodesIter {
-            nodes: &self.nodes,
-            pos: 0,
-        }
+        self.nodes.iter().map(|s| s.as_str())
     }
 
     /// Checks if a node name is in the list.
@@ -304,7 +280,7 @@ impl<'a> Nodes<'a> {
     #[inline]
     #[must_use]
     pub fn at(&self, index: usize) -> Option<&str> {
-        self.nodes.get(index).map(|cow| cow.as_ref())
+        self.nodes.get(index).map(|s| s.as_str())
     }
 
     /// Converts the nodes to their DBC file representation.
@@ -347,10 +323,8 @@ impl<'a> Nodes<'a> {
     /// This method requires the `std` feature to be enabled.
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> String {
-        use String;
-        let mut result = String::from(crate::BU_);
-        result.push(':');
+    pub fn to_dbc_string(&self) -> std::string::String {
+        let mut result = format!("{}:", BU_);
         let nodes_str = format!("{}", self);
         if !nodes_str.is_empty() {
             result.push(' ');
@@ -361,7 +335,7 @@ impl<'a> Nodes<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> core::fmt::Display for Nodes<'a> {
+impl core::fmt::Display for Nodes {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.nodes.is_empty() {
             return Ok(());
@@ -380,10 +354,7 @@ impl<'a> core::fmt::Display for Nodes<'a> {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{
-        Parser,
-        error::{ParseError, lang},
-    };
+    use crate::{ParseError, Parser, error::lang};
 
     #[test]
     fn test_nodes_from_valid_line() {
@@ -441,6 +412,4 @@ mod tests {
             _ => panic!("Expected ParseError::Nodes"),
         }
     }
-
-    // Note: Builder limit tests have been moved to nodes_builder.rs
 }

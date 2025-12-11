@@ -43,23 +43,37 @@ The crate supports multiple levels of functionality through feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| *(none)* | ❌ | **`no_std`**: Parsing with `alloc` crate. Uses `Vec` for dynamic collections (heap-allocated). |
-| `std`   | ✅ | Adds standard library integration (I/O helpers, file operations, builders, string formatting). |
+| `alloc` | ❌ | **REQUIRED** (unless using `heapless`): Enables heap-allocated collections via `alloc` crate. Uses `Vec` for dynamic collections. Requires global allocator. |
+| `heapless` | ❌ | **REQUIRED** (unless using `alloc`): Enables stack-allocated, bounded collections (no `alloc` needed). Uses fixed-size arrays with capacity limits. |
+| `std` | ✅ | Includes `alloc` + standard library features (I/O helpers, file operations, builders, string formatting). |
+
+**⚠️ Important:** You **MUST** enable either `alloc` OR `heapless` (or use `std` which includes `alloc`). The library will not compile without one of these features.
 
 **Feature Hierarchy:**
-- **`no_std`** (no features): Parsing with `alloc` crate, uses `Vec` for dynamic collections
-- **`std`**: Adds I/O helpers, file operations, builders, string formatting
+- **`alloc`**: Heap-allocated `Vec` collections (requires global allocator). Choose this for systems with dynamic memory allocation.
+- **`heapless`**: Stack-allocated, bounded collections (no allocator needed). Choose this for embedded systems without allocators. Capacity limits apply.
+- **`std`** (default): Includes `alloc` + std library features (builders, I/O, formatting). Best for desktop/server applications.
+
+**Note:** You use either `alloc` OR `heapless`, not both. The `std` feature automatically includes `alloc`.
 
 **Examples:**
 
 ```toml
-# Default: std enabled
+# Default: std enabled (includes alloc)
 [dependencies]
 dbc-rs = "1"
 
-# Pure no_std (no std)
+# no_std with heap-allocated collections (requires global allocator)
 [dependencies]
-dbc-rs = { version = "1", default-features = false }
+dbc-rs = { version = "1", default-features = false, features = ["alloc"] }
+
+# no_std with stack-allocated, bounded collections (no allocator needed)
+[dependencies]
+dbc-rs = { version = "1", default-features = false, features = ["heapless"] }
+
+# ❌ This will NOT compile - you must enable either alloc or heapless
+# [dependencies]
+# dbc-rs = { version = "1", default-features = false }
 ```
 
 ## DBC Format Feature Support
@@ -144,13 +158,13 @@ if let Some(msg) = dbc.messages().iter().find(|m| m.id() == 256) {
 ### Creating and Modifying DBC Files
 
 ```rust
-use dbc_rs::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
+use dbc_rs::{Dbc, VersionBuilder, NodesBuilder, MessageBuilder, SignalBuilder, ByteOrder, ReceiversBuilder};
 
 // Create from scratch
-let version = Version::builder().major(1).minor(0).build()?;
-let nodes = Nodes::builder().add_node("ECM").add_node("TCM").build();
+let version = VersionBuilder::new().version("1.0").build()?;
+let nodes = NodesBuilder::new().add_node("ECM").add_node("TCM").build()?;
 
-let signal = Signal::builder()
+let signal = SignalBuilder::new()
     .name("EngineSpeed")
     .start_bit(0)
     .length(16)
@@ -161,10 +175,10 @@ let signal = Signal::builder()
     .min(0.0)
     .max(8000.0)
     .unit("rpm")
-    .receivers(Receivers::Broadcast)
+    .receivers(ReceiversBuilder::new().broadcast())
     .build()?;
 
-let message = Message::builder()
+let message = MessageBuilder::new()
     .id(256)
     .name("EngineData")
     .dlc(8)
@@ -172,7 +186,7 @@ let message = Message::builder()
     .add_signal(signal)
     .build()?;
 
-let dbc = Dbc::builder()
+let dbc = DbcBuilder::new()
     .version(version)
     .nodes(nodes)
     .add_message(message)
@@ -385,9 +399,12 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 ## Performance Notes
 
 - **Memory Usage**: 
-  - Both `std` and `no_std`: Uses `Vec<T>` (heap-allocated via `alloc`, dynamic sizing)
-- **Parsing**: O(n) complexity, entire file parsed into memory
-- **Recommendations**: For very large DBC files (>10MB), consider splitting into multiple files
+  - **`alloc`/`std` features**: Uses `Vec<T>` (heap-allocated, dynamic sizing)
+  - **`heapless` feature**: Uses fixed-size, stack-allocated arrays (capacity limits apply, default: 100 messages for embedded targets, 10000 for desktop)
+  - **Parsing**: O(n) complexity, entire file parsed into memory
+  - **Recommendations**: 
+    - For embedded targets with `heapless`, the default `MAX_MESSAGES` is 100 (configurable via `DBC_MAX_MESSAGES` env var)
+    - For very large DBC files (>10MB), consider splitting into multiple files
 
 ## Contributing
 

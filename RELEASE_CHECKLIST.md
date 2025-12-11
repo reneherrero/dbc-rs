@@ -17,7 +17,7 @@ This checklist ensures all steps are completed before publishing a new release o
   cargo clippy --all-targets -p dbc-rs -- -D warnings
   
   # no_std target (clippy only checks, doesn't build, so debug build issues don't apply)
-  cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
+  cargo clippy --no-default-features --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
   
   # dbc-cli
   cargo clippy --all-targets -p dbc-cli -- -D warnings
@@ -43,15 +43,22 @@ This checklist ensures all steps are completed before publishing a new release o
 
 ### 2. Build Verification
 
-- [ ] **Builds successfully with `std` feature**
+- [ ] **Builds successfully with `std` (includes `alloc`) feature**
   ```bash
-  cargo build --release -p dbc-rs
+  cargo build --release
   ```
 
-- [ ] **Builds successfully in `no_std` mode**
+- [ ] **Builds successfully in `no_std` + `alloc` only feature**
   ```bash
-  cargo build --release --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+  cargo build --release --no-default-features --features alloc --package dbc-rs
   ```
+
+- [ ] **Builds successfully in `no_std` + `heapless` mode**
+  ```bash
+  // You need to reduce message capacity for embedded devices 
+  DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf --package dbc-rs
+  ```
+  Note: For embedded targets, the default of 10000 can causes a stack overflow with heapless Vec. Override with `DBC_MAX_MESSAGES` if needed.
 
 - [ ] **Builds successfully on MSRV (1.85.0)**
   ```bash
@@ -245,12 +252,22 @@ For pre-releases:
 # 3. Run all checks locally (matches CI workflows)
 cargo test --workspace
 # Note: The following may fail if there are compilation errors - fix before release
-cargo test --no-default-features -p dbc-rs
+cargo test --no-default-features --features alloc -p dbc-rs
+# Note: heapless tests require increased stack size due to Debug formatting
+# Use --lib to skip examples (parse_no_std example has linker issues with heapless on x86_64)
+RUST_MIN_STACK=8388608 cargo test --no-default-features --features heapless -p dbc-rs --lib
+
+RUST_MIN_STACK=8388608 cargo build --no-default-features --target thumbv7em-none-eabihf --features heapless -p dbc-rs
+
 cargo clippy --all-targets -p dbc-rs -- -D warnings
-cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
+cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
+cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
 cargo clippy --all-targets -p dbc-cli -- -D warnings
+
 cargo fmt -- --check
+
 cargo llvm-cov --workspace --fail-under-lines 80
+
 cargo publish --dry-run -p dbc-rs
 
 # 4. Push changes and wait for CI workflows to pass

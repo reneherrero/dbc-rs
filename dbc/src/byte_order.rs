@@ -18,30 +18,24 @@ pub enum ByteOrder {
 #[cfg(test)]
 mod tests {
     use super::ByteOrder;
-    #[cfg(not(feature = "std"))]
-    use alloc::format;
-
-    // Helper macro to run tests that work in all configurations
-    macro_rules! test_all_configs {
-        ($name:ident, $body:block) => {
-            #[test]
-            fn $name() $body
-        };
-    }
+    use core::hash::Hash;
 
     // Tests that work in all configurations (no_std, std)
-    test_all_configs!(test_byte_order_variants, {
+    #[test]
+    fn test_byte_order_variants() {
         assert_eq!(ByteOrder::LittleEndian as u8, 1);
         assert_eq!(ByteOrder::BigEndian as u8, 0);
-    });
+    }
 
-    test_all_configs!(test_byte_order_equality, {
+    #[test]
+    fn test_byte_order_equality() {
         assert_eq!(ByteOrder::LittleEndian, ByteOrder::LittleEndian);
         assert_eq!(ByteOrder::BigEndian, ByteOrder::BigEndian);
         assert_ne!(ByteOrder::LittleEndian, ByteOrder::BigEndian);
-    });
+    }
 
-    test_all_configs!(test_byte_order_clone, {
+    #[test]
+    fn test_byte_order_clone() {
         let original = ByteOrder::LittleEndian;
         let cloned = original;
         assert_eq!(original, cloned);
@@ -49,27 +43,20 @@ mod tests {
         let original2 = ByteOrder::BigEndian;
         let cloned2 = original2;
         assert_eq!(original2, cloned2);
-    });
+    }
 
-    test_all_configs!(test_byte_order_copy, {
+    #[test]
+    fn test_byte_order_copy() {
         let order = ByteOrder::LittleEndian;
         let copied = order; // Copy, not move
         assert_eq!(order, copied); // Original still valid
-    });
-
-    test_all_configs!(test_byte_order_hash_trait, {
-        // Test that Hash trait is implemented by checking it compiles
-        fn _assert_hash<T: core::hash::Hash>() {}
-        _assert_hash::<ByteOrder>();
-    });
+    }
 
     #[test]
-    fn test_byte_order_debug() {
-        let little = format!("{:?}", ByteOrder::LittleEndian);
-        assert!(little.contains("LittleEndian"));
-
-        let big = format!("{:?}", ByteOrder::BigEndian);
-        assert!(big.contains("BigEndian"));
+    fn test_byte_order_hash_trait() {
+        // Test that Hash trait is implemented by checking it compiles
+        fn _assert_hash<T: Hash>() {}
+        _assert_hash::<ByteOrder>();
     }
 
     // Tests that require std (for DefaultHasher)
@@ -78,6 +65,15 @@ mod tests {
         use super::*;
         use core::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+
+        #[test]
+        fn test_byte_order_debug() {
+            let little = format!("{:?}", ByteOrder::LittleEndian);
+            assert!(little.contains("LittleEndian"));
+
+            let big = format!("{:?}", ByteOrder::BigEndian);
+            assert!(big.contains("BigEndian"));
+        }
 
         #[test]
         fn test_byte_order_hash() {
