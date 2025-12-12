@@ -4,7 +4,19 @@ use crate::error::Result;
 use crate::{
     Dbc, Message, MessageBuilder, MessageList, Nodes, NodesBuilder, Receivers, ReceiversBuilder,
     SignalBuilder, ValueDescriptionsBuilder, Version, VersionBuilder,
+    attributes::{Attribute, AttributeDefault, AttributeDefinition},
+    comment::Comment,
+    value_table::ValueTable,
 };
+
+// ExtendedMultiplexing is not exported, so we need a local type for the builder
+#[derive(Debug, Clone, PartialEq)]
+struct ExtendedMultiplexingBuilder {
+    message_id: u32,
+    signal_name: String,
+    multiplexer_switch: String,
+    value_ranges: Vec<(u8, u8)>,
+}
 
 /// Builder for constructing `Dbc` instances programmatically.
 ///
@@ -45,6 +57,12 @@ pub struct DbcBuilder {
     nodes: NodesBuilder,
     messages: Vec<MessageBuilder>,
     value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder>,
+    attributes: Vec<AttributeDefinition>,
+    attribute_defaults: Vec<AttributeDefault>,
+    attribute_values: Vec<Attribute>,
+    comments: Vec<Comment>,
+    value_tables: Vec<ValueTable>,
+    extended_multiplexing: Vec<ExtendedMultiplexingBuilder>,
 }
 
 impl DbcBuilder {
@@ -176,11 +194,27 @@ impl DbcBuilder {
             value_descriptions.insert((message_id, signal_name.to_string()), builder);
         }
 
+        // Copy attributes, comments, value tables, and extended multiplexing from parsed Dbc
+        // Note: These are not exposed via public API yet, so we'll need to access them directly
+        // For now, we'll initialize them as empty and add methods to populate them
+        let attributes = std::vec::Vec::new(); // TODO: Copy from dbc when getters are available
+        let attribute_defaults = std::vec::Vec::new();
+        let attribute_values = std::vec::Vec::new();
+        let comments = std::vec::Vec::new();
+        let value_tables = std::vec::Vec::new();
+        let extended_multiplexing = std::vec::Vec::new();
+
         Self {
             version,
             nodes,
             messages,
             value_descriptions,
+            attributes,
+            attribute_defaults,
+            attribute_values,
+            comments,
+            value_tables,
+            extended_multiplexing,
         }
     }
 
@@ -278,6 +312,146 @@ impl DbcBuilder {
         self
     }
 
+    /// Adds a comment to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, comment::Comment, comment::CommentObjectType};
+    ///
+    /// let comment = Comment::new(
+    ///     CommentObjectType::General,
+    ///     None,
+    ///     None,
+    ///     "This is a general comment".to_string(),
+    /// );
+    /// let builder = DbcBuilder::new()
+    ///     .add_comment(comment);
+    /// ```
+    #[must_use]
+    pub fn add_comment(mut self, comment: Comment) -> Self {
+        self.comments.push(comment);
+        self
+    }
+
+    /// Adds a value table to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, value_table::ValueTable};
+    ///
+    /// let value_table = ValueTable::new(
+    ///     "GearState".to_string(),
+    ///     vec![(0, "Park".to_string()), (1, "Drive".to_string())],
+    /// );
+    /// let builder = DbcBuilder::new()
+    ///     .add_value_table(value_table);
+    /// ```
+    #[must_use]
+    pub fn add_value_table(mut self, value_table: ValueTable) -> Self {
+        self.value_tables.push(value_table);
+        self
+    }
+
+    /// Adds an attribute definition to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, attributes::{AttributeDefinition, AttributeObjectType, AttributeValueType}};
+    ///
+    /// let attr_def = AttributeDefinition::new(
+    ///     AttributeObjectType::Message,
+    ///     "GenMsgCycleTime".to_string(),
+    ///     AttributeValueType::Int(0, 65535),
+    /// );
+    /// let builder = DbcBuilder::new()
+    ///     .add_attribute_definition(attr_def);
+    /// ```
+    #[must_use]
+    pub fn add_attribute_definition(mut self, attr_def: AttributeDefinition) -> Self {
+        self.attributes.push(attr_def);
+        self
+    }
+
+    /// Adds an attribute default value to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, attributes::{AttributeDefault, AttributeValue}};
+    ///
+    /// let attr_default = AttributeDefault::new(
+    ///     "GenMsgCycleTime".to_string(),
+    ///     AttributeValue::Int(100),
+    /// );
+    /// let builder = DbcBuilder::new()
+    ///     .add_attribute_default(attr_default);
+    /// ```
+    #[must_use]
+    pub fn add_attribute_default(mut self, attr_default: AttributeDefault) -> Self {
+        self.attribute_defaults.push(attr_default);
+        self
+    }
+
+    /// Adds an attribute value assignment to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, attributes::{Attribute, AttributeObjectType, AttributeValue}};
+    ///
+    /// let attr = Attribute::new(
+    ///     "GenMsgCycleTime".to_string(),
+    ///     AttributeObjectType::Message,
+    ///     None,
+    ///     Some(256),
+    ///     AttributeValue::Int(50),
+    /// );
+    /// let builder = DbcBuilder::new()
+    ///     .add_attribute_value(attr);
+    /// ```
+    #[must_use]
+    pub fn add_attribute_value(mut self, attr: Attribute) -> Self {
+        self.attribute_values.push(attr);
+        self
+    }
+
+    /// Adds extended multiplexing information to the DBC file.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_id` - The message ID
+    /// * `signal_name` - The name of the multiplexed signal
+    /// * `multiplexer_switch` - The name of the multiplexer switch signal
+    /// * `value_ranges` - Vector of (min, max) value ranges
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DbcBuilder;
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .add_extended_multiplexing(256, "SignalA".to_string(), "Mux".to_string(), vec![(0, 10), (20, 30)]);
+    /// ```
+    #[must_use]
+    pub fn add_extended_multiplexing(
+        mut self,
+        message_id: u32,
+        signal_name: String,
+        multiplexer_switch: String,
+        value_ranges: Vec<(u8, u8)>,
+    ) -> Self {
+        self.extended_multiplexing.push(ExtendedMultiplexingBuilder {
+            message_id,
+            signal_name,
+            multiplexer_switch,
+            value_ranges,
+        });
+        self
+    }
+
     /// Validates the builder without constructing the `Dbc`.
     ///
     /// This method performs all validation checks. Note that this consumes
@@ -326,6 +500,7 @@ impl DbcBuilder {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)] // Builder needs to return all fields
     fn extract_fields(
         self,
     ) -> Result<(
@@ -333,6 +508,12 @@ impl DbcBuilder {
         Nodes,
         MessageList,
         crate::dbc::ValueDescriptionsList,
+        std::vec::Vec<AttributeDefinition>,
+        std::vec::Vec<AttributeDefault>,
+        std::vec::Vec<Attribute>,
+        std::vec::Vec<Comment>,
+        std::vec::Vec<ValueTable>,
+        std::vec::Vec<ExtendedMultiplexingBuilder>,
     )> {
         // Build version
         let version = self.version.build()?;
@@ -359,7 +540,18 @@ impl DbcBuilder {
         let value_descriptions =
             crate::dbc::ValueDescriptionsList::from_map(value_descriptions_map);
 
-        Ok((version, nodes, messages, value_descriptions))
+        Ok((
+            version,
+            nodes,
+            messages,
+            value_descriptions,
+            self.attributes,
+            self.attribute_defaults,
+            self.attribute_values,
+            self.comments,
+            self.value_tables,
+            self.extended_multiplexing,
+        ))
     }
 
     /// Builds the `Dbc` from the builder.
@@ -379,12 +571,61 @@ impl DbcBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<Dbc> {
-        let (version, nodes, messages, value_descriptions) = self.extract_fields()?;
+        let (
+            version,
+            nodes,
+            messages,
+            value_descriptions,
+            attributes,
+            attribute_defaults,
+            attribute_values,
+            comments,
+            value_tables,
+            extended_multiplexing_builders,
+        ) = self.extract_fields()?;
         // Validate before construction
         // Get slice from MessageList for validation
         let messages_slice: std::vec::Vec<Message> = messages.iter().cloned().collect();
         Dbc::validate(&nodes, &messages_slice, Some(&value_descriptions))?;
-        Ok(Dbc::new(Some(version), nodes, messages, value_descriptions))
+
+        // Convert ExtendedMultiplexingBuilder to ExtendedMultiplexing
+        // ExtendedMultiplexing is defined in dbc.rs (as dbc_impl module) but not exported
+        // Since we're in the same module, we can access it via super::dbc_impl
+        use super::dbc_impl::ExtendedMultiplexing;
+        use crate::compat::{String, Vec};
+        let extended_multiplexing: std::vec::Vec<ExtendedMultiplexing> =
+            extended_multiplexing_builders
+                .into_iter()
+                .map(|em| {
+                    let signal_name =
+                        String::try_from(em.signal_name.as_str()).unwrap_or_else(|_| String::new());
+                    let multiplexer_switch = String::try_from(em.multiplexer_switch.as_str())
+                        .unwrap_or_else(|_| String::new());
+                    let mut value_ranges = Vec::<(u8, u8), 64>::new();
+                    for (min, max) in em.value_ranges {
+                        let _ = value_ranges.push((min, max));
+                    }
+                    ExtendedMultiplexing::new(
+                        em.message_id,
+                        signal_name,
+                        multiplexer_switch,
+                        value_ranges,
+                    )
+                })
+                .collect();
+
+        Ok(Dbc::new_with_extras(
+            Some(version),
+            nodes,
+            messages,
+            value_descriptions,
+            attributes,
+            attribute_defaults,
+            attribute_values,
+            comments,
+            value_tables,
+            extended_multiplexing,
+        ))
     }
 }
 

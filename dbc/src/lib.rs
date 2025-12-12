@@ -36,7 +36,11 @@ extern crate std;
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
 
+#[cfg(feature = "std")]
+mod attributes;
 mod byte_order;
+#[cfg(feature = "std")]
+mod comment;
 mod compat;
 mod dbc;
 mod error;
@@ -47,6 +51,8 @@ mod receivers;
 mod signal;
 #[cfg(feature = "std")]
 mod value_descriptions;
+#[cfg(feature = "std")]
+mod value_table;
 mod version;
 
 pub use byte_order::ByteOrder;
@@ -57,7 +63,7 @@ pub use error::{Error, Result};
 pub use message::{Message, SignalList};
 pub use nodes::Nodes;
 pub use receivers::Receivers;
-pub use signal::Signal;
+pub use signal::{MultiplexerIndicator, Signal};
 #[cfg(feature = "std")]
 pub use value_descriptions::{ValueDescriptions, ValueDescriptionsBuilder};
 pub use version::Version;

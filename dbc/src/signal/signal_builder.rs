@@ -1,5 +1,5 @@
 use crate::error::lang;
-use crate::signal::Signal;
+use crate::signal::{MultiplexerIndicator, Signal};
 use crate::{ByteOrder, Error, ReceiversBuilder, Result};
 
 type SignalFields = (
@@ -29,6 +29,7 @@ pub struct SignalBuilder {
     max: Option<f64>,
     unit: Option<String>,
     receivers: ReceiversBuilder,
+    multiplexer: MultiplexerIndicator,
 }
 
 impl SignalBuilder {
@@ -45,6 +46,7 @@ impl SignalBuilder {
             max: None,
             unit: None,
             receivers: ReceiversBuilder::new(),
+            multiplexer: MultiplexerIndicator::Normal,
         }
     }
 
@@ -114,6 +116,12 @@ impl SignalBuilder {
         self
     }
 
+    #[must_use]
+    pub fn multiplexer(mut self, multiplexer: MultiplexerIndicator) -> Self {
+        self.multiplexer = multiplexer;
+        self
+    }
+
     fn extract_fields(&self) -> Result<SignalFields> {
         let name = self.name.clone().ok_or(Error::Signal(lang::SIGNAL_NAME_EMPTY))?;
         let start_bit = self.start_bit.ok_or(Error::Signal(lang::SIGNAL_START_BIT_REQUIRED))?;
@@ -180,6 +188,7 @@ impl SignalBuilder {
             max: Some(max),
             unit,
             receivers,
+            multiplexer: self.multiplexer,
         })
     }
 }
@@ -216,6 +225,7 @@ impl SignalBuilder {
             max,
             unit.map(|u| u.into()),
             built_receivers,
+            self.multiplexer,
         ))
     }
 }

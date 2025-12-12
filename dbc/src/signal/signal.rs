@@ -2,6 +2,17 @@ use crate::compat::String;
 use crate::error::lang;
 use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result};
 
+/// Multiplexer indicator for signals
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MultiplexerIndicator {
+    /// Normal signal (not multiplexed)
+    Normal,
+    /// Multiplexer switch signal (M)
+    Switch,
+    /// Multiplexed signal (m0, m1, m2, etc.)
+    Multiplexed(u8),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
     name: String<{ MAX_NAME_SIZE }>,
@@ -15,6 +26,7 @@ pub struct Signal {
     max: f64,
     unit: Option<String<{ MAX_NAME_SIZE }>>,
     receivers: Receivers,
+    multiplexer: MultiplexerIndicator,
 }
 
 impl Signal {
@@ -63,6 +75,7 @@ impl Signal {
         max: f64,
         unit: Option<String<{ MAX_NAME_SIZE }>>,
         receivers: Receivers,
+        multiplexer: MultiplexerIndicator,
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
@@ -77,6 +90,34 @@ impl Signal {
             max,
             unit,
             receivers,
+            multiplexer,
+        }
+    }
+
+    /// Get the multiplexer indicator for this signal
+    #[must_use]
+    pub fn multiplexer(&self) -> MultiplexerIndicator {
+        self.multiplexer
+    }
+
+    /// Check if this signal is a multiplexer switch
+    #[must_use]
+    pub fn is_multiplexer_switch(&self) -> bool {
+        matches!(self.multiplexer, MultiplexerIndicator::Switch)
+    }
+
+    /// Check if this signal is multiplexed
+    #[must_use]
+    pub fn is_multiplexed(&self) -> bool {
+        matches!(self.multiplexer, MultiplexerIndicator::Multiplexed(_))
+    }
+
+    /// Get the multiplexer value if this signal is multiplexed
+    #[must_use]
+    pub fn multiplexer_value(&self) -> Option<u8> {
+        match self.multiplexer {
+            MultiplexerIndicator::Multiplexed(v) => Some(v),
+            _ => None,
         }
     }
 
@@ -284,38 +325,63 @@ impl Signal {
             .parse_identifier()
             .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_NAME_EMPTY))?;
 
-        // Skip whitespace (optional before colon) - handle multiplexer indicator
+        // Skip whitespace (optional before colon) - parse multiplexer indicator
         // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
-        // For now, we just skip whitespace and any potential multiplexer indicator
         parser.skip_newlines_and_spaces();
 
-        // Skip potential multiplexer indicator (m followed by number, or M)
-        // For simplicity, skip any 'm' or 'M' followed by digits
-        if parser.expect(b"m").is_ok() || parser.expect(b"M").is_ok() {
-            // Skip any digits that follow
+        // Parse multiplexer indicator
+        let multiplexer = if parser.expect(b"M").is_ok() {
+            // Multiplexer switch (M)
+            parser.skip_newlines_and_spaces();
+            MultiplexerIndicator::Switch
+        } else if parser.expect(b"m").is_ok() {
+            // Multiplexed signal (m followed by number)
+            // Parse the multiplexer switch value
+            let mut value = 0u8;
+            let mut has_digit = false;
             loop {
                 let _pos_before = parser.pos();
-                // Try to consume a digit
-                if parser.expect(b"0").is_ok()
-                    || parser.expect(b"1").is_ok()
-                    || parser.expect(b"2").is_ok()
-                    || parser.expect(b"3").is_ok()
-                    || parser.expect(b"4").is_ok()
-                    || parser.expect(b"5").is_ok()
-                    || parser.expect(b"6").is_ok()
-                    || parser.expect(b"7").is_ok()
-                    || parser.expect(b"8").is_ok()
-                    || parser.expect(b"9").is_ok()
-                {
-                    // Consumed a digit, continue
+                let digit = if parser.expect(b"0").is_ok() {
+                    Some(0)
+                } else if parser.expect(b"1").is_ok() {
+                    Some(1)
+                } else if parser.expect(b"2").is_ok() {
+                    Some(2)
+                } else if parser.expect(b"3").is_ok() {
+                    Some(3)
+                } else if parser.expect(b"4").is_ok() {
+                    Some(4)
+                } else if parser.expect(b"5").is_ok() {
+                    Some(5)
+                } else if parser.expect(b"6").is_ok() {
+                    Some(6)
+                } else if parser.expect(b"7").is_ok() {
+                    Some(7)
+                } else if parser.expect(b"8").is_ok() {
+                    Some(8)
+                } else if parser.expect(b"9").is_ok() {
+                    Some(9)
                 } else {
-                    // Not a digit, stop
+                    None
+                };
+                if let Some(d) = digit {
+                    has_digit = true;
+                    value = value.saturating_mul(10).saturating_add(d);
+                } else {
                     break;
                 }
             }
-            // Skip whitespace after multiplexer indicator
-            parser.skip_newlines_and_spaces();
-        }
+            if !has_digit {
+                // 'm' without a number - treat as normal signal
+                MultiplexerIndicator::Normal
+            } else {
+                parser.skip_newlines_and_spaces();
+                MultiplexerIndicator::Multiplexed(value)
+            }
+        } else {
+            // Normal signal (no multiplexer indicator)
+            MultiplexerIndicator::Normal
+        };
 
         // Expect colon
         parser.expect(b":").map_err(|_| Error::Expected("Expected colon"))?;
@@ -373,6 +439,7 @@ impl Signal {
             max,
             unit,
             receivers,
+            multiplexer,
         })
     }
 
@@ -569,6 +636,19 @@ impl Signal {
 
         result.push_str(" SG_ ");
         result.push_str(self.name());
+        // Add multiplexer indicator
+        match self.multiplexer {
+            MultiplexerIndicator::Switch => {
+                result.push_str(" M");
+            }
+            MultiplexerIndicator::Multiplexed(value) => {
+                result.push_str(" m");
+                result.push_str(&value.to_string());
+            }
+            MultiplexerIndicator::Normal => {
+                // No indicator for normal signals
+            }
+        }
         result.push_str(" : ");
         result.push_str(&self.start_bit().to_string());
         result.push('|');

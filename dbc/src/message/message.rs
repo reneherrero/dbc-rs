@@ -161,6 +161,7 @@ impl Message {
         // Check if any two signals overlap in the same message
         // Must account for byte order: little-endian signals extend forward,
         // big-endian signals extend backward from start_bit
+        // Multiplexed signals can overlap if they have different multiplexer values
         // We iterate over pairs without collecting to avoid alloc
         for (i, sig1) in signals.iter().enumerate() {
             let (sig1_lsb, sig1_msb) =
@@ -174,9 +175,31 @@ impl Message {
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
                 // lsb1 <= msb2 && lsb2 <= msb1
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
-                    return Err(Error::Validation(lang::SIGNAL_OVERLAP));
+                    // Allow overlap for multiplexed signals with different values
+                    let sig1_mux = sig1.multiplexer();
+                    let sig2_mux = sig2.multiplexer();
+                    let can_overlap = match (sig1_mux, sig2_mux) {
+                        (
+                            crate::MultiplexerIndicator::Multiplexed(v1),
+                            crate::MultiplexerIndicator::Multiplexed(v2),
+                        ) => v1 != v2,
+                        (crate::MultiplexerIndicator::Switch, _)
+                        | (_, crate::MultiplexerIndicator::Switch) => false, // Switch signals cannot overlap
+                        _ => false, // Normal signals cannot overlap
+                    };
+                    if !can_overlap {
+                        return Err(Error::Validation(lang::SIGNAL_OVERLAP));
+                    }
                 }
             }
+        }
+
+        // Validate multiplexer switches: must have exactly one switch signal per message
+        let switch_count = signals.iter().filter(|s| s.is_multiplexer_switch()).count();
+        if switch_count > 1 {
+            return Err(Error::Validation(
+                "Multiple multiplexer switches in message",
+            ));
         }
 
         Ok(())
