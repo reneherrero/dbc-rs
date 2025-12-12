@@ -1,4 +1,5 @@
-use crate::{DBC_KEYWORDS, Error, Result, error::lang};
+use crate::error::lang;
+use crate::{DBC_KEYWORDS, Error, Result};
 
 #[derive(Debug)]
 pub struct Parser<'a> {

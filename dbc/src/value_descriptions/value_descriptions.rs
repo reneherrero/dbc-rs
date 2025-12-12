@@ -1,5 +1,6 @@
-use crate::MAX_VALUE_DESCRIPTIONS;
 use std::{string::String, vec::Vec};
+
+use crate::MAX_VALUE_DESCRIPTIONS;
 
 /// Value descriptions for a signal.
 ///

@@ -3,9 +3,10 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+use core::{fmt, hash, str};
+
 use crate::compat::vec::Vec;
 use crate::error::{Error, Result};
-use core::{fmt, hash, str};
 
 #[cfg(feature = "alloc")]
 type Inner<const N: usize> = alloc::string::String;

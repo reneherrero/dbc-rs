@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
+
+use crate::error::Result;
 use crate::{
     Dbc, Message, MessageBuilder, MessageList, Nodes, NodesBuilder, Receivers, ReceiversBuilder,
-    SignalBuilder, ValueDescriptionsBuilder, Version, VersionBuilder, error::Result,
+    SignalBuilder, ValueDescriptionsBuilder, Version, VersionBuilder,
 };
-use std::collections::BTreeMap;
 
 /// Builder for constructing `Dbc` instances programmatically.
 ///

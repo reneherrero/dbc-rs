@@ -1,4 +1,6 @@
-use crate::{ByteOrder, Error, ReceiversBuilder, Result, error::lang, signal::Signal};
+use crate::error::lang;
+use crate::signal::Signal;
+use crate::{ByteOrder, Error, ReceiversBuilder, Result};
 
 type SignalFields = (
     String,

@@ -1,8 +1,7 @@
-use crate::{
-    error::lang,
-    {Error, Message, Result, Signal, SignalBuilder},
-};
 use std::string::String;
+
+use crate::error::lang;
+use crate::{Error, Message, Result, Signal, SignalBuilder};
 
 #[derive(Debug)]
 pub struct MessageBuilder {

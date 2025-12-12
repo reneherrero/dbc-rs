@@ -1,8 +1,6 @@
-use crate::{
-    Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Parser, Result,
-    compat::{String, Vec},
-    error::lang,
-};
+use crate::compat::{String, Vec};
+use crate::error::lang;
+use crate::{Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Parser, Result};
 
 /// Represents the receiver nodes for a signal in a DBC file.
 ///

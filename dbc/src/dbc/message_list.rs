@@ -1,4 +1,6 @@
-use crate::{Error, MAX_MESSAGES, Message, Result, compat::Vec, error::lang};
+use crate::compat::Vec;
+use crate::error::lang;
+use crate::{Error, MAX_MESSAGES, Message, Result};
 
 /// Encapsulates the messages array and count for a DBC
 ///

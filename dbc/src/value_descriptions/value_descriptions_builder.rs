@@ -1,4 +1,5 @@
-use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions, error::lang};
+use crate::error::lang;
+use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions};
 
 /// Builder for creating `ValueDescriptions` programmatically.
 ///

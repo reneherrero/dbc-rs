@@ -1,4 +1,5 @@
-use crate::{MAX_SIGNALS_PER_MESSAGE, Signal, compat::Vec};
+use crate::compat::Vec;
+use crate::{MAX_SIGNALS_PER_MESSAGE, Signal};
 
 /// Encapsulates the signals array for a message
 ///

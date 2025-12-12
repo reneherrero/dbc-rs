@@ -1,8 +1,6 @@
-use crate::{
-    BU_, Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result,
-    compat::{String, Vec},
-    error::lang,
-};
+use crate::compat::{String, Vec};
+use crate::error::lang;
+use crate::{BU_, Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result};
 
 /// Represents a collection of node (ECU) names from a DBC file.
 ///

@@ -1,5 +1,7 @@
-use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Nodes, Result, error::lang};
 use std::{string::String, vec::Vec};
+
+use crate::error::lang;
+use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Nodes, Result};
 
 /// Builder for creating `Nodes` programmatically.
 ///

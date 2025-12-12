@@ -1,8 +1,8 @@
+use crate::compat::String;
+use crate::error::lang;
+use crate::{ByteOrder, Error, MAX_NAME_SIZE, MAX_SIGNALS_PER_MESSAGE, Parser, Result, Signal};
+
 use super::SignalList;
-use crate::{
-    ByteOrder, Error, MAX_NAME_SIZE, MAX_SIGNALS_PER_MESSAGE, Parser, Result, Signal,
-    compat::String, error::lang,
-};
 
 /// Represents a CAN message in a DBC file.
 ///

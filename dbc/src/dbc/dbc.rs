@@ -1,11 +1,14 @@
+#[cfg(feature = "std")]
+use std::collections::BTreeMap;
+
+use crate::compat::Vec;
+use crate::error::lang;
 use crate::{
     Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, MessageList, Nodes, Parser, Result,
-    Signal, Version, compat::Vec, error::lang,
+    Signal, Version,
 };
 #[cfg(feature = "std")]
 use crate::{ValueDescriptions, ValueDescriptionsList};
-#[cfg(feature = "std")]
-use std::collections::BTreeMap;
 
 /// Represents a complete DBC (CAN database) file.
 ///

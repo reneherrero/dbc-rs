@@ -1,8 +1,6 @@
-use crate::{
-    MAX_NAME_SIZE, Parser, VERSION,
-    compat::{String, Vec},
-    error::{Error, Result, lang},
-};
+use crate::compat::{String, Vec};
+use crate::error::{Error, Result, lang};
+use crate::{MAX_NAME_SIZE, Parser, VERSION};
 
 /// Represents a version string from a DBC file.
 ///

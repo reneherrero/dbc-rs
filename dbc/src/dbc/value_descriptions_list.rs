@@ -1,8 +1,9 @@
-use crate::ValueDescriptions;
 use std::{
     collections::{BTreeMap, btree_map::Iter},
     string::String,
 };
+
+use crate::ValueDescriptions;
 
 /// Encapsulates the value descriptions map for a DBC
 ///

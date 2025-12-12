@@ -1,6 +1,6 @@
-use crate::{
-    ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result, compat::String, error::lang,
-};
+use crate::compat::String;
+use crate::error::lang;
+use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
