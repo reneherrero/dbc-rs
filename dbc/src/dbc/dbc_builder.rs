@@ -1,6 +1,6 @@
 use crate::{
-    Dbc, Message, MessageBuilder, MessageList, Nodes, NodesBuilder, ValueDescriptionsBuilder,
-    Version, VersionBuilder, error::Result,
+    Dbc, Message, MessageBuilder, MessageList, Nodes, NodesBuilder, Receivers, ReceiversBuilder,
+    SignalBuilder, ValueDescriptionsBuilder, Version, VersionBuilder, error::Result,
 };
 use std::collections::BTreeMap;
 
@@ -42,7 +42,7 @@ pub struct DbcBuilder {
     version: VersionBuilder,
     nodes: NodesBuilder,
     messages: Vec<MessageBuilder>,
-    value_descriptions: std::collections::BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder>,
+    value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder>,
 }
 
 impl DbcBuilder {
@@ -88,12 +88,7 @@ impl DbcBuilder {
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn from_dbc(dbc: &Dbc<'_>) -> Self {
-        #[cfg(feature = "std")]
-        use crate::{
-            MessageBuilder, NodesBuilder, ReceiversBuilder, SignalBuilder, VersionBuilder,
-        };
-
+    pub fn from_dbc(dbc: &Dbc) -> Self {
         // Convert version to builder (store builder, not final type)
         let version = if let Some(v) = dbc.version() {
             VersionBuilder::new().version(v.as_str())
@@ -102,10 +97,14 @@ impl DbcBuilder {
         };
 
         // Convert nodes to builder (store builder, not final type)
+        // Note: We unwrap here because we're converting from a valid Dbc, so names should already fit MAX_NAME_SIZE
         let nodes = {
             let mut builder = NodesBuilder::new();
             for node in dbc.nodes().iter() {
-                builder = builder.add_node(node);
+                // Convert mayheap::String to std::string::String for the builder
+                let node_str = node.to_string();
+                // Should never fail for valid Dbc - unwrap is safe
+                builder = builder.add_node(node_str);
             }
             builder
         };
@@ -140,12 +139,16 @@ impl DbcBuilder {
 
                     // Convert receivers using ReceiversBuilder
                     let receivers_builder = match sig.receivers() {
-                        crate::Receivers::Broadcast => ReceiversBuilder::new().broadcast(),
-                        crate::Receivers::None => ReceiversBuilder::new().none(),
-                        crate::Receivers::Nodes(_) => {
+                        Receivers::Broadcast => ReceiversBuilder::new().broadcast(),
+                        Receivers::None => ReceiversBuilder::new().none(),
+                        Receivers::Nodes(nodes) => {
                             let mut rb = ReceiversBuilder::new();
-                            for receiver in sig.receivers().iter() {
-                                rb = rb.add_node(receiver).unwrap(); // Can't fail for valid DBC
+                            // nodes is Vec<String<{MAX_NAME_SIZE}>>, iterate directly
+                            for receiver in nodes.iter() {
+                                // receiver is &String<{MAX_NAME_SIZE}>, clone it
+                                let receiver_str = receiver.clone();
+                                // Should never fail for valid Dbc - unwrap is safe
+                                rb = rb.add_node(receiver_str);
                             }
                             rb
                         }
@@ -297,19 +300,18 @@ impl DbcBuilder {
         let (_version, nodes, messages, value_descriptions) = {
             let version = self.version.build()?;
             let nodes = self.nodes.build()?;
-            let messages: Vec<Message<'_>> = self
+            let messages: std::vec::Vec<Message> = self
                 .messages
                 .into_iter()
                 .map(|builder| builder.build())
-                .collect::<Result<Vec<_>>>()?;
+                .collect::<Result<std::vec::Vec<_>>>()?;
             let mut value_descriptions_map: BTreeMap<
-                (Option<u32>, crate::Cow<'_, str>),
-                crate::ValueDescriptions<'_>,
+                (Option<u32>, String),
+                crate::ValueDescriptions,
             > = BTreeMap::new();
             for ((message_id, signal_name), vd_builder) in self.value_descriptions {
                 let vd = vd_builder.build()?;
-                let signal_name_cow: crate::Cow<'_, str> = crate::Cow::Owned(signal_name);
-                value_descriptions_map.insert((message_id, signal_name_cow), vd);
+                value_descriptions_map.insert((message_id, signal_name), vd);
             }
             let value_descriptions =
                 crate::dbc::ValueDescriptionsList::from_map(value_descriptions_map);
@@ -321,16 +323,14 @@ impl DbcBuilder {
 
         Ok(())
     }
-}
 
-impl<'a> DbcBuilder {
     fn extract_fields(
         self,
     ) -> Result<(
-        Version<'a>,
-        Nodes<'a>,
-        Vec<Message<'a>>,
-        crate::dbc::ValueDescriptionsList<'a>,
+        Version,
+        Nodes,
+        MessageList,
+        crate::dbc::ValueDescriptionsList,
     )> {
         // Build version
         let version = self.version.build()?;
@@ -339,22 +339,20 @@ impl<'a> DbcBuilder {
         let nodes = self.nodes.build()?;
 
         // Build messages
-        let messages: Vec<Message<'a>> = self
+        // Collect into a temporary Vec first, then convert to slice for MessageList::new
+        let messages_vec: std::vec::Vec<Message> = self
             .messages
             .into_iter()
             .map(|builder| builder.build())
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<std::vec::Vec<_>>>()?;
+        let messages = MessageList::new(&messages_vec)?;
 
         // Build value descriptions
-        let mut value_descriptions_map: BTreeMap<
-            (Option<u32>, crate::Cow<'a, str>),
-            crate::ValueDescriptions<'a>,
-        > = BTreeMap::new();
+        let mut value_descriptions_map: BTreeMap<(Option<u32>, String), crate::ValueDescriptions> =
+            BTreeMap::new();
         for ((message_id, signal_name), vd_builder) in self.value_descriptions {
             let vd = vd_builder.build()?;
-            // Convert String to Cow::Owned (no leak)
-            let signal_name_cow: crate::Cow<'a, str> = crate::Cow::Owned(signal_name);
-            value_descriptions_map.insert((message_id, signal_name_cow), vd);
+            value_descriptions_map.insert((message_id, signal_name), vd);
         }
         let value_descriptions =
             crate::dbc::ValueDescriptionsList::from_map(value_descriptions_map);
@@ -378,21 +376,13 @@ impl<'a> DbcBuilder {
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(self) -> Result<Dbc<'a>> {
+    pub fn build(self) -> Result<Dbc> {
         let (version, nodes, messages, value_descriptions) = self.extract_fields()?;
         // Validate before construction
-        Dbc::validate(&nodes, &messages, Some(&value_descriptions))?;
-        // Convert Vec to MessageList
-        let messages_list = MessageList::new(&messages).map_err(|e| match e {
-            crate::error::ParseError::Message(msg) => crate::Error::Validation(msg),
-            _ => crate::Error::Validation(crate::error::lang::NODES_TOO_MANY),
-        })?;
-        Ok(Dbc::new(
-            Some(version),
-            nodes,
-            messages_list,
-            value_descriptions,
-        ))
+        // Get slice from MessageList for validation
+        let messages_slice: std::vec::Vec<Message> = messages.iter().cloned().collect();
+        Dbc::validate(&nodes, &messages_slice, Some(&value_descriptions))?;
+        Ok(Dbc::new(Some(version), nodes, messages, value_descriptions))
     }
 }
 
@@ -460,12 +450,10 @@ mod tests {
             .add_signal(signal);
 
         let result = DbcBuilder::new().nodes(nodes).add_message(message).build();
-        // VersionBuilder requires a version, so this should fail
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            crate::Error::Version(_) => {}
-            _ => panic!("Expected Version error"),
-        }
+        // VersionBuilder now allows empty version, so this should succeed
+        assert!(result.is_ok());
+        let dbc = result.unwrap();
+        assert_eq!(dbc.version().unwrap().as_str(), "");
     }
 
     #[test]
@@ -635,13 +623,9 @@ mod tests {
     #[test]
     fn test_dbc_builder_validate_missing_version() {
         let nodes = NodesBuilder::new().add_nodes(["ECM"]);
-        // VersionBuilder requires a version, so validation should fail
+        // VersionBuilder now allows empty version, so validation should succeed
         let result = DbcBuilder::new().nodes(nodes).validate();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            crate::Error::Version(_) => {}
-            _ => panic!("Expected Version error"),
-        }
+        assert!(result.is_ok());
     }
 
     #[test]

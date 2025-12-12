@@ -1,6 +1,8 @@
 use crate::{
-    error, {Error, Message, Result, Signal, SignalBuilder},
+    error::lang,
+    {Error, Message, Result, Signal, SignalBuilder},
 };
+use std::string::String;
 
 #[derive(Debug)]
 pub struct MessageBuilder {
@@ -71,14 +73,10 @@ impl MessageBuilder {
     }
 
     fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<SignalBuilder>)> {
-        let id = self.id.ok_or(Error::Message(error::lang::MESSAGE_ID_REQUIRED.to_string()))?;
-        let name = self.name.ok_or(Error::Message(error::lang::MESSAGE_NAME_EMPTY.to_string()))?;
-        let dlc = self.dlc.ok_or(Error::Message(
-            error::lang::MESSAGE_DLC_REQUIRED.to_string(),
-        ))?;
-        let sender = self.sender.ok_or(Error::Message(
-            error::lang::MESSAGE_SENDER_EMPTY.to_string(),
-        ))?;
+        let id = self.id.ok_or(Error::Message(lang::MESSAGE_ID_REQUIRED.to_string()))?;
+        let name = self.name.ok_or(Error::Message(lang::MESSAGE_NAME_EMPTY.to_string()))?;
+        let dlc = self.dlc.ok_or(Error::Message(lang::MESSAGE_DLC_REQUIRED.to_string()))?;
+        let sender = self.sender.ok_or(Error::Message(lang::MESSAGE_SENDER_EMPTY.to_string()))?;
         Ok((id, name, dlc, sender, self.signals))
     }
 
@@ -86,16 +84,12 @@ impl MessageBuilder {
     pub fn validate(mut self) -> Result<Self> {
         // Extract fields (this consumes signals, but we'll reconstruct)
         let signals_clone = self.signals.clone();
-        let id = self.id.ok_or(Error::Message(error::lang::MESSAGE_ID_REQUIRED.to_string()))?;
-        let name = self.name.ok_or(Error::Message(error::lang::MESSAGE_NAME_EMPTY.to_string()))?;
-        let dlc = self.dlc.ok_or(Error::Message(
-            error::lang::MESSAGE_DLC_REQUIRED.to_string(),
-        ))?;
-        let sender = self.sender.ok_or(Error::Message(
-            error::lang::MESSAGE_SENDER_EMPTY.to_string(),
-        ))?;
+        let id = self.id.ok_or(Error::Message(lang::MESSAGE_ID_REQUIRED.to_string()))?;
+        let name = self.name.ok_or(Error::Message(lang::MESSAGE_NAME_EMPTY.to_string()))?;
+        let dlc = self.dlc.ok_or(Error::Message(lang::MESSAGE_DLC_REQUIRED.to_string()))?;
+        let sender = self.sender.ok_or(Error::Message(lang::MESSAGE_SENDER_EMPTY.to_string()))?;
         // Build signals for validation using cloned signals
-        let built_signals: Vec<Signal<'static>> = signals_clone
+        let built_signals: Vec<Signal> = signals_clone
             .into_iter()
             .map(|sig_builder| sig_builder.build())
             .collect::<Result<Vec<_>>>()?;
@@ -117,23 +111,23 @@ impl Default for MessageBuilder {
     }
 }
 
-impl<'a> MessageBuilder {
-    pub fn build(self) -> Result<Message<'a>> {
+impl MessageBuilder {
+    pub fn build(self) -> Result<Message> {
         let (id, name, dlc, sender, signals) = self.extract_fields()?;
         // Build all signals first
-        let built_signals: Vec<Signal<'a>> = signals
+        let built_signals: Vec<Signal> = signals
             .into_iter()
             .map(|sig_builder| sig_builder.build())
             .collect::<Result<Vec<_>>>()?;
         // Validate before construction
         Message::validate_internal(id, &name, dlc, &sender, &built_signals)?;
-        // Use owned Vec directly (no leak needed)
-        // SignalList::from_signals_vec will take ownership
+        // Convert name and sender to String<{ MAX_NAME_SIZE }>
+
         Ok(Message::new(
             id,
-            crate::Cow::Owned(name),
+            name.into(),
             dlc,
-            crate::Cow::Owned(sender),
+            sender.into(),
             built_signals,
         ))
     }

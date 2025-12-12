@@ -34,24 +34,61 @@ if ! rustup run stable cargo clippy --version &> /dev/null; then
     }
 fi
 
+# Install embedded target if not already installed
+echo -e "${YELLOW}Ensuring embedded target is available...${NC}"
+if ! rustup target list --installed | grep -q "thumbv7em-none-eabihf"; then
+    echo -e "${YELLOW}Installing embedded target thumbv7em-none-eabihf...${NC}"
+    rustup target add thumbv7em-none-eabihf || {
+        echo -e "${RED}Error: Failed to install embedded target.${NC}"
+        exit 1
+    }
+fi
+
 # Track if any checks failed
 FAILED=0
 
-# Run clippy on dbc-rs using latest stable (for better linting)
-echo -e "\n${YELLOW}Running clippy on dbc-rs (using latest stable)...${NC}"
-if rustup run stable cargo clippy --all-targets -p dbc-rs -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed${NC}"
+# Run clippy on dbc-rs using latest stable (std feature)
+echo -e "\n${YELLOW}Running clippy on dbc-rs (std feature)...${NC}"
+if rustup run stable cargo clippy --lib --bins -p dbc-rs -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ dbc-rs clippy check passed (std)${NC}"
 else
-    echo -e "${RED}✗ dbc-rs clippy check failed${NC}"
+    echo -e "${RED}✗ dbc-rs clippy check failed (std)${NC}"
     FAILED=1
 fi
 
-# Run clippy on dbc-rs in no_std mode
-echo -e "\n${YELLOW}Running clippy on dbc-rs (no_std mode)...${NC}"
-if rustup run stable cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs no_std clippy check passed${NC}"
+# Run clippy on dbc-rs with alloc feature
+echo -e "\n${YELLOW}Running clippy on dbc-rs (alloc feature)...${NC}"
+if rustup run stable cargo clippy --no-default-features --features alloc -p dbc-rs --lib --bins -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ dbc-rs clippy check passed (alloc)${NC}"
 else
-    echo -e "${RED}✗ dbc-rs no_std clippy check failed${NC}"
+    echo -e "${RED}✗ dbc-rs clippy check failed (alloc)${NC}"
+    FAILED=1
+fi
+
+# Run clippy on dbc-rs with heapless feature (x86_64)
+echo -e "\n${YELLOW}Running clippy on dbc-rs (heapless x86_64)...${NC}"
+if rustup run stable cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ dbc-rs clippy check passed (heapless x86_64)${NC}"
+else
+    echo -e "${RED}✗ dbc-rs clippy check failed (heapless x86_64)${NC}"
+    FAILED=1
+fi
+
+# Run clippy on dbc-rs with heapless feature (embedded)
+echo -e "\n${YELLOW}Running clippy on dbc-rs (heapless embedded)...${NC}"
+if rustup run stable cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ dbc-rs clippy check passed (heapless embedded)${NC}"
+else
+    echo -e "${RED}✗ dbc-rs clippy check failed (heapless embedded)${NC}"
+    FAILED=1
+fi
+
+# Run clippy on dbc-rs with alloc feature (embedded)
+echo -e "\n${YELLOW}Running clippy on dbc-rs (alloc embedded)...${NC}"
+if rustup run stable cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ dbc-rs clippy check passed (alloc embedded)${NC}"
+else
+    echo -e "${RED}✗ dbc-rs clippy check failed (alloc embedded)${NC}"
     FAILED=1
 fi
 

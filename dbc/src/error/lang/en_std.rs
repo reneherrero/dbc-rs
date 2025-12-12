@@ -10,11 +10,7 @@ pub const DBC_ERROR_CATEGORY: &str = "DBC Error";
 pub const VERSION_ERROR_CATEGORY: &str = "Version Error";
 pub const NODES_ERROR_CATEGORY: &str = "Nodes Error";
 
-// Version-related error messages
-pub const VERSION_EMPTY: &str = "Empty version string";
-
 // DBC file-related error messages
-pub const INVALID_UTF8: &str = "Invalid UTF-8";
 pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &str =
     "Value description references non-existent message";
 pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &str =

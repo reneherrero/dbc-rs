@@ -1,6 +1,8 @@
-use std::collections::{BTreeMap, btree_map::Iter};
-
-use crate::{Cow, value_descriptions::ValueDescriptions};
+use crate::ValueDescriptions;
+use std::{
+    collections::{BTreeMap, btree_map::Iter},
+    string::String,
+};
 
 /// Encapsulates the value descriptions map for a DBC
 ///
@@ -8,14 +10,14 @@ use crate::{Cow, value_descriptions::ValueDescriptions};
 /// They can be message-specific (keyed by message_id and signal_name) or global
 /// (keyed by None and signal_name, applying to all signals with that name).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct ValueDescriptionsList<'a> {
-    value_descriptions: BTreeMap<(Option<u32>, Cow<'a, str>), ValueDescriptions<'a>>,
+pub struct ValueDescriptionsList {
+    value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptions>,
 }
 
-impl<'a> ValueDescriptionsList<'a> {
+impl ValueDescriptionsList {
     /// Create ValueDescriptionsList from a BTreeMap
     pub(crate) fn from_map(
-        value_descriptions: BTreeMap<(Option<u32>, Cow<'a, str>), ValueDescriptions<'a>>,
+        value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptions>,
     ) -> Self {
         Self { value_descriptions }
     }
@@ -42,7 +44,7 @@ impl<'a> ValueDescriptionsList<'a> {
     /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
-    pub fn iter(&self) -> impl Iterator<Item = ((Option<u32>, &str), &ValueDescriptions<'a>)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = ((Option<u32>, &str), &ValueDescriptions)> + '_ {
         ValueDescriptionsListIter {
             entries: self.value_descriptions.iter(),
         }
@@ -119,7 +121,7 @@ impl<'a> ValueDescriptionsList<'a> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn for_signal(&self, message_id: u32, signal_name: &str) -> Option<&ValueDescriptions<'a>> {
+    pub fn for_signal(&self, message_id: u32, signal_name: &str) -> Option<&ValueDescriptions> {
         // First try to find a specific entry for this message_id
         // Then fall back to a global entry (None message_id) that applies to all messages
         // Priority: message-specific > global
@@ -128,7 +130,7 @@ impl<'a> ValueDescriptionsList<'a> {
         self.value_descriptions
             .iter()
             .find(|((id, name), _)| {
-                name.as_ref() == signal_name
+                name.as_str() == signal_name
                     && match id {
                         Some(specific_id) => *specific_id == message_id,
                         None => false, // Check global entries separately
@@ -139,22 +141,22 @@ impl<'a> ValueDescriptionsList<'a> {
                 // Fall back to global entry (None message_id)
                 self.value_descriptions
                     .iter()
-                    .find(|((id, name), _)| id.is_none() && name.as_ref() == signal_name)
+                    .find(|((id, name), _)| id.is_none() && name.as_str() == signal_name)
                     .map(|(_, v)| v)
             })
     }
 }
 
 /// Iterator over value descriptions in a ValueDescriptionsList
-struct ValueDescriptionsListIter<'a, 'b> {
-    entries: Iter<'b, (Option<u32>, Cow<'a, str>), ValueDescriptions<'a>>,
+struct ValueDescriptionsListIter<'a> {
+    entries: Iter<'a, (Option<u32>, String), ValueDescriptions>,
 }
 
-impl<'a, 'b> Iterator for ValueDescriptionsListIter<'a, 'b> {
-    type Item = ((Option<u32>, &'b str), &'b ValueDescriptions<'a>);
+impl<'a> Iterator for ValueDescriptionsListIter<'a> {
+    type Item = ((Option<u32>, &'a str), &'a ValueDescriptions);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.entries.next().map(|(k, v)| ((k.0, k.1.as_ref()), v))
+        self.entries.next().map(|(k, v)| ((k.0, k.1.as_str()), v))
     }
 }

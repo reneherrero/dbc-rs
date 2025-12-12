@@ -1,11 +1,12 @@
 use crate::{
-    ByteOrder, Cow, Parser, Receivers,
-    error::{ParseError, ParseResult},
+    ByteOrder, Error, MAX_NAME_SIZE, ParseError, ParseResult, Parser, Receivers, Result,
+    error::lang,
 };
+use mayheap::String;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Signal<'a> {
-    name: Cow<'a, str>,
+pub struct Signal {
+    name: String<{ MAX_NAME_SIZE }>,
     start_bit: u16,
     length: u16,
     byte_order: ByteOrder,
@@ -14,18 +15,12 @@ pub struct Signal<'a> {
     offset: f64,
     min: f64,
     max: f64,
-    unit: Option<Cow<'a, str>>,
-    receivers: Receivers<'a>,
+    unit: Option<String<{ MAX_NAME_SIZE }>>,
+    receivers: Receivers,
 }
 
-impl<'a> Signal<'a> {
-    pub(crate) fn validate(
-        name: &str,
-        length: u16,
-        min: f64,
-        max: f64,
-    ) -> crate::error::Result<()> {
-        use crate::error::{Error, lang};
+impl Signal {
+    pub(crate) fn validate(name: &str, length: u16, min: f64, max: f64) -> Result<()> {
         if name.trim().is_empty() {
             return Err(Error::Validation(lang::SIGNAL_NAME_EMPTY));
         }
@@ -59,7 +54,7 @@ impl<'a> Signal<'a> {
     #[cfg(feature = "std")]
     #[allow(clippy::too_many_arguments)] // Internal method, builder pattern is the public API
     pub(crate) fn new(
-        name: impl Into<Cow<'a, str>>,
+        name: String<{ MAX_NAME_SIZE }>,
         start_bit: u16,
         length: u16,
         byte_order: ByteOrder,
@@ -68,12 +63,12 @@ impl<'a> Signal<'a> {
         offset: f64,
         min: f64,
         max: f64,
-        unit: Option<impl Into<Cow<'a, str>>>,
-        receivers: Receivers<'a>,
+        unit: Option<String<{ MAX_NAME_SIZE }>>,
+        receivers: Receivers,
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
-            name: name.into(),
+            name,
             start_bit,
             length,
             byte_order,
@@ -82,7 +77,7 @@ impl<'a> Signal<'a> {
             offset,
             min,
             max,
-            unit: unit.map(|u| u.into()),
+            unit,
             receivers,
         }
     }
@@ -92,17 +87,13 @@ impl<'a> Signal<'a> {
         let start_bit = match parser.parse_u32() {
             Ok(v) => v as u16,
             Err(_) => {
-                return Err(ParseError::Signal(
-                    crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT,
-                ));
+                return Err(ParseError::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
             }
         };
 
         // Validate start_bit range
         if start_bit > 511 {
-            return Err(ParseError::Signal(
-                crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT,
-            ));
+            return Err(ParseError::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
         }
 
         // Expect pipe
@@ -111,7 +102,7 @@ impl<'a> Signal<'a> {
         // Parse length
         let length = parser
             .parse_u32()
-            .map_err(|_| ParseError::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_LENGTH))?
+            .map_err(|_| ParseError::Signal(lang::SIGNAL_PARSE_INVALID_LENGTH))?
             as u16;
 
         // Expect @
@@ -172,9 +163,7 @@ impl<'a> Signal<'a> {
                     0.0 // Empty factor
                 } else {
                     // Position changed but parsing failed - invalid format
-                    return Err(ParseError::Signal(
-                        crate::error::lang::SIGNAL_PARSE_INVALID_FACTOR,
-                    ));
+                    return Err(ParseError::Signal(lang::SIGNAL_PARSE_INVALID_FACTOR));
                 }
             }
         };
@@ -270,16 +259,14 @@ impl<'a> Signal<'a> {
         Ok((min, max))
     }
 
-    fn parse_unit<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Option<&'a str>> {
-        const MAX_UNIT_LENGTH: u16 = 256;
-
+    fn parse_unit(parser: &mut Parser) -> ParseResult<Option<String<{ MAX_NAME_SIZE }>>> {
         // Expect opening quote
         parser
             .expect(b"\"")
             .map_err(|_| ParseError::Expected("Expected opening quote"))?;
 
         // Use take_until_quote to read the unit (allow any printable characters)
-        let unit_bytes = parser.take_until_quote(false, MAX_UNIT_LENGTH).map_err(|e| match e {
+        let unit_bytes = parser.take_until_quote(false, MAX_NAME_SIZE).map_err(|e| match e {
             ParseError::MaxStrLength(_) => {
                 ParseError::Signal(crate::error::lang::SIGNAL_PARSE_UNIT_TOO_LONG)
             }
@@ -287,19 +274,17 @@ impl<'a> Signal<'a> {
         })?;
 
         // Convert bytes to string slice
-        let unit_str = core::str::from_utf8(unit_bytes)
-            .map_err(|_| ParseError::Expected("Invalid UTF-8 in unit"))?;
+        let unit = core::str::from_utf8(unit_bytes)
+            .map_err(|_e| ParseError::Expected(lang::INVALID_UTF8))?;
 
-        let unit = if unit_str.is_empty() {
-            None
-        } else {
-            Some(unit_str)
-        };
+        let unit: String<{ MAX_NAME_SIZE }> = String::try_from(unit)
+            .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
 
+        let unit = if unit.is_empty() { None } else { Some(unit) };
         Ok(unit)
     }
 
-    pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
         // Signal parsing must always start with "SG_" keyword
         parser
             .expect(crate::SG_.as_bytes())
@@ -381,14 +366,17 @@ impl<'a> Signal<'a> {
         let receivers = Receivers::parse(parser)?;
 
         // Validate before construction
-        Self::validate(name, length, min, max).map_err(|e| match e {
-            crate::error::Error::Validation(msg) => crate::error::ParseError::Signal(msg),
-            _ => crate::error::ParseError::Signal("Validation error"),
+        Self::validate(name, length, min, max).map_err(|e| {
+            crate::error::map_val_error(e, ParseError::Signal, || {
+                ParseError::Signal(crate::error::lang::SIGNAL_ERROR_PREFIX)
+            })
         })?;
+
+        let name = crate::validate_name(name)?;
+
         // Construct directly (validation already done)
-        // Value descriptions are stored in Dbc, not in Signal
         Ok(Self {
-            name: Cow::Borrowed(name),
+            name,
             start_bit,
             length,
             byte_order,
@@ -397,7 +385,7 @@ impl<'a> Signal<'a> {
             offset,
             min,
             max,
-            unit: unit.map(Cow::Borrowed),
+            unit,
             receivers,
         })
     }
@@ -464,7 +452,7 @@ impl<'a> Signal<'a> {
 
     #[inline]
     #[must_use]
-    pub fn receivers(&self) -> &Receivers<'a> {
+    pub fn receivers(&self) -> &Receivers {
         &self.receivers
     }
 
@@ -504,9 +492,7 @@ impl<'a> Signal<'a> {
     /// assert_eq!(rpm, 2000.0);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn decode(&self, data: &[u8]) -> Result<f64, crate::error::Error> {
-        use crate::error::{Error, lang};
-
+    pub fn decode(&self, data: &[u8]) -> Result<f64> {
         let start_bit = self.start_bit as usize;
         let length = self.length as usize;
         let end_byte = (start_bit + length - 1) / 8;
@@ -592,8 +578,8 @@ impl<'a> Signal<'a> {
 
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> String {
-        let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
+    pub fn to_dbc_string(&self) -> std::string::String {
+        let mut result = std::string::String::with_capacity(100); // Pre-allocate reasonable capacity
 
         result.push_str(" SG_ ");
         result.push_str(self.name());
@@ -619,16 +605,17 @@ impl<'a> Signal<'a> {
 
         // Factor and offset: (factor,offset)
         result.push_str(" (");
-        result.push_str(&format!("{}", self.factor()));
+        use core::fmt::Write;
+        write!(result, "{}", self.factor()).unwrap();
         result.push(',');
-        result.push_str(&format!("{}", self.offset()));
+        write!(result, "{}", self.offset()).unwrap();
         result.push(')');
 
         // Min and max: [min|max]
         result.push_str(" [");
-        result.push_str(&format!("{}", self.min()));
+        write!(result, "{}", self.min()).unwrap();
         result.push('|');
-        result.push_str(&format!("{}", self.max()));
+        write!(result, "{}", self.max()).unwrap();
         result.push(']');
 
         // Unit: "unit" or ""
@@ -654,7 +641,7 @@ impl<'a> Signal<'a> {
                         if i > 0 {
                             result.push(' ');
                         }
-                        result.push_str(node);
+                        result.push_str(node.as_str());
                     }
                 }
             }
@@ -668,10 +655,10 @@ impl<'a> Signal<'a> {
 }
 
 // Custom Eq implementation that handles f64 (treats NaN as equal to NaN)
-impl<'a> Eq for Signal<'a> {}
+impl Eq for Signal {}
 
 // Custom Hash implementation that handles f64 (treats NaN consistently)
-impl<'a> core::hash::Hash for Signal<'a> {
+impl core::hash::Hash for Signal {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         self.start_bit.hash(state);
@@ -689,7 +676,7 @@ impl<'a> core::hash::Hash for Signal<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> core::fmt::Display for Signal<'a> {
+impl core::fmt::Display for Signal {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_dbc_string())
     }
@@ -703,11 +690,6 @@ mod tests {
         Parser,
         error::{ParseError, lang},
     };
-    #[cfg(not(feature = "std"))]
-    use alloc::format;
-
-    // Note: Builder tests have been moved to signal_builder.rs
-    // This module only tests Signal parsing and direct API usage
 
     #[test]
     fn test_parse_valid_signal() {
@@ -724,9 +706,10 @@ mod tests {
         assert_eq!(sig.min(), 0.);
         assert_eq!(sig.max(), 8000.);
         assert_eq!(sig.unit(), Some("rpm"));
-        // Check receivers using iter_nodes
+        // Check receivers using iter
         let mut receivers_iter = sig.receivers().iter();
-        assert_eq!(receivers_iter.next(), Some("TCM"));
+        let receiver1 = receivers_iter.next().unwrap();
+        assert_eq!(receiver1.as_str(), "TCM");
         assert_eq!(receivers_iter.next(), None);
     }
 
@@ -763,10 +746,12 @@ mod tests {
         assert_eq!(sig.min(), -40.);
         assert_eq!(sig.max(), 215.);
         assert_eq!(sig.unit(), Some("°C"));
-        // Check receivers using iter_nodes
+        // Check receivers using iter
         let mut receivers_iter = sig.receivers().iter();
-        assert_eq!(receivers_iter.next(), Some("TCM"));
-        assert_eq!(receivers_iter.next(), Some("BCM"));
+        let receiver1 = receivers_iter.next().unwrap();
+        assert_eq!(receiver1.as_str(), "TCM");
+        let receiver2 = receivers_iter.next().unwrap();
+        assert_eq!(receiver2.as_str(), "BCM");
         assert_eq!(receivers_iter.next(), None);
     }
 
@@ -906,7 +891,6 @@ mod tests {
         use super::*;
 
         #[test]
-        #[cfg(feature = "std")] // to_dbc_string is only available with std
         fn test_signal_to_dbc_string_round_trip() {
             // Test round-trip: parse -> to_dbc_string -> parse
             let test_cases = vec![
@@ -953,8 +937,4 @@ mod tests {
             }
         }
     }
-
-    // Note: Helper parsing functions (parse_name_and_prefix, parse_position, etc.) are now internal
-    // and use the Parser directly. Their functionality is tested through Signal::parse tests above.
-    // All tests for these helper methods have been removed as they are implementation details.
 }

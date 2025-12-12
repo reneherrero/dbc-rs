@@ -14,7 +14,7 @@ The minimum supported Rust version is **1.85.0**. The crate is tested against th
 
 ## Features
 
-- ✅ **Zero dependencies** - Pure Rust implementation
+- ✅ **Minimal dependencies** - Pure Rust implementation
 - ✅ **no_std support** - Works on embedded targets without the standard library
 - ✅ **Full editing & writing** - Modify and save DBC files with the same structs
 - ✅ **Feature flag control** - Optional `std` feature for desktop conveniences
@@ -43,23 +43,37 @@ The crate supports multiple levels of functionality through feature flags:
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| *(none)* | ❌ | **`no_std`**: Parsing with `alloc` crate. Uses `Vec` for dynamic collections (heap-allocated). |
-| `std`   | ✅ | Adds standard library integration (I/O helpers, file operations, builders, string formatting). |
+| `alloc` | ❌ | **REQUIRED** (unless using `heapless`): Enables heap-allocated collections via `alloc` crate. Uses `Vec` for dynamic collections. Requires global allocator. |
+| `heapless` | ❌ | **REQUIRED** (unless using `alloc`): Enables stack-allocated, bounded collections (no `alloc` needed). Uses fixed-size arrays with capacity limits. |
+| `std` | ✅ | Includes `alloc` + standard library features (I/O helpers, file operations, builders, string formatting). |
+
+**⚠️ Important:** You **MUST** enable either `alloc` OR `heapless` (or use `std` which includes `alloc`). The library will not compile without one of these features.
 
 **Feature Hierarchy:**
-- **`no_std`** (no features): Parsing with `alloc` crate, uses `Vec` for dynamic collections
-- **`std`**: Adds I/O helpers, file operations, builders, string formatting
+- **`alloc`**: Heap-allocated `Vec` collections (requires global allocator). Choose this for systems with dynamic memory allocation.
+- **`heapless`**: Stack-allocated, bounded collections (no allocator needed). Choose this for embedded systems without allocators. Capacity limits apply.
+- **`std`** (default): Includes `alloc` + std library features (builders, I/O, formatting). Best for desktop/server applications.
+
+**Note:** You use either `alloc` OR `heapless`, not both. The `std` feature automatically includes `alloc`.
 
 **Examples:**
 
 ```toml
-# Default: std enabled
+# Default: std enabled (includes alloc)
 [dependencies]
 dbc-rs = "1"
 
-# Pure no_std (no std)
+# no_std with heap-allocated collections (requires global allocator)
 [dependencies]
-dbc-rs = { version = "1", default-features = false }
+dbc-rs = { version = "1", default-features = false, features = ["alloc"] }
+
+# no_std with stack-allocated, bounded collections (no allocator needed)
+[dependencies]
+dbc-rs = { version = "1", default-features = false, features = ["heapless"] }
+
+# ❌ This will NOT compile - you must enable either alloc or heapless
+# [dependencies]
+# dbc-rs = { version = "1", default-features = false }
 ```
 
 ## DBC Format Feature Support
@@ -81,16 +95,15 @@ dbc-rs = { version = "1", default-features = false }
 
 All signal features are fully supported: name, start bit, length, byte order (`@0`/`@1`), sign (`+`/`-`), factor, offset, min/max values, unit, and receivers (Broadcast `*`, specific nodes, or None).
 
-### Extended Features ❌
-
-Not yet implemented: Value tables (`VAL_TABLE_`), structured comments (`CM_`), attributes (`BA_DEF_`, `BA_DEF_DEF_`, `BA_`), signal groups (`SIG_GROUP_`), environment variables (`EV_`), signal multiplexing, and advanced node relationships.
-
 ### Advanced Features
 
 | Feature | Parse | Write | Notes |
 |---------|-------|-------|-------|
 | 29-bit Extended CAN IDs | ✅ | ✅ | Validated (range: 2048-536870911) |
-| Signal multiplexing | ❌ | ❌ | |
+
+### Extended Features ❌
+
+Not yet implemented: Value tables (`VAL_TABLE_`), structured comments (`CM_`), attributes (`BA_DEF_`, `BA_DEF_DEF_`, `BA_`), signal groups (`SIG_GROUP_`), environment variables (`EV_`), signal multiplexing, and advanced node relationships.
 
 ## Example DBC File
 
@@ -144,13 +157,13 @@ if let Some(msg) = dbc.messages().iter().find(|m| m.id() == 256) {
 ### Creating and Modifying DBC Files
 
 ```rust
-use dbc_rs::{Dbc, Version, Nodes, Message, Signal, ByteOrder, Receivers};
+use dbc_rs::{Dbc, VersionBuilder, NodesBuilder, MessageBuilder, SignalBuilder, ByteOrder, ReceiversBuilder};
 
 // Create from scratch
-let version = Version::builder().major(1).minor(0).build()?;
-let nodes = Nodes::builder().add_node("ECM").add_node("TCM").build();
+let version = VersionBuilder::new().version("1.0").build()?;
+let nodes = NodesBuilder::new().add_node("ECM").add_node("TCM").build()?;
 
-let signal = Signal::builder()
+let signal = SignalBuilder::new()
     .name("EngineSpeed")
     .start_bit(0)
     .length(16)
@@ -161,10 +174,10 @@ let signal = Signal::builder()
     .min(0.0)
     .max(8000.0)
     .unit("rpm")
-    .receivers(Receivers::Broadcast)
+    .receivers(ReceiversBuilder::new().broadcast())
     .build()?;
 
-let message = Message::builder()
+let message = MessageBuilder::new()
     .id(256)
     .name("EngineData")
     .dlc(8)
@@ -172,7 +185,7 @@ let message = Message::builder()
     .add_signal(signal)
     .build()?;
 
-let dbc = Dbc::builder()
+let dbc = DbcBuilder::new()
     .version(version)
     .nodes(nodes)
     .add_message(message)
@@ -228,78 +241,31 @@ let modified_dbc = DbcBuilder::new(Some(&dbc))
     .build()?;
 ```
 
-### no_std Usage (Parsing Only)
+### no_std Usage
 
 ```rust
 use dbc_rs::Dbc;
 
-// Parse from bytes (no file I/O needed)
-let dbc_bytes = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM\n SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"";
+// Parse from string slice or bytes
+let dbc = Dbc::parse(dbc_content)?;
+// or
 let dbc = Dbc::parse_bytes(dbc_bytes)?;
 
-// Access data (read-only)
+// Access data (read-only in no_std, builders require std)
 let version = dbc.version();
 let messages = dbc.messages();
-
-// Note: to_dbc_string() requires std feature
-// #[cfg(feature = "std")]
-// let saved = dbc.to_dbc_string();
 ```
 
-### std Usage (With Builders)
-
-```rust
-use dbc_rs::{Dbc, MessageBuilder, SignalBuilder, ByteOrder, Receivers};
-
-// Parse existing DBC
-let dbc = Dbc::parse(&content)?;
-
-// Create new message with builder
-let signal = SignalBuilder::new()
-    .name("RPM")
-    .start_bit(0)
-    .length(16)
-    .byte_order(ByteOrder::BigEndian)
-    .unsigned(true)
-    .factor(0.25)
-    .offset(0.0)
-    .min(0.0)
-    .max(8000.0)
-    .unit("rpm")
-    .receivers(Receivers::Broadcast)
-    .build()?;
-
-let message = MessageBuilder::new()
-    .id(256)
-    .name("EngineData")
-    .dlc(8)
-    .sender("ECM")
-    .add_signal(signal)
-    .build()?;
-
-// Format to string
-let dbc_string = dbc.to_dbc_string();
-```
-
-### std Usage (With File I/O)
+### File I/O (requires `std` feature)
 
 ```rust
 use dbc_rs::Dbc;
-use std::io::Read;
 
-// Read from file - you manage the buffer
-let mut buffer = Vec::new();
-std::fs::File::open("example.dbc")?
-    .read_to_end(&mut buffer)
-    .map_err(|e| dbc_rs::Error::Dbc(format!("{}", e)))?;
-let dbc = Dbc::parse_bytes(&buffer)?;
+// Read from file
+let content = std::fs::read_to_string("example.dbc")?;
+let dbc = Dbc::parse(&content)?;
 
-// Or read directly with std::fs::read
-let buffer = std::fs::read("example.dbc")
-    .map_err(|e| dbc_rs::Error::Dbc(format!("{}", e)))?;
-let dbc = Dbc::parse_bytes(&buffer)?;
-
-// All std features available
+// Save to file
 let dbc_string = dbc.to_dbc_string();
 std::fs::write("output.dbc", dbc_string)?;
 ```
@@ -321,26 +287,17 @@ match Dbc::parse(invalid_content) {
 
 ## Security & Resource Limits
 
-For security reasons (DoS protection), the library enforces the following limits:
-
-- **Maximum 256 nodes** per DBC file
-- **Maximum 64 receiver nodes** per signal
-- **Maximum 10,000 messages** per DBC file
-- **Maximum 64 signals** per message
-- **Maximum 256 characters** for unit strings
-
-Attempting to exceed these limits will result in a validation error. These limits accommodate typical DBC file sizes (typically < 1000 messages and < 10 nodes).
+For security reasons (DoS protection), the library enforces capacity limits that prevent resource exhaustion. Default limits accommodate typical DBC files (typically < 1000 messages, < 10 nodes). These limits are configurable at build time (see [Build-Time Configuration](#build-time-configuration)). Attempting to exceed limits results in a validation error.
 
 For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
-1. **Extended Features**: Many advanced DBC features (attributes, value tables, structured comments, etc.) are not yet supported. Files containing these features will parse successfully but the extended data will be lost on save.
+1. **Extended Features**: Advanced DBC features (attributes, value tables, structured comments, signal multiplexing, etc.) are not yet supported. Files containing these features parse successfully but extended data is lost on save.
 2. **Comments**: Single-line `//` comments are parsed but not preserved when saving.
-3. **Signal Multiplexing**: Multiplexed signals are not yet supported.
-4. **Feature Restrictions**: 
-   - Without `std`: Cannot create/modify DBC files (builders unavailable)
-   - Without `std`: Cannot read from filesystem (use `parse()` or `parse_bytes()` instead)
+3. **Feature Restrictions**: 
+   - Builders and file I/O require `std` feature
+   - Without `std`: Use `parse()` or `parse_bytes()` for parsing only
 
 ## Troubleshooting
 
@@ -370,24 +327,40 @@ For a comprehensive security audit, see [SECURITY.md](SECURITY.md).
 2. **Validation**: Input validation occurs at construction time
 3. **no_std First**: Designed for `no_std` environments, with optional `std` feature
 4. **Zero Dependencies**: No external dependencies
-5. **Memory Efficiency**: Uses `Vec` (via `alloc`) for dynamic collections in both `std` and `no_std` builds
+5. **Memory Efficiency**: Supports both heap-allocated (`alloc`) and stack-allocated (`heapless`) collections
 
 ### Error Handling
 
 - **Result-based**: All fallible operations return `Result<T>`
 - **Categorized errors**: 
-  - High-level errors (require `std`): `Error::Signal`, `Error::Message`, `Error::Dbc`, `Error::Version`, `Error::Nodes`, `Error::InvalidData`
-  - Low-level parse errors (available in `no_std`): `Error::ParseError(ParseError::...)` with variants like `Expected`, `UnexpectedEof`, `InvalidChar`, etc.
-  - Other errors: `Error::Decoding`, `Error::Validation`
-- **Internationalized**: Error messages can be localized at build time
-- **Feature-dependent**: With `std`, errors include detailed `String` messages; without it, static `&'static str` messages via `ParseError`
+  - High-level (`std` only): `Error::Signal`, `Error::Message`, `Error::Dbc`, `Error::Version`, `Error::Nodes`, `Error::InvalidData`
+  - Low-level (`no_std` compatible): `Error::ParseError(ParseError::...)` with variants like `Expected`, `UnexpectedEof`, `InvalidChar`
+  - Other: `Error::Decoding`, `Error::Validation`
+- **Feature-dependent**: With `std`, errors include detailed `String` messages; without it, static `&'static str` messages
 
-## Performance Notes
+## Build-Time Configuration
 
-- **Memory Usage**: 
-  - Both `std` and `no_std`: Uses `Vec<T>` (heap-allocated via `alloc`, dynamic sizing)
+Capacity limits are configurable at build time via environment variables (generated by `build.rs`):
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `DBC_MAX_MESSAGES` | `10000` | Maximum number of messages per DBC file |
+| `DBC_MAX_SIGNALS_PER_MESSAGE` | `64` | Maximum number of signals per message |
+| `DBC_MAX_NODES` | `256` | Maximum number of nodes in the bus |
+| `DBC_MAX_VALUE_DESCRIPTIONS` | `64` | Maximum number of value descriptions |
+| `DBC_MAX_RECEIVER_NODES` | `64` | Maximum number of receiver nodes per signal |
+| `DBC_MAX_NAME_SIZE` | `64` | Maximum length of names (messages, signals, nodes, etc.) |
+
+**Example:**
+```bash
+# Reduce capacity limits for embedded targets (recommended for heapless)
+DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf
+```
+
+**Performance Notes:**
+- **`alloc`/`std`**: Heap-allocated, dynamic sizing
+- **`heapless`**: Stack-allocated, fixed-size arrays (default 10000 messages may cause stack overflow on embedded; reduce to 100-500)
 - **Parsing**: O(n) complexity, entire file parsed into memory
-- **Recommendations**: For very large DBC files (>10MB), consider splitting into multiple files
 
 ## Contributing
 

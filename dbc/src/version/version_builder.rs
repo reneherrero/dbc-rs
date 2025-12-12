@@ -69,9 +69,7 @@ impl VersionBuilder {
         self.version = Some(version.as_ref().to_string());
         self
     }
-}
 
-impl<'a> VersionBuilder {
     /// Builds the `Version` from the builder configuration.
     ///
     /// This validates that a version has been set and constructs a `Version` instance
@@ -109,12 +107,10 @@ impl<'a> VersionBuilder {
     /// assert_eq!(version.as_str(), "");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(self) -> Result<Version<'a>> {
+    pub fn build(self) -> Result<Version> {
         match self.version {
-            Some(v) => Ok(Version::new(crate::Cow::Owned(v))),
-            None => Err(crate::Error::Version(
-                crate::error::lang::VERSION_EMPTY.to_string(),
-            )),
+            Some(v) => Ok(Version::new(v.into())),
+            None => Ok(Version::new("".to_string().into())),
         }
 
         // Use Cow::Owned for owned strings (no leak needed)
@@ -130,7 +126,6 @@ impl Default for VersionBuilder {
 #[cfg(test)]
 mod tests {
     use super::VersionBuilder;
-    use crate::error::lang;
 
     #[test]
     fn test_version_builder_version_string() {
@@ -140,14 +135,8 @@ mod tests {
 
     #[test]
     fn test_version_builder_missing_version() {
-        use crate::Error;
-
         let result = VersionBuilder::new().build();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            Error::Version(msg) => assert!(msg.contains(lang::VERSION_EMPTY)),
-            _ => panic!("Expected Version error"),
-        }
+        assert!(result.is_ok());
     }
 
     #[test]

@@ -33,7 +33,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
 
 mod byte_order;
@@ -76,11 +76,28 @@ pub use version::VersionBuilder;
 
 pub(crate) use parser::Parser;
 
-// Re-export Cow for internal use
-#[cfg(not(feature = "std"))]
-pub(crate) use alloc::borrow::Cow;
-#[cfg(feature = "std")]
-pub(crate) use std::borrow::Cow;
+/// Helper function to validate and convert a string to a name with MAX_NAME_SIZE limit.
+///
+/// This centralizes the common pattern of converting a string reference to
+/// `String<{ MAX_NAME_SIZE }>` with proper error handling.
+#[inline]
+pub(crate) fn validate_name<S: AsRef<str>>(
+    name: S,
+) -> ParseResult<mayheap::String<{ MAX_NAME_SIZE }>> {
+    mayheap::String::try_from(name.as_ref())
+        .map_err(|_| ParseError::Version(error::lang::MAX_NAME_SIZE_EXCEEDED))
+}
+
+/// Helper function to check if a length exceeds a maximum limit.
+///
+/// This centralizes the common pattern of checking collection lengths against MAX limits.
+/// Returns `Some(error)` if the limit is exceeded, `None` otherwise.
+///
+/// This is an internal helper function and not part of the public API.
+#[inline]
+pub(crate) fn check_max_limit<E>(len: usize, max: usize, error: E) -> Option<E> {
+    if len > max { Some(error) } else { None }
+}
 
 /// The version of this crate as specified in `Cargo.toml`.
 ///
@@ -96,6 +113,7 @@ pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // - DBC_MAX_NODES (default: 256)
 // - DBC_MAX_VALUE_DESCRIPTIONS (default: 64)
 // - DBC_MAX_RECEIVER_NODES (default: 64)
+// - DBC_MAX_NAME_SIZE (default: 64)
 include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 
 // DBC file format keywords

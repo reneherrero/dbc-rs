@@ -13,11 +13,20 @@ This checklist ensures all steps are completed before publishing a new release o
 
 - [ ] **Clippy checks pass (all targets)**
   ```bash
-  # Default target (with std) - matches CI workflow
-  cargo clippy --all-targets -p dbc-rs -- -D warnings
+  # std (default) - use --lib --bins to exclude benchmarks
+  cargo clippy --lib --bins -p dbc-rs -- -D warnings
   
-  # no_std target (clippy only checks, doesn't build, so debug build issues don't apply)
-  cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
+  # alloc only
+  cargo clippy --no-default-features --features alloc -p dbc-rs --lib --bins -- -D warnings
+  
+  # heapless (x86_64)
+  cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings
+  
+  # heapless (embedded)
+  cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
+  
+  # alloc (embedded)
+  cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings
   
   # dbc-cli
   cargo clippy --all-targets -p dbc-cli -- -D warnings
@@ -33,25 +42,36 @@ This checklist ensures all steps are completed before publishing a new release o
 - [ ] **Documentation builds without warnings**
   ```bash
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dbc-rs
+  # Note: dbc-cli may have intra-doc link warnings, check if acceptable
   RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dbc-cli
   ```
 
 - [ ] **Code coverage meets threshold (80%)**
   ```bash
-  cargo llvm-cov --workspace --tests --lib --ignore-filename-regex "^(tests|examples|benches)/" --fail-under-lines 80
+  cargo llvm-cov --workspace --fail-under-lines 80
   ```
 
 ### 2. Build Verification
 
-- [ ] **Builds successfully with `std` feature**
+- [ ] **Builds successfully with `std` (includes `alloc`) feature**
   ```bash
-  cargo build --release -p dbc-rs
+  cargo build --release
   ```
 
-- [ ] **Builds successfully in `no_std` mode**
+- [ ] **Builds successfully in `no_std` + `alloc` only feature**
   ```bash
-  cargo build --release --no-default-features --target thumbv7m-none-eabi -p dbc-rs
+  cargo build --release --no-default-features --features alloc --package dbc-rs
   ```
+
+- [ ] **Builds successfully in `no_std` + `heapless` mode**
+  ```bash
+  # x86_64
+  DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --package dbc-rs
+  
+  # Embedded target (requires DBC_MAX_MESSAGES reduction)
+  DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf --package dbc-rs
+  ```
+  Note: For embedded targets, the default of 10000 causes stack overflow with heapless Vec. Override with `DBC_MAX_MESSAGES` (recommended: 100-500).
 
 - [ ] **Builds successfully on MSRV (1.85.0)**
   ```bash
@@ -189,8 +209,10 @@ This checklist ensures all steps are completed before publishing a new release o
 
 ### 9. Publishing to crates.io
 
-- [ ] **Dry-run successful**
+- [ ] **Dry-run successful** (requires all changes committed)
   ```bash
+  # Note: This will fail if there are uncommitted changes
+  # Commit all changes first, or use --allow-dirty for testing
   cargo publish --dry-run -p dbc-rs
   ```
 
@@ -243,14 +265,44 @@ For pre-releases:
 # 1. Update version in Cargo.toml
 # 2. Update CHANGELOG.md
 # 3. Run all checks locally (matches CI workflows)
-cargo test --workspace
-# Note: The following may fail if there are compilation errors - fix before release
-cargo test --no-default-features -p dbc-rs
-cargo clippy --all-targets -p dbc-rs -- -D warnings
-cargo clippy --no-default-features --target thumbv7m-none-eabi -p dbc-rs -- -D warnings
-cargo clippy --all-targets -p dbc-cli -- -D warnings
+
+# Tests - all configurations
+cargo test --workspace  # Tests entire workspace including dbc-cli
+cargo test --no-default-features --features alloc -p dbc-rs  # Explicit alloc feature test
+RUST_MIN_STACK=8388608 cargo test --no-default-features --features heapless -p dbc-rs --lib  # heapless tests
+
+# Builds - all configurations (release builds)
+cargo build --release -p dbc-rs  # std (default)
+cargo build --release --no-default-features --features alloc -p dbc-rs  # alloc only
+DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless -p dbc-rs  # heapless x86_64
+DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs  # heapless embedded
+cargo build --release --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs  # alloc embedded
+
+# Clippy - all configurations
+cargo clippy --lib --bins -p dbc-rs -- -D warnings  # std (default)
+cargo clippy --no-default-features --features alloc -p dbc-rs --lib --bins -- -D warnings  # alloc only
+cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings  # heapless x86_64
+cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings  # heapless embedded
+cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings  # alloc embedded
+cargo clippy --all-targets -p dbc-cli -- -D warnings  # dbc-cli
+
+# Formatting
 cargo fmt -- --check
+
+# Documentation
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dbc-rs
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p dbc-cli
+
+# Coverage
 cargo llvm-cov --workspace --fail-under-lines 80
+
+# MSRV checks
+rustup run 1.85.0 cargo build --release -p dbc-rs
+rustup run 1.85.0 cargo test -p dbc-rs
+```
+
+**Note**: All commands in this quick reference are now covered in CI workflows. The pre-commit hook runs fast checks (clippy and formatting) on all feature combinations to avoid slowing down commits while ensuring code quality.
+
 cargo publish --dry-run -p dbc-rs
 
 # 4. Push changes and wait for CI workflows to pass
@@ -297,12 +349,23 @@ cargo publish -p dbc-rs
 - **Keep SECURITY.md updated**: Review and update for each release
 - **Verify CI passes**: Don't publish if CI is failing
 - **CI Workflows**: The project uses two separate workflows:
-  - `dbc-rs.yml`: Tests the library with multiple configurations:
-    - `std` feature (default) on latest stable and MSRV
-    - `no_std` mode on latest stable and MSRV
-    - Clippy checks for both std and no_std modes
-    - Formatting, documentation, and coverage checks
+  - `dbc-rs.yml`: Comprehensive testing with 12 jobs covering:
+    - `test-std`: Tests std feature on latest stable (includes workspace tests)
+    - `test-alloc`: Tests alloc feature (x86_64 and embedded)
+    - `test-heapless`: Tests heapless feature with RUST_MIN_STACK and DBC_MAX_MESSAGES (x86_64 and embedded)
+    - `test-no-std`: Basic no_std checks and builds (embedded)
+    - `test-std-msrv`: MSRV tests for std feature
+    - `test-no-std-msrv`: MSRV tests for no_std mode
+    - `lint`: Clippy checks for all feature combinations (std, alloc, heapless x86_64, heapless embedded, alloc embedded)
+    - `fmt`: Formatting check
+    - `doc`: Documentation build checks
+    - `coverage`: Code coverage (≥80%)
+    - `benchmark`: Benchmark tests
   - `dbc-cli.yml`: Tests the CLI application
   - Both workflows run automatically on pushes and PRs to `main`
   - Workflows use path-based triggers to only run when relevant files change
+- **Pre-commit Hook**: Runs fast checks before commits:
+  - Clippy: dbc-rs (all features/targets) and dbc-cli
+  - Formatting check (using pinned toolchain)
+  - Intentionally excludes tests and builds (too slow for pre-commit)
 

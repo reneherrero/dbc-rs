@@ -1,8 +1,4 @@
-use crate::{
-    ByteOrder, ReceiversBuilder,
-    error::{Error, Result},
-    signal::Signal,
-};
+use crate::{ByteOrder, Error, ReceiversBuilder, Result, error::lang, signal::Signal};
 
 type SignalFields = (
     String,
@@ -117,15 +113,11 @@ impl SignalBuilder {
     }
 
     fn extract_fields(&self) -> Result<SignalFields> {
-        let name = self.name.clone().ok_or(Error::Signal(
-            crate::error::lang::SIGNAL_NAME_EMPTY.to_string(),
-        ))?;
-        let start_bit = self.start_bit.ok_or(Error::Signal(
-            crate::error::lang::SIGNAL_START_BIT_REQUIRED.to_string(),
-        ))?;
-        let length = self.length.ok_or(Error::Signal(
-            crate::error::lang::SIGNAL_LENGTH_REQUIRED.to_string(),
-        ))?;
+        let name = self.name.clone().ok_or(Error::Signal(lang::SIGNAL_NAME_EMPTY.to_string()))?;
+        let start_bit = self
+            .start_bit
+            .ok_or(Error::Signal(lang::SIGNAL_START_BIT_REQUIRED.to_string()))?;
+        let length = self.length.ok_or(Error::Signal(lang::SIGNAL_LENGTH_REQUIRED.to_string()))?;
         let byte_order =
             self.byte_order.ok_or(Error::Signal("byte_order is required".to_string()))?;
         let unsigned = self.unsigned.ok_or(Error::Signal("unsigned is required".to_string()))?;
@@ -167,21 +159,20 @@ impl SignalBuilder {
         // Validate start_bit: must be between 0 and 511 (CAN FD maximum is 512 bits)
         if start_bit > 511 {
             return Err(Error::Signal(
-                crate::error::lang::SIGNAL_PARSE_INVALID_START_BIT.to_string(),
+                lang::SIGNAL_PARSE_INVALID_START_BIT.to_string(),
             ));
         }
 
         // Validate that start_bit + length doesn't exceed CAN FD maximum (512 bits)
-        // Note: This is a basic sanity check. Full validation (including message DLC bounds
-        // and overlap detection) happens when the signal is added to a message.
+        // Note: This is a basic sanity check. Full validation (including name, min/max,
+        // message DLC bounds, and overlap detection) happens in build() when the signal
+        // is actually constructed, to avoid duplicate validation calls.
         let end_bit = start_bit + length - 1; // -1 because length includes the start bit
         if end_bit >= 512 {
             return Err(Error::Signal(
-                crate::error::lang::SIGNAL_EXTENDS_BEYOND_MESSAGE.to_string(),
+                lang::SIGNAL_EXTENDS_BEYOND_MESSAGE.to_string(),
             ));
         }
-
-        Signal::validate(&name, length, min, max)?;
         Ok(Self {
             name: Some(name),
             start_bit: Some(start_bit),
@@ -198,8 +189,8 @@ impl SignalBuilder {
     }
 }
 
-impl<'a> SignalBuilder {
-    pub fn build(self) -> Result<Signal<'a>> {
+impl SignalBuilder {
+    pub fn build(self) -> Result<Signal> {
         let (
             name,
             start_bit,
@@ -219,7 +210,7 @@ impl<'a> SignalBuilder {
         Signal::validate(&name, length, min, max)?;
         // Use Cow::Owned for owned strings (no leak needed)
         Ok(Signal::new(
-            crate::Cow::Owned(name),
+            name.into(),
             start_bit,
             length,
             byte_order,
@@ -228,7 +219,7 @@ impl<'a> SignalBuilder {
             offset,
             min,
             max,
-            unit.map(crate::Cow::Owned),
+            unit.map(|u| u.into()),
             built_receivers,
         ))
     }

@@ -1,5 +1,4 @@
-use crate::{Error, Result};
-use crate::{MAX_VALUE_DESCRIPTIONS, value_descriptions::ValueDescriptions};
+use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions};
 
 /// Builder for creating `ValueDescriptions` programmatically.
 ///
@@ -79,9 +78,7 @@ impl ValueDescriptionsBuilder {
         }
         self
     }
-}
 
-impl<'a> ValueDescriptionsBuilder {
     /// Builds the `ValueDescriptions` from the builder.
     ///
     /// # Errors
@@ -99,19 +96,17 @@ impl<'a> ValueDescriptionsBuilder {
     ///     .build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn build(self) -> Result<ValueDescriptions<'a>> {
-        if self.entries.len() > MAX_VALUE_DESCRIPTIONS {
-            return Err(Error::InvalidData(
-                "Too many value descriptions".to_string(),
-            ));
+    pub fn build(self) -> Result<ValueDescriptions> {
+        if let Some(err) = crate::check_max_limit(
+            self.entries.len(),
+            MAX_VALUE_DESCRIPTIONS,
+            Error::InvalidData("Too many value descriptions".to_string()),
+        ) {
+            return Err(err);
         }
 
         // Use Cow::Owned for owned strings (no leak needed)
-        let cow_entries: Vec<(u64, crate::Cow<'a, str>)> = self
-            .entries
-            .into_iter()
-            .map(|(value, description)| (value, crate::Cow::Owned(description)))
-            .collect();
+        let cow_entries: Vec<(u64, String)> = self.entries.into_iter().collect();
 
         Ok(ValueDescriptions::from_slice(&cow_entries))
     }

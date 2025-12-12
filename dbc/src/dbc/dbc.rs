@@ -4,8 +4,7 @@ use crate::{
 };
 #[cfg(feature = "std")]
 use crate::{ValueDescriptions, ValueDescriptionsList};
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+use mayheap::Vec;
 #[cfg(feature = "std")]
 use std::collections::BTreeMap;
 
@@ -34,21 +33,21 @@ use std::collections::BTreeMap;
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
 #[derive(Debug)]
-pub struct Dbc<'a> {
-    version: Option<Version<'a>>,
-    nodes: Nodes<'a>,
-    messages: MessageList<'a>,
+pub struct Dbc {
+    version: Option<Version>,
+    nodes: Nodes,
+    messages: MessageList,
     #[cfg(feature = "std")]
-    value_descriptions: ValueDescriptionsList<'a>,
+    value_descriptions: ValueDescriptionsList,
 }
 
-impl<'a> Dbc<'a> {
+impl Dbc {
     // Validate function for std feature (with value_descriptions)
     #[cfg(feature = "std")]
     pub(crate) fn validate(
-        nodes: &Nodes<'_>,
-        messages: &[Message<'_>],
-        value_descriptions: Option<&ValueDescriptionsList<'_>>,
+        nodes: &Nodes,
+        messages: &[Message],
+        value_descriptions: Option<&ValueDescriptionsList>,
     ) -> Result<()> {
         Self::validate_common(nodes, messages)?;
 
@@ -86,12 +85,12 @@ impl<'a> Dbc<'a> {
 
     // Validate function for no_std mode (without value_descriptions)
     #[cfg(not(feature = "std"))]
-    pub(crate) fn validate(nodes: &Nodes<'_>, messages: &[Message<'_>]) -> Result<()> {
+    pub(crate) fn validate(nodes: &Nodes, messages: &[Message]) -> Result<()> {
         Self::validate_common(nodes, messages)
     }
 
     // Common validation logic shared by both versions
-    fn validate_common(nodes: &Nodes<'_>, messages: &[Message<'_>]) -> Result<()> {
+    fn validate_common(nodes: &Nodes, messages: &[Message]) -> Result<()> {
         // Check for duplicate message IDs
         for (i, msg1) in messages.iter().enumerate() {
             for msg2 in messages.iter().skip(i + 1) {
@@ -116,10 +115,10 @@ impl<'a> Dbc<'a> {
 
     #[cfg(feature = "std")]
     pub(crate) fn new(
-        version: Option<Version<'a>>,
-        nodes: Nodes<'a>,
-        messages: MessageList<'a>,
-        value_descriptions: crate::dbc::value_descriptions_list::ValueDescriptionsList<'a>,
+        version: Option<Version>,
+        nodes: Nodes,
+        messages: MessageList,
+        value_descriptions: ValueDescriptionsList,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
@@ -146,7 +145,7 @@ impl<'a> Dbc<'a> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn version(&self) -> Option<&Version<'a>> {
+    pub fn version(&self) -> Option<&Version> {
         self.version.as_ref()
     }
 
@@ -169,7 +168,7 @@ impl<'a> Dbc<'a> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn nodes(&self) -> &Nodes<'a> {
+    pub fn nodes(&self) -> &Nodes {
         &self.nodes
     }
 
@@ -190,7 +189,7 @@ impl<'a> Dbc<'a> {
     /// ```
     #[inline]
     #[must_use]
-    pub fn messages(&self) -> &MessageList<'a> {
+    pub fn messages(&self) -> &MessageList {
         &self.messages
     }
 
@@ -239,7 +238,7 @@ impl<'a> Dbc<'a> {
     #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn value_descriptions(&self) -> &ValueDescriptionsList<'a> {
+    pub fn value_descriptions(&self) -> &ValueDescriptionsList {
         &self.value_descriptions
     }
 
@@ -249,7 +248,7 @@ impl<'a> Dbc<'a> {
         &self,
         message_id: u32,
         signal_name: &str,
-    ) -> Option<&ValueDescriptions<'a>> {
+    ) -> Option<&ValueDescriptions> {
         self.value_descriptions.for_signal(message_id, signal_name)
     }
 
@@ -271,10 +270,10 @@ impl<'a> Dbc<'a> {
     /// assert_eq!(dbc.messages().len(), 1);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn parse(data: &'a str) -> ParseResult<Self> {
+    pub fn parse(data: &str) -> ParseResult<Self> {
         let mut parser = Parser::new(data.as_bytes())?;
 
-        let mut messages_buffer: Vec<Message<'a>> = { Vec::with_capacity(MAX_MESSAGES) };
+        let mut messages_buffer: Vec<Message, { MAX_MESSAGES }> = Vec::new();
 
         let mut message_count_actual = 0;
 
@@ -284,14 +283,19 @@ impl<'a> Dbc<'a> {
             SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
         };
 
-        let mut version: Option<Version<'a>> = None;
-        let mut nodes: Option<Nodes<'a>> = None;
+        let mut version: Option<Version> = None;
+        let mut nodes: Option<Nodes> = None;
 
         // Store value descriptions during parsing: (message_id, signal_name, value, description)
         #[cfg(feature = "std")]
-        type ValueDescriptionsBufferEntry<'a> = (Option<u32>, &'a str, Vec<(u64, &'a str)>);
+        type ValueDescriptionsBufferEntry = (
+            Option<u32>,
+            std::string::String,
+            std::vec::Vec<(u64, std::string::String)>,
+        );
         #[cfg(feature = "std")]
-        let mut value_descriptions_buffer: Vec<ValueDescriptionsBufferEntry<'a>> = Vec::new();
+        let mut value_descriptions_buffer: std::vec::Vec<ValueDescriptionsBufferEntry> =
+            std::vec::Vec::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -386,14 +390,15 @@ impl<'a> Dbc<'a> {
                         };
                         parser.skip_newlines_and_spaces();
                         let signal_name = match parser.parse_identifier() {
-                            Ok(name) => name,
+                            Ok(name) => name.to_string(),
                             Err(_) => {
                                 parser.skip_to_end_of_line();
                                 continue;
                             }
                         };
                         // Parse value-description pairs
-                        let mut entries = Vec::new();
+                        let mut entries: std::vec::Vec<(u64, std::string::String)> =
+                            std::vec::Vec::new();
                         loop {
                             parser.skip_newlines_and_spaces();
                             // Check for semicolon (end of VAL_ statement)
@@ -428,7 +433,7 @@ impl<'a> Dbc<'a> {
                                 }
                             };
                             let description = match core::str::from_utf8(description_bytes) {
-                                Ok(s) => s,
+                                Ok(s) => s.to_string(),
                                 Err(_) => {
                                     parser.skip_to_end_of_line();
                                     break;
@@ -493,8 +498,7 @@ impl<'a> Dbc<'a> {
                     // Now parse signals from the original parser
                     parser.skip_to_end_of_line(); // Skip past header line
 
-                    let mut signals_array: Vec<Signal<'a>> =
-                        { Vec::with_capacity(MAX_SIGNALS_PER_MESSAGE) };
+                    let mut signals_array: Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }> = Vec::new();
 
                     loop {
                         parser.skip_newlines_and_spaces();
@@ -508,7 +512,9 @@ impl<'a> Dbc<'a> {
                                     }
                                     // Signal::parse expects SG_ keyword, which we've already verified with starts_with
                                     let signal = Signal::parse(&mut parser)?;
-                                    signals_array.push(signal);
+                                    signals_array.push(signal).map_err(|_| {
+                                        ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY)
+                                    })?;
                                     continue;
                                 }
                             }
@@ -525,7 +531,9 @@ impl<'a> Dbc<'a> {
                     // Use Message::parse which will parse the header and use our signals
                     let message = Message::parse(&mut message_parser, &signals_array)?;
 
-                    messages_buffer.push(message);
+                    messages_buffer
+                        .push(message)
+                        .map_err(|_| ParseError::Message(lang::NODES_TOO_MANY))?;
                     message_count_actual += 1;
                     continue;
                 }
@@ -554,11 +562,10 @@ impl<'a> Dbc<'a> {
         // Build value descriptions map for storage in Dbc
         #[cfg(feature = "std")]
         let value_descriptions_list = {
-            use crate::Cow;
-            let mut map: BTreeMap<(Option<u32>, Cow<'a, str>), ValueDescriptions<'a>> =
+            let mut map: BTreeMap<(Option<u32>, std::string::String), ValueDescriptions> =
                 BTreeMap::new();
             for (message_id, signal_name, entries) in value_descriptions_buffer {
-                let key = (message_id, Cow::Borrowed(signal_name));
+                let key = (message_id, signal_name);
                 let value_descriptions = ValueDescriptions::from_slice(&entries);
                 map.insert(key, value_descriptions);
             }
@@ -566,20 +573,20 @@ impl<'a> Dbc<'a> {
         };
 
         // Convert messages buffer to slice for validation and construction
-        let messages_slice: &[Message<'a>] = &messages_buffer[..];
+        let messages_slice: &[Message] = &messages_buffer[..];
 
         // Validate messages (duplicate IDs, sender in nodes, etc.)
         #[cfg(feature = "std")]
-        Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(
-            |e| match e {
-                Error::Validation(msg) => ParseError::Message(msg),
-                _ => ParseError::Message("Validation error"),
-            },
-        )?;
+        Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(|e| {
+            crate::error::map_val_error(e, ParseError::Message, || {
+                ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            })
+        })?;
         #[cfg(not(feature = "std"))]
-        Self::validate(&nodes, messages_slice).map_err(|e| match e {
-            Error::Validation(msg) => ParseError::Message(msg),
-            _ => ParseError::Message("Validation error"),
+        Self::validate(&nodes, messages_slice).map_err(|e| {
+            crate::error::map_val_error(e, ParseError::Message, || {
+                ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            })
         })?;
 
         // Construct directly (validation already done)
@@ -605,13 +612,9 @@ impl<'a> Dbc<'a> {
     /// println!("Parsed {} messages", dbc.messages().len());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn parse_bytes<'b>(data: &'b [u8]) -> Result<Dbc<'b>> {
-        let content = core::str::from_utf8(data).map_err(|_e| {
-            #[cfg(feature = "std")]
-            return Error::Dbc(lang::INVALID_UTF8.to_string());
-            #[cfg(not(feature = "std"))]
-            return Error::ParseError(ParseError::Expected("Invalid UTF-8"));
-        })?;
+    pub fn parse_bytes(data: &[u8]) -> Result<Dbc> {
+        let content = core::str::from_utf8(data)
+            .map_err(|_e| Error::ParseError(ParseError::Expected(lang::INVALID_UTF8)))?;
         Dbc::parse(content).map_err(Error::ParseError)
     }
 
@@ -650,7 +653,7 @@ impl<'a> Dbc<'a> {
         // BO_ and SG_ lines for each message
         for message in self.messages().iter() {
             result.push('\n');
-            result.push_str(&message.to_dbc_string_with_signals());
+            result.push_str(&message.to_string_full());
         }
 
         result
@@ -658,7 +661,7 @@ impl<'a> Dbc<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> core::fmt::Display for Dbc<'a> {
+impl core::fmt::Display for Dbc {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.to_dbc_string())
     }
@@ -795,58 +798,17 @@ BO_ 256 Engine : 8 ECM
     }
 
     #[test]
-    #[cfg(feature = "std")]
-    fn test_parse_from_string() {
-        let data = String::from(
-            r#"VERSION "1.0"
-
-BU_: ECM
-
-BO_ 256 Engine : 8 ECM
- SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
-"#,
-        );
-
-        let dbc = Dbc::parse(&data).unwrap();
-        assert_eq!(
-            dbc.version().map(|v| v.to_string()),
-            Some("1.0".to_string())
-        );
-        assert_eq!(dbc.messages().len(), 1);
-    }
-
-    #[test]
     fn test_parse_bytes_invalid_utf8() {
         // Invalid UTF-8 sequence
         let invalid_bytes = &[0xFF, 0xFE, 0xFD];
         let result = Dbc::parse_bytes(invalid_bytes);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Dbc(msg) => {
-                assert!(msg.contains(lang::INVALID_UTF8));
+            Error::ParseError(ParseError::Expected(msg)) => {
+                assert_eq!(msg, lang::INVALID_UTF8);
             }
-            _ => panic!("Expected Dbc error"),
+            _ => panic!("Expected ParseError::Expected with INVALID_UTF8"),
         }
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_save_basic() {
-        // Use parsing instead of builders
-        let dbc_content = r#"VERSION "1.0"
-
-BU_: ECM
-
-BO_ 256 EngineData : 8 ECM
- SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *
-"#;
-        let dbc = Dbc::parse(dbc_content).unwrap();
-
-        let saved = dbc.to_dbc_string();
-        assert!(saved.contains("VERSION \"1.0\""));
-        assert!(saved.contains("BU_: ECM"));
-        assert!(saved.contains("BO_ 256 EngineData : 8 ECM"));
-        assert!(saved.contains("SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *")); // BigEndian = @0
     }
 
     #[test]
@@ -1029,10 +991,124 @@ BO_ 256 Test : 8 ECM
         assert!(result.is_err());
     }
 
-    #[test]
+    // Tests that require std (for to_dbc_string, value_descriptions, etc.)
     #[cfg(feature = "std")]
-    fn test_parse_val_value_descriptions() {
-        let data = r#"VERSION ""
+    mod tests_std {
+        use super::*;
+
+        #[test]
+        fn test_parse_from_string() {
+            let data = String::from(
+                r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+"#,
+            );
+
+            let dbc = Dbc::parse(&data).unwrap();
+            assert_eq!(
+                dbc.version().map(|v| v.to_string()),
+                Some("1.0".to_string())
+            );
+            assert_eq!(dbc.messages().len(), 1);
+        }
+
+        #[test]
+        fn test_save_basic() {
+            // Use parsing instead of builders
+            let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *
+"#;
+            let dbc = Dbc::parse(dbc_content).unwrap();
+
+            let saved = dbc.to_dbc_string();
+            assert!(saved.contains("VERSION \"1.0\""));
+            assert!(saved.contains("BU_: ECM"));
+            assert!(saved.contains("BO_ 256 EngineData : 8 ECM"));
+            assert!(saved.contains("SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *")); // BigEndian = @0
+        }
+
+        #[test]
+        fn test_save_round_trip() {
+            let original = r#"VERSION "1.0"
+
+BU_: ECM TCM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@0- (1,-40) [-40|215] "°C" TCM
+
+BO_ 512 BrakeData : 4 TCM
+ SG_ Pressure : 0|16@0+ (0.1,0) [0|1000] "bar"
+"#;
+
+            let dbc = Dbc::parse(original).unwrap();
+            let saved = dbc.to_dbc_string();
+            let dbc2 = Dbc::parse(&saved).unwrap();
+
+            // Verify round-trip: parsed data should match
+            assert_eq!(
+                dbc.version().map(|v| v.to_string()),
+                dbc2.version().map(|v| v.to_string())
+            );
+            assert_eq!(dbc.messages().len(), dbc2.messages().len());
+
+            for (msg1, msg2) in dbc.messages().iter().zip(dbc2.messages().iter()) {
+                assert_eq!(msg1.id(), msg2.id());
+                assert_eq!(msg1.name(), msg2.name());
+                assert_eq!(msg1.dlc(), msg2.dlc());
+                assert_eq!(msg1.sender(), msg2.sender());
+                assert_eq!(msg1.signals().len(), msg2.signals().len());
+
+                for (sig1, sig2) in msg1.signals().iter().zip(msg2.signals().iter()) {
+                    assert_eq!(sig1.name(), sig2.name());
+                    assert_eq!(sig1.start_bit(), sig2.start_bit());
+                    assert_eq!(sig1.length(), sig2.length());
+                    assert_eq!(sig1.byte_order(), sig2.byte_order());
+                    assert_eq!(sig1.is_unsigned(), sig2.is_unsigned());
+                    assert_eq!(sig1.factor(), sig2.factor());
+                    assert_eq!(sig1.offset(), sig2.offset());
+                    assert_eq!(sig1.min(), sig2.min());
+                    assert_eq!(sig1.max(), sig2.max());
+                    assert_eq!(sig1.unit(), sig2.unit());
+                    assert_eq!(sig1.receivers(), sig2.receivers());
+                }
+            }
+        }
+
+        #[test]
+        fn test_save_multiple_messages() {
+            // Use parsing instead of builders
+            let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM TCM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm"
+
+BO_ 512 BrakeData : 4 TCM
+ SG_ Pressure : 0|16@1+ (0.1,0) [0|1000] "bar"
+"#;
+            let dbc = Dbc::parse(dbc_content).unwrap();
+            let saved = dbc.to_dbc_string();
+
+            // Verify both messages are present
+            assert!(saved.contains("BO_ 256 EngineData : 8 ECM"));
+            assert!(saved.contains("BO_ 512 BrakeData : 4 TCM"));
+            assert!(saved.contains("SG_ RPM"));
+            assert!(saved.contains("SG_ Pressure"));
+        }
+
+        #[test]
+        fn test_parse_val_value_descriptions() {
+            let data = r#"VERSION ""
 
 NS_ :
 
@@ -1046,61 +1122,60 @@ BO_ 100 Message1 : 8 Node1
 VAL_ 100 Signal -1 "Reverse" 0 "Neutral" 1 "First" 2 "Second" 3 "Third" 4 "Fourth" ;
 "#;
 
-        let dbc = match Dbc::parse(data) {
-            Ok(dbc) => dbc,
-            Err(e) => panic!("Failed to parse DBC: {:?}", e),
-        };
+            let dbc = match Dbc::parse(data) {
+                Ok(dbc) => dbc,
+                Err(e) => panic!("Failed to parse DBC: {:?}", e),
+            };
 
-        // Verify basic structure
-        assert_eq!(dbc.messages().len(), 1);
-        let message = dbc.messages().iter().find(|m| m.id() == 100).unwrap();
-        assert_eq!(message.name(), "Message1");
-        assert_eq!(message.sender(), "Node1");
+            // Verify basic structure
+            assert_eq!(dbc.messages().len(), 1);
+            let message = dbc.messages().iter().find(|m| m.id() == 100).unwrap();
+            assert_eq!(message.name(), "Message1");
+            assert_eq!(message.sender(), "Node1");
 
-        // Verify signal exists
-        let signal = message.signals().find("Signal").unwrap();
-        assert_eq!(signal.name(), "Signal");
-        assert_eq!(signal.start_bit(), 32);
-        assert_eq!(signal.length(), 8);
-        assert_eq!(signal.unit(), Some("Gear"));
+            // Verify signal exists
+            let signal = message.signals().find("Signal").unwrap();
+            assert_eq!(signal.name(), "Signal");
+            assert_eq!(signal.start_bit(), 32);
+            assert_eq!(signal.length(), 8);
+            assert_eq!(signal.unit(), Some("Gear"));
 
-        // Verify value descriptions are parsed and accessible
-        let value_descriptions = dbc
-            .value_descriptions_for_signal(100, "Signal")
-            .expect("Value descriptions should exist for signal");
+            // Verify value descriptions are parsed and accessible
+            let value_descriptions = dbc
+                .value_descriptions_for_signal(100, "Signal")
+                .expect("Value descriptions should exist for signal");
 
-        // Verify all value mappings
-        assert_eq!(value_descriptions.get(0xFFFFFFFF), Some("Reverse")); // -1 as u32
-        assert_eq!(value_descriptions.get(0), Some("Neutral"));
-        assert_eq!(value_descriptions.get(1), Some("First"));
-        assert_eq!(value_descriptions.get(2), Some("Second"));
-        assert_eq!(value_descriptions.get(3), Some("Third"));
-        assert_eq!(value_descriptions.get(4), Some("Fourth"));
+            // Verify all value mappings
+            assert_eq!(value_descriptions.get(0xFFFFFFFF), Some("Reverse")); // -1 as u32
+            assert_eq!(value_descriptions.get(0), Some("Neutral"));
+            assert_eq!(value_descriptions.get(1), Some("First"));
+            assert_eq!(value_descriptions.get(2), Some("Second"));
+            assert_eq!(value_descriptions.get(3), Some("Third"));
+            assert_eq!(value_descriptions.get(4), Some("Fourth"));
 
-        // Verify non-existent values return None
-        assert_eq!(value_descriptions.get(5), None);
-        assert_eq!(value_descriptions.get(99), None);
+            // Verify non-existent values return None
+            assert_eq!(value_descriptions.get(5), None);
+            assert_eq!(value_descriptions.get(99), None);
 
-        // Verify we can iterate over all value descriptions
-        let iter = value_descriptions.iter();
-        let mut entries: Vec<_> = iter.collect();
-        entries.sort_by_key(|(v, _)| *v);
+            // Verify we can iterate over all value descriptions
+            let iter = value_descriptions.iter();
+            let mut entries: std::vec::Vec<_> = iter.collect();
+            entries.sort_by_key(|(v, _)| *v);
 
-        assert_eq!(entries.len(), 6);
-        // After sorting by key (u64), 0xFFFFFFFF (4294967295) comes after smaller values
-        assert_eq!(entries[0], (0, "Neutral"));
-        assert_eq!(entries[1], (1, "First"));
-        assert_eq!(entries[2], (2, "Second"));
-        assert_eq!(entries[3], (3, "Third"));
-        assert_eq!(entries[4], (4, "Fourth"));
-        assert_eq!(entries[5], (0xFFFFFFFF, "Reverse"));
-    }
+            assert_eq!(entries.len(), 6);
+            // After sorting by key (u64), 0xFFFFFFFF (4294967295) comes after smaller values
+            assert_eq!(entries[0], (0, "Neutral".to_string()));
+            assert_eq!(entries[1], (1, "First".to_string()));
+            assert_eq!(entries[2], (2, "Second".to_string()));
+            assert_eq!(entries[3], (3, "Third".to_string()));
+            assert_eq!(entries[4], (4, "Fourth".to_string()));
+            assert_eq!(entries[5], (0xFFFFFFFF, "Reverse".to_string()));
+        }
 
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_parse_val_global_value_descriptions() {
-        // Test global value descriptions (VAL_ -1) that apply to all signals with the same name
-        let data = r#"VERSION "1.0"
+        #[test]
+        fn test_parse_val_global_value_descriptions() {
+            // Test global value descriptions (VAL_ -1) that apply to all signals with the same name
+            let data = r#"VERSION "1.0"
 
 NS_ :
 
@@ -1121,66 +1196,67 @@ BO_ 512 DashboardDisplay: 8 DASH
 VAL_ -1 DI_gear 0 "INVALID" 1 "P" 2 "R" 3 "N" 4 "D" 5 "S" 6 "L" 7 "SNA" ;
 "#;
 
-        let dbc = match Dbc::parse(data) {
-            Ok(dbc) => dbc,
-            Err(e) => panic!("Failed to parse DBC: {:?}", e),
-        };
+            let dbc = match Dbc::parse(data) {
+                Ok(dbc) => dbc,
+                Err(e) => panic!("Failed to parse DBC: {:?}", e),
+            };
 
-        // Verify basic structure
-        assert_eq!(dbc.messages().len(), 2);
+            // Verify basic structure
+            assert_eq!(dbc.messages().len(), 2);
 
-        // Verify first message (EngineData)
-        let engine_msg = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
-        assert_eq!(engine_msg.name(), "EngineData");
-        assert_eq!(engine_msg.sender(), "ECU");
-        let di_gear_signal1 = engine_msg.signals().find("DI_gear").unwrap();
-        assert_eq!(di_gear_signal1.name(), "DI_gear");
-        assert_eq!(di_gear_signal1.start_bit(), 24);
+            // Verify first message (EngineData)
+            let engine_msg = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
+            assert_eq!(engine_msg.name(), "EngineData");
+            assert_eq!(engine_msg.sender(), "ECU");
+            let di_gear_signal1 = engine_msg.signals().find("DI_gear").unwrap();
+            assert_eq!(di_gear_signal1.name(), "DI_gear");
+            assert_eq!(di_gear_signal1.start_bit(), 24);
 
-        // Verify second message (DashboardDisplay)
-        let dash_msg = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
-        assert_eq!(dash_msg.name(), "DashboardDisplay");
-        assert_eq!(dash_msg.sender(), "DASH");
-        let di_gear_signal2 = dash_msg.signals().find("DI_gear").unwrap();
-        assert_eq!(di_gear_signal2.name(), "DI_gear");
-        assert_eq!(di_gear_signal2.start_bit(), 0);
+            // Verify second message (DashboardDisplay)
+            let dash_msg = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
+            assert_eq!(dash_msg.name(), "DashboardDisplay");
+            assert_eq!(dash_msg.sender(), "DASH");
+            let di_gear_signal2 = dash_msg.signals().find("DI_gear").unwrap();
+            assert_eq!(di_gear_signal2.name(), "DI_gear");
+            assert_eq!(di_gear_signal2.start_bit(), 0);
 
-        // Verify global value descriptions apply to DI_gear in message 256
-        let value_descriptions1 = dbc
-            .value_descriptions_for_signal(256, "DI_gear")
-            .expect("Global value descriptions should exist for DI_gear in message 256");
+            // Verify global value descriptions apply to DI_gear in message 256
+            let value_descriptions1 = dbc
+                .value_descriptions_for_signal(256, "DI_gear")
+                .expect("Global value descriptions should exist for DI_gear in message 256");
 
-        assert_eq!(value_descriptions1.get(0), Some("INVALID"));
-        assert_eq!(value_descriptions1.get(1), Some("P"));
-        assert_eq!(value_descriptions1.get(2), Some("R"));
-        assert_eq!(value_descriptions1.get(3), Some("N"));
-        assert_eq!(value_descriptions1.get(4), Some("D"));
-        assert_eq!(value_descriptions1.get(5), Some("S"));
-        assert_eq!(value_descriptions1.get(6), Some("L"));
-        assert_eq!(value_descriptions1.get(7), Some("SNA"));
+            assert_eq!(value_descriptions1.get(0), Some("INVALID"));
+            assert_eq!(value_descriptions1.get(1), Some("P"));
+            assert_eq!(value_descriptions1.get(2), Some("R"));
+            assert_eq!(value_descriptions1.get(3), Some("N"));
+            assert_eq!(value_descriptions1.get(4), Some("D"));
+            assert_eq!(value_descriptions1.get(5), Some("S"));
+            assert_eq!(value_descriptions1.get(6), Some("L"));
+            assert_eq!(value_descriptions1.get(7), Some("SNA"));
 
-        // Verify global value descriptions also apply to DI_gear in message 512
-        let value_descriptions2 = dbc
-            .value_descriptions_for_signal(512, "DI_gear")
-            .expect("Global value descriptions should exist for DI_gear in message 512");
+            // Verify global value descriptions also apply to DI_gear in message 512
+            let value_descriptions2 = dbc
+                .value_descriptions_for_signal(512, "DI_gear")
+                .expect("Global value descriptions should exist for DI_gear in message 512");
 
-        // Both should return the same value descriptions (same reference or same content)
-        assert_eq!(value_descriptions2.get(0), Some("INVALID"));
-        assert_eq!(value_descriptions2.get(1), Some("P"));
-        assert_eq!(value_descriptions2.get(2), Some("R"));
-        assert_eq!(value_descriptions2.get(3), Some("N"));
-        assert_eq!(value_descriptions2.get(4), Some("D"));
-        assert_eq!(value_descriptions2.get(5), Some("S"));
-        assert_eq!(value_descriptions2.get(6), Some("L"));
-        assert_eq!(value_descriptions2.get(7), Some("SNA"));
+            // Both should return the same value descriptions (same reference or same content)
+            assert_eq!(value_descriptions2.get(0), Some("INVALID"));
+            assert_eq!(value_descriptions2.get(1), Some("P"));
+            assert_eq!(value_descriptions2.get(2), Some("R"));
+            assert_eq!(value_descriptions2.get(3), Some("N"));
+            assert_eq!(value_descriptions2.get(4), Some("D"));
+            assert_eq!(value_descriptions2.get(5), Some("S"));
+            assert_eq!(value_descriptions2.get(6), Some("L"));
+            assert_eq!(value_descriptions2.get(7), Some("SNA"));
 
-        // Verify they should be the same instance (both reference the global entry)
-        // Since we store by (Option<u32>, &str), both should return the same entry
-        assert_eq!(value_descriptions1.len(), value_descriptions2.len());
-        assert_eq!(value_descriptions1.len(), 8);
+            // Verify they should be the same instance (both reference the global entry)
+            // Since we store by (Option<u32>, &str), both should return the same entry
+            assert_eq!(value_descriptions1.len(), value_descriptions2.len());
+            assert_eq!(value_descriptions1.len(), 8);
 
-        // Verify other signals don't have value descriptions
-        assert_eq!(dbc.value_descriptions_for_signal(256, "EngineRPM"), None);
-        assert_eq!(dbc.value_descriptions_for_signal(512, "SpeedDisplay"), None);
+            // Verify other signals don't have value descriptions
+            assert_eq!(dbc.value_descriptions_for_signal(256, "EngineRPM"), None);
+            assert_eq!(dbc.value_descriptions_for_signal(512, "SpeedDisplay"), None);
+        }
     }
 }

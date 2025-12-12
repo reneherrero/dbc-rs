@@ -1,7 +1,8 @@
 use crate::{
-    Cow, Parser,
+    MAX_NAME_SIZE, Parser, VERSION,
     error::{ParseError, ParseResult, lang},
 };
+use mayheap::{String, Vec};
 
 /// Represents a version string from a DBC file.
 ///
@@ -39,11 +40,11 @@ use crate::{
 /// - `"1.0-beta"` - Version with suffix
 /// - `""` - Empty version string (allowed)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Version<'a> {
-    version: Cow<'a, str>,
+pub struct Version {
+    version: String<{ MAX_NAME_SIZE }>,
 }
 
-impl<'a> Version<'a> {
+impl Version {
     /// Creates a new `Version` from a version string.
     ///
     /// # Note
@@ -55,11 +56,9 @@ impl<'a> Version<'a> {
     /// # Arguments
     ///
     /// * `version` - The version string (should be validated before calling this)
-    pub(crate) fn new(version: impl Into<Cow<'a, str>>) -> Self {
+    pub(crate) fn new(version: String<{ MAX_NAME_SIZE }>) -> Self {
         // Validation should have been done prior (by builder or parse)
-        Self {
-            version: version.into(),
-        }
+        Self { version }
     }
 
     /// Parses a `VERSION` statement from a DBC file.
@@ -100,8 +99,7 @@ impl<'a> Version<'a> {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use = "parse result should be checked"]
-    pub(crate) fn parse<'b: 'a>(parser: &mut Parser<'b>) -> ParseResult<Self> {
-        use crate::VERSION;
+    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
         // Version parsing must always start with "VERSION" keyword
         parser
             .expect(VERSION.as_bytes())
@@ -113,18 +111,16 @@ impl<'a> Version<'a> {
             .expect(b"\"")
             .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
 
-        // Read version content until closing quote (allow any printable characters)
-        // Use a reasonable max length for version strings (e.g., 255 characters)
-        // Note: take_until_quote already advances past the closing quote
-        const MAX_VERSION_LENGTH: u16 = 255;
-        let version_bytes = parser.take_until_quote(false, MAX_VERSION_LENGTH)?;
+        let version_bytes = parser.take_until_quote(false, MAX_NAME_SIZE)?;
 
         // Convert bytes to string slice using the parser's input
-        let version_str = core::str::from_utf8(version_bytes)
-            .map_err(|_| ParseError::Version(lang::VERSION_INVALID))?;
+        let v = Vec::<u8, { MAX_NAME_SIZE }>::from_slice(version_bytes)
+            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
+        let version_str = String::<{ MAX_NAME_SIZE }>::from_utf8(v)
+            .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
 
         // Construct directly (validation already done during parsing)
-        Ok(Version::new(Cow::Borrowed(version_str)))
+        Ok(Version::new(version_str))
     }
 
     /// Returns the version string as a `&str`.
@@ -193,8 +189,7 @@ impl<'a> Version<'a> {
     /// This method requires the `std` feature to be enabled.
     #[must_use]
     #[cfg(feature = "std")]
-    pub fn to_dbc_string(&self) -> String {
-        use crate::VERSION;
+    pub fn to_dbc_string(&self) -> std::string::String {
         if self.version.is_empty() {
             format!("{} \"\"", VERSION)
         } else {
@@ -226,7 +221,7 @@ impl<'a> Version<'a> {
 /// }
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
-impl<'a> core::fmt::Display for Version<'a> {
+impl core::fmt::Display for Version {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.version)
     }

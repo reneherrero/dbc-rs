@@ -1,9 +1,9 @@
-use crate::{
-    ByteOrder, Cow, MAX_SIGNALS_PER_MESSAGE, Parser, Signal,
-    error::{Error, ParseError, ParseResult, lang},
-};
-
 use super::SignalList;
+use crate::{
+    ByteOrder, Error, MAX_NAME_SIZE, MAX_SIGNALS_PER_MESSAGE, ParseError, ParseResult, Parser,
+    Result, Signal, error::lang,
+};
+use mayheap::String;
 
 /// Represents a CAN message in a DBC file.
 ///
@@ -33,17 +33,17 @@ use super::SignalList;
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Message<'a> {
+pub struct Message {
     id: u32,
-    name: Cow<'a, str>,
+    name: String<{ MAX_NAME_SIZE }>,
     dlc: u8,
-    sender: Cow<'a, str>,
-    signals: SignalList<'a>,
+    sender: String<{ MAX_NAME_SIZE }>,
+    signals: SignalList,
 }
 
-impl<'a> Message<'a> {
+impl Message {
     #[allow(clippy::similar_names)] // physical_lsb and physical_msb are intentionally similar
-    fn calculate_bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
+    fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
         let start = start_bit;
         let len = length;
 
@@ -93,8 +93,8 @@ impl<'a> Message<'a> {
         name: &str,
         dlc: u8,
         sender: &str,
-        signals: &[Signal<'a>],
-    ) -> crate::error::Result<()> {
+        signals: &[Signal],
+    ) -> Result<()> {
         // Validate CAN ID range
         // CAN specification allows:
         // - Standard 11-bit IDs: 0x000 to 0x7FF (0-2047)
@@ -106,8 +106,12 @@ impl<'a> Message<'a> {
         const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF; // 536870911
 
         // Check signal count limit per message (DoS protection)
-        if signals.len() > MAX_SIGNALS_PER_MESSAGE {
-            return Err(Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS));
+        if let Some(err) = crate::check_max_limit(
+            signals.len(),
+            MAX_SIGNALS_PER_MESSAGE,
+            Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS),
+        ) {
+            return Err(err);
         }
 
         if name.trim().is_empty() {
@@ -145,7 +149,7 @@ impl<'a> Message<'a> {
         for signal in signals.iter() {
             // Calculate the actual bit range for this signal (accounting for byte order)
             let (lsb, msb) =
-                Self::calculate_bit_range(signal.start_bit(), signal.length(), signal.byte_order());
+                Self::bit_range(signal.start_bit(), signal.length(), signal.byte_order());
             // Check if the signal extends beyond the message boundary
             // The signal's highest bit position must be less than max_bits
             let signal_max_bit = lsb.max(msb);
@@ -161,11 +165,11 @@ impl<'a> Message<'a> {
         // We iterate over pairs without collecting to avoid alloc
         for (i, sig1) in signals.iter().enumerate() {
             let (sig1_lsb, sig1_msb) =
-                Self::calculate_bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
+                Self::bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
 
             for sig2 in signals.iter().skip(i + 1) {
                 let (sig2_lsb, sig2_msb) =
-                    Self::calculate_bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
+                    Self::bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
 
                 // Check if ranges overlap
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
@@ -182,42 +186,45 @@ impl<'a> Message<'a> {
     #[cfg(feature = "std")]
     pub(crate) fn new(
         id: u32,
-        name: impl Into<Cow<'a, str>>,
+        name: String<{ crate::MAX_NAME_SIZE }>,
         dlc: u8,
-        sender: impl Into<Cow<'a, str>>,
-        signals: impl Into<SignalList<'a>>,
+        sender: String<{ crate::MAX_NAME_SIZE }>,
+        signals: impl Into<SignalList>,
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
             id,
-            name: name.into(),
+            name,
             dlc,
-            sender: sender.into(),
+            sender,
             signals: signals.into(),
         }
     }
 
     pub(crate) fn new_from_signals(
         id: u32,
-        name: impl Into<Cow<'a, str>>,
+        name: &str,
         dlc: u8,
-        sender: impl Into<Cow<'a, str>>,
-        signals: &[Signal<'a>],
+        sender: &str,
+        signals: &[Signal],
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
+        let name_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(name)
+            .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))
+            .unwrap();
+        let sender_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(sender)
+            .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))
+            .unwrap();
         Self {
             id,
-            name: name.into(),
+            name: name_str,
             dlc,
-            sender: sender.into(),
-            signals: SignalList::from_signals_slice(signals),
+            sender: sender_str,
+            signals: SignalList::from_slice(signals),
         }
     }
 
-    pub(crate) fn parse<'b: 'a>(
-        parser: &mut Parser<'b>,
-        signals: &[Signal<'a>],
-    ) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser, signals: &[Signal]) -> ParseResult<Self> {
         // Message parsing must always start with "BO_" keyword
         parser
             .expect(crate::BO_.as_bytes())
@@ -274,9 +281,10 @@ impl<'a> Message<'a> {
         }
 
         // Validate before construction
-        Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| match e {
-            crate::error::Error::Validation(msg) => crate::error::ParseError::Message(msg),
-            _ => crate::error::ParseError::Message("Validation error"),
+        Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| {
+            crate::error::map_val_error(e, crate::error::ParseError::Message, || {
+                crate::error::ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            })
         })?;
         // Construct directly (validation already done)
         Ok(Self::new_from_signals(id, name, dlc, sender, signals))
@@ -315,7 +323,7 @@ impl<'a> Message<'a> {
     #[inline]
     #[must_use]
     pub fn name(&self) -> &str {
-        &self.name
+        self.name.as_str()
     }
 
     /// Returns the Data Length Code (DLC) in bytes.
@@ -342,19 +350,19 @@ impl<'a> Message<'a> {
     #[inline]
     #[must_use]
     pub fn sender(&self) -> &str {
-        &self.sender
+        self.sender.as_str()
     }
 
     /// Get a reference to the signals collection
     #[inline]
     #[must_use]
-    pub fn signals(&self) -> &SignalList<'a> {
+    pub fn signals(&self) -> &SignalList {
         &self.signals
     }
 
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> String {
+    pub fn to_dbc_string(&self) -> std::string::String {
         format!(
             "BO_ {} {} : {} {}",
             self.id(),
@@ -366,8 +374,8 @@ impl<'a> Message<'a> {
 
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string_with_signals(&self) -> String {
-        let mut result = String::with_capacity(200 + (self.signals.len() * 100));
+    pub fn to_string_full(&self) -> std::string::String {
+        let mut result = std::string::String::with_capacity(200 + (self.signals.len() * 100));
         result.push_str(&self.to_dbc_string());
         result.push('\n');
 
@@ -381,9 +389,9 @@ impl<'a> Message<'a> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> core::fmt::Display for Message<'a> {
+impl core::fmt::Display for Message {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.to_dbc_string_with_signals())
+        write!(f, "{}", self.to_string_full())
     }
 }
 
@@ -391,9 +399,7 @@ impl<'a> core::fmt::Display for Message<'a> {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{Parser, error::ParseError};
-    #[cfg(not(feature = "std"))]
-    use alloc::{format, vec};
+    use crate::{ParseError, Parser};
 
     // Note: Builder tests have been moved to message_builder.rs
     // This module only tests Message parsing and direct API usage
@@ -488,8 +494,7 @@ mod tests {
         )
         .unwrap();
 
-        let signals = vec![signal1, signal2];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
         assert_eq!(message.id(), 256);
         assert_eq!(message.name(), "EngineData");
         assert_eq!(message.dlc(), 8);
@@ -512,8 +517,7 @@ mod tests {
         )
         .unwrap();
 
-        let signals = vec![signal1, signal2];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
         let mut signals_iter = message.signals().iter();
         assert_eq!(signals_iter.next().unwrap().name(), "RPM");
         assert_eq!(signals_iter.next().unwrap().name(), "Temp");
@@ -536,8 +540,7 @@ mod tests {
             &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
         )
         .unwrap();
-        let signals = vec![signal1];
-        let message = Message::parse(&mut parser2, &signals).unwrap();
+        let message = Message::parse(&mut parser2, &[signal1]).unwrap();
         assert_eq!(message.signals().len(), 1);
     }
 
@@ -555,8 +558,7 @@ mod tests {
         )
         .unwrap();
 
-        let signals = vec![signal1, signal2];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
         assert_eq!(message.signals().at(0).unwrap().name(), "RPM");
         assert_eq!(message.signals().at(1).unwrap().name(), "Temp");
         assert!(message.signals().at(2).is_none());
@@ -576,84 +578,10 @@ mod tests {
         )
         .unwrap();
 
-        let signals = vec![signal1, signal2];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
         assert_eq!(message.signals().find("RPM").unwrap().name(), "RPM");
         assert_eq!(message.signals().find("Temp").unwrap().name(), "Temp");
         assert!(message.signals().find("Nonexistent").is_none());
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_to_dbc_string() {
-        let data = b"BO_ 256 EngineData : 8 ECM";
-        let mut parser = Parser::new(data).unwrap();
-        let signals: &[Signal] = &[];
-        let message = Message::parse(&mut parser, signals).unwrap();
-        let dbc_string = message.to_dbc_string();
-        assert_eq!(dbc_string, "BO_ 256 EngineData : 8 ECM");
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_to_dbc_string_with_signals() {
-        let data = b"BO_ 256 EngineData : 8 ECM";
-        let mut parser = Parser::new(data).unwrap();
-
-        let signal1 = Signal::parse(
-            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
-        )
-        .unwrap();
-        let signal2 = Signal::parse(
-            &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\"").unwrap(),
-        )
-        .unwrap();
-
-        let signals = vec![signal1, signal2];
-        let message = Message::parse(&mut parser, &signals).unwrap();
-        let dbc_string = message.to_dbc_string_with_signals();
-        assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
-        assert!(dbc_string.contains("SG_ RPM"));
-        assert!(dbc_string.contains("SG_ Temp"));
-    }
-
-    #[test]
-    fn test_message_can_2_0a_dlc_limits() {
-        // CAN 2.0A: DLC can be 1-8 bytes (8-64 bits)
-        // Test valid DLC values
-        for dlc in 1..=8 {
-            let data = format!("BO_ 256 EngineData : {} ECM", dlc);
-            let mut parser = Parser::new(data.as_bytes()).unwrap();
-            let signals: &[Signal] = &[];
-            let message = Message::parse(&mut parser, signals).unwrap();
-            assert_eq!(message.dlc(), dlc);
-        }
-    }
-
-    #[test]
-    fn test_message_can_2_0b_dlc_limits() {
-        // CAN 2.0B: DLC can be 1-8 bytes (8-64 bits)
-        // Test valid DLC values
-        for dlc in 1..=8 {
-            let data = format!("BO_ 256 EngineData : {} ECM", dlc);
-            let mut parser = Parser::new(data.as_bytes()).unwrap();
-            let signals: &[Signal] = &[];
-            let message = Message::parse(&mut parser, signals).unwrap();
-            assert_eq!(message.dlc(), dlc);
-        }
-    }
-
-    #[test]
-    fn test_message_can_fd_dlc_limits() {
-        // CAN FD: DLC can be 1-64 bytes (8-512 bits)
-        // Test valid DLC values up to 64
-        for dlc in [1, 8, 12, 16, 20, 24, 32, 48, 64] {
-            let data = format!("BO_ 256 EngineData : {} ECM", dlc);
-            let mut parser = Parser::new(data.as_bytes()).unwrap();
-            let signals: &[Signal] = &[];
-            let message = Message::parse(&mut parser, signals).unwrap();
-            assert_eq!(message.dlc(), dlc);
-        }
     }
 
     #[test]
@@ -683,8 +611,7 @@ mod tests {
         )
         .unwrap();
 
-        let signals = vec![signal1, signal2, signal3, signal4];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal1, signal2, signal3, signal4]).unwrap();
         assert_eq!(message.signals().len(), 4);
     }
 
@@ -703,8 +630,7 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@1+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
-        let signals = vec![signal];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal]).unwrap();
         // The signal should be valid and fit within the message
         assert_eq!(message.signals().len(), 1);
     }
@@ -721,74 +647,12 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
-        let signals = vec![signal];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal]).unwrap();
         // The signal should be valid and fit within the message
         assert_eq!(message.signals().len(), 1);
     }
 
     // Note: Big-endian signal overlap and boundary tests have been moved to message_builder.rs
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_to_dbc_string_empty_signals() {
-        let data = b"BO_ 256 EngineData : 8 ECM";
-        let mut parser = Parser::new(data).unwrap();
-        let signals: &[Signal] = &[];
-        let message = Message::parse(&mut parser, signals).unwrap();
-
-        let dbc_string = message.to_dbc_string();
-        assert_eq!(dbc_string, "BO_ 256 EngineData : 8 ECM");
-
-        let dbc_string_with_signals = message.to_dbc_string_with_signals();
-        assert_eq!(dbc_string_with_signals, "BO_ 256 EngineData : 8 ECM\n");
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_to_dbc_string_special_characters() {
-        let data = b"BO_ 1234 Test_Message_With_Underscores : 4 Sender_Node";
-        let mut parser = Parser::new(data).unwrap();
-        let signals: &[Signal] = &[];
-        let message = Message::parse(&mut parser, signals).unwrap();
-
-        let dbc_string = message.to_dbc_string();
-        assert_eq!(
-            dbc_string,
-            "BO_ 1234 Test_Message_With_Underscores : 4 Sender_Node"
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_to_dbc_string_extended_id() {
-        // Use a valid extended ID (max is 0x1FFF_FFFF = 536870911)
-        let data = b"BO_ 536870911 ExtendedID : 8 ECM";
-        let mut parser = Parser::new(data).unwrap();
-        let signals: &[Signal] = &[];
-        let message = Message::parse(&mut parser, signals).unwrap();
-
-        let dbc_string = message.to_dbc_string();
-        assert_eq!(dbc_string, "BO_ 536870911 ExtendedID : 8 ECM");
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_to_dbc_string_dlc_edge_cases() {
-        // Test DLC = 1
-        let data = b"BO_ 256 MinDLC : 1 ECM";
-        let mut parser = Parser::new(data).unwrap();
-        let signals: &[Signal] = &[];
-        let message = Message::parse(&mut parser, signals).unwrap();
-        assert_eq!(message.to_dbc_string(), "BO_ 256 MinDLC : 1 ECM");
-
-        // Test DLC = 64 (CAN FD max)
-        let data2 = b"BO_ 257 MaxDLC : 64 ECM";
-        let mut parser2 = Parser::new(data2).unwrap();
-        let signals_empty: &[Signal] = &[];
-        let message2 = Message::parse(&mut parser2, signals_empty).unwrap();
-        assert_eq!(message2.to_dbc_string(), "BO_ 257 MaxDLC : 64 ECM");
-    }
 
     #[test]
     fn test_message_signals_is_empty() {
@@ -810,8 +674,7 @@ mod tests {
         )
         .unwrap();
 
-        let signals = vec![signal];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal]).unwrap();
 
         // Valid index
         assert!(message.signals().at(0).is_some());
@@ -837,8 +700,7 @@ mod tests {
         )
         .unwrap();
 
-        let signals = vec![signal1, signal2];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
 
         // Exact match
         assert!(message.signals().find("RPM").is_some());
@@ -866,55 +728,6 @@ mod tests {
 
         assert!(message.signals().find("RPM").is_none());
         assert!(message.signals().find("").is_none());
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_display_trait() {
-        let data = b"BO_ 256 EngineData : 8 ECM";
-        let mut parser = Parser::new(data).unwrap();
-
-        // Parse signal from DBC string instead of using builder
-        let signal = Signal::parse(
-            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
-        )
-        .unwrap();
-
-        let signals = vec![signal];
-        let message = Message::parse(&mut parser, &signals).unwrap();
-
-        let display_str = format!("{}", message);
-        assert!(display_str.contains("BO_ 256 EngineData : 8 ECM"));
-        assert!(display_str.contains("SG_ RPM"));
-    }
-
-    #[test]
-    #[cfg(feature = "std")]
-    fn test_message_to_dbc_string_with_signals_multiple() {
-        let data = b"BO_ 256 EngineData : 8 ECM";
-        let mut parser = Parser::new(data).unwrap();
-
-        // Parse signals from DBC strings instead of using builders
-        let signal1 = Signal::parse(
-            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
-        )
-        .unwrap();
-
-        let signal2 = Signal::parse(
-            &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\" *").unwrap(),
-        )
-        .unwrap();
-
-        let signals = vec![signal1, signal2];
-        let message = Message::parse(&mut parser, &signals).unwrap();
-
-        let dbc_string = message.to_dbc_string_with_signals();
-        assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
-        assert!(dbc_string.contains("SG_ RPM"));
-        assert!(dbc_string.contains("SG_ Temp"));
-        // Should have newlines between signals
-        let lines: Vec<&str> = dbc_string.lines().collect();
-        assert!(lines.len() >= 3); // Message line + at least 2 signal lines
     }
 
     #[test]
@@ -957,18 +770,212 @@ mod tests {
             Signal::parse(&mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
-        let signals = vec![signal1, signal2, signal3];
-        let message = Message::parse(&mut parser, &signals).unwrap();
+        let message = Message::parse(&mut parser, &[signal1, signal2, signal3]).unwrap();
 
         let mut iter = message.signals().iter();
         assert_eq!(iter.next().unwrap().name(), "Signal1");
         assert_eq!(iter.next().unwrap().name(), "Signal2");
         assert_eq!(iter.next().unwrap().name(), "Signal3");
         assert!(iter.next().is_none());
+    }
 
-        // Test that iterator can be used multiple times
-        #[cfg(feature = "std")]
-        {
+    // Tests that require std (for string formatting and Display trait)
+    #[cfg(feature = "std")]
+    mod tests_std {
+        use super::*;
+
+        #[test]
+        fn test_message_can_2_0a_dlc_limits() {
+            // CAN 2.0A: DLC can be 1-8 bytes (8-64 bits)
+            // Test valid DLC values
+            for dlc in 1..=8 {
+                let data = format!("BO_ 256 EngineData : {} ECM", dlc);
+                let mut parser = Parser::new(data.as_bytes()).unwrap();
+                let signals: &[Signal] = &[];
+                let message = Message::parse(&mut parser, signals).unwrap();
+                assert_eq!(message.dlc(), dlc);
+            }
+        }
+
+        #[test]
+        fn test_message_can_2_0b_dlc_limits() {
+            // CAN 2.0B: DLC can be 1-8 bytes (8-64 bits)
+            // Test valid DLC values
+            for dlc in 1..=8 {
+                let data = format!("BO_ 256 EngineData : {} ECM", dlc);
+                let mut parser = Parser::new(data.as_bytes()).unwrap();
+                let signals: &[Signal] = &[];
+                let message = Message::parse(&mut parser, signals).unwrap();
+                assert_eq!(message.dlc(), dlc);
+            }
+        }
+
+        #[test]
+        fn test_message_can_fd_dlc_limits() {
+            // CAN FD: DLC can be 1-64 bytes (8-512 bits)
+            // Test valid DLC values up to 64
+            for dlc in [1, 8, 12, 16, 20, 24, 32, 48, 64] {
+                let data = format!("BO_ 256 EngineData : {} ECM", dlc);
+                let mut parser = Parser::new(data.as_bytes()).unwrap();
+                let signals: &[Signal] = &[];
+                let message = Message::parse(&mut parser, signals).unwrap();
+                assert_eq!(message.dlc(), dlc);
+            }
+        }
+        #[test]
+        fn test_message_to_dbc_string() {
+            let data = b"BO_ 256 EngineData : 8 ECM";
+            let mut parser = Parser::new(data).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
+            let dbc_string = message.to_dbc_string();
+            assert_eq!(dbc_string, "BO_ 256 EngineData : 8 ECM");
+        }
+
+        #[test]
+        fn test_message_to_string_full() {
+            let data = b"BO_ 256 EngineData : 8 ECM";
+            let mut parser = Parser::new(data).unwrap();
+
+            let signal1 = Signal::parse(
+                &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
+            )
+            .unwrap();
+            let signal2 = Signal::parse(
+                &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\"").unwrap(),
+            )
+            .unwrap();
+
+            let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
+            let dbc_string = message.to_string_full();
+            assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
+            assert!(dbc_string.contains("SG_ RPM"));
+            assert!(dbc_string.contains("SG_ Temp"));
+        }
+
+        #[test]
+        fn test_message_to_dbc_string_empty_signals() {
+            let data = b"BO_ 256 EngineData : 8 ECM";
+            let mut parser = Parser::new(data).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
+
+            let dbc_string = message.to_dbc_string();
+            assert_eq!(dbc_string, "BO_ 256 EngineData : 8 ECM");
+
+            let dbc_string_with_signals = message.to_string_full();
+            assert_eq!(dbc_string_with_signals, "BO_ 256 EngineData : 8 ECM\n");
+        }
+
+        #[test]
+        fn test_message_to_dbc_string_special_characters() {
+            let data = b"BO_ 1234 Test_Message_With_Underscores : 4 Sender_Node";
+            let mut parser = Parser::new(data).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
+
+            let dbc_string = message.to_dbc_string();
+            assert_eq!(
+                dbc_string,
+                "BO_ 1234 Test_Message_With_Underscores : 4 Sender_Node"
+            );
+        }
+
+        #[test]
+        fn test_message_to_dbc_string_extended_id() {
+            // Use a valid extended ID (max is 0x1FFF_FFFF = 536870911)
+            let data = b"BO_ 536870911 ExtendedID : 8 ECM";
+            let mut parser = Parser::new(data).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
+
+            let dbc_string = message.to_dbc_string();
+            assert_eq!(dbc_string, "BO_ 536870911 ExtendedID : 8 ECM");
+        }
+
+        #[test]
+        fn test_message_to_dbc_string_dlc_edge_cases() {
+            // Test DLC = 1
+            let data = b"BO_ 256 MinDLC : 1 ECM";
+            let mut parser = Parser::new(data).unwrap();
+            let signals: &[Signal] = &[];
+            let message = Message::parse(&mut parser, signals).unwrap();
+            assert_eq!(message.to_dbc_string(), "BO_ 256 MinDLC : 1 ECM");
+
+            // Test DLC = 64 (CAN FD max)
+            let data2 = b"BO_ 257 MaxDLC : 64 ECM";
+            let mut parser2 = Parser::new(data2).unwrap();
+            let signals_empty: &[Signal] = &[];
+            let message2 = Message::parse(&mut parser2, signals_empty).unwrap();
+            assert_eq!(message2.to_dbc_string(), "BO_ 257 MaxDLC : 64 ECM");
+        }
+
+        #[test]
+        fn test_message_display_trait() {
+            let data = b"BO_ 256 EngineData : 8 ECM";
+            let mut parser = Parser::new(data).unwrap();
+
+            // Parse signal from DBC string instead of using builder
+            let signal = Signal::parse(
+                &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
+            )
+            .unwrap();
+
+            let message = Message::parse(&mut parser, &[signal]).unwrap();
+
+            let display_str = format!("{}", message);
+            assert!(display_str.contains("BO_ 256 EngineData : 8 ECM"));
+            assert!(display_str.contains("SG_ RPM"));
+        }
+
+        #[test]
+        fn test_message_to_string_full_multiple() {
+            let data = b"BO_ 256 EngineData : 8 ECM";
+            let mut parser = Parser::new(data).unwrap();
+
+            // Parse signals from DBC strings instead of using builders
+            let signal1 = Signal::parse(
+                &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
+            )
+            .unwrap();
+
+            let signal2 = Signal::parse(
+                &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\" *").unwrap(),
+            )
+            .unwrap();
+
+            let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
+
+            let dbc_string = message.to_string_full();
+            assert!(dbc_string.contains("BO_ 256 EngineData : 8 ECM"));
+            assert!(dbc_string.contains("SG_ RPM"));
+            assert!(dbc_string.contains("SG_ Temp"));
+            // Should have newlines between signals
+            let lines: Vec<&str> = dbc_string.lines().collect();
+            assert!(lines.len() >= 3); // Message line + at least 2 signal lines
+        }
+
+        #[test]
+        fn test_message_signals_iterator_collect() {
+            let data = b"BO_ 256 EngineData : 8 ECM";
+            let mut parser = Parser::new(data).unwrap();
+
+            let signal1 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
+            let signal2 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
+            let signal3 = Signal::parse(
+                &mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap(),
+            )
+            .unwrap();
+
+            let message = Message::parse(&mut parser, &[signal1, signal2, signal3]).unwrap();
+
+            // Test that iterator can be used multiple times
             let names: Vec<&str> = message.signals().iter().map(|s| s.name()).collect();
             assert_eq!(names, vec!["Signal1", "Signal2", "Signal3"]);
         }

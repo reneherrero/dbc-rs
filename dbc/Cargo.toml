@@ -14,12 +14,20 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 
+[dependencies]
+mayheap = { version = "0.2.0", default-features = false }
+
 [package.metadata.docs.rs]
 features = ["std"]
 
 [features]
 default = ["std"]
-std = []
+# Optional: enable when you have a global allocator (Cortex-A, Linux, etc.)
+alloc = ["mayheap/alloc"]
+# Optional: enable when you want the bounded versions (almost always)
+heapless = ["mayheap/heapless"]
+# Default: enable when you want all the std features (Builders, etc.)
+std = ["alloc"]
 
 [[example]]
 name = "create_dbc"
@@ -34,12 +42,11 @@ required-features = ["std"]
 [[example]]
 name = "parse_no_std"
 path = "examples/parse_no_std.rs"
-required-features = []
+required-features = ["alloc"]
 
 [dev-dependencies]
 proptest = { version = "1.5", default-features = false, features = ["std"] }
-criterion = { version = "0.5", default-features = false }
-mockalloc = "0.1.2"
+criterion = { version = "0.8.1", default-features = false }
 
 [[bench]]
 name = "parse_bench"
