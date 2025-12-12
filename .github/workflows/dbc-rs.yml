@@ -107,7 +107,7 @@ jobs:
       - name: Build library with std feature (MSRV)
         run: cargo build --verbose -p dbc-rs
       - name: Run tests with std feature (MSRV)
-        run: cargo test --verbose -p dbc-rs
+        run: cargo test --verbose --lib --tests -p dbc-rs
 
   test-no-std-msrv:
     name: Test (no_std, MSRV)

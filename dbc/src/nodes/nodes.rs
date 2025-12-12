@@ -1,7 +1,8 @@
 use crate::{
-    BU_, Error, MAX_NAME_SIZE, MAX_NODES, ParseError, ParseResult, Parser, Result, error::lang,
+    BU_, Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result,
+    compat::{String, Vec},
+    error::lang,
 };
-use mayheap::{String, Vec};
 
 /// Represents a collection of node (ECU) names from a DBC file.
 ///
@@ -95,16 +96,14 @@ impl Nodes {
     }
 
     #[must_use = "parse result should be checked"]
-    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Nodes parsing must always start with "BU_" keyword
         parser
             .expect(BU_.as_bytes())
-            .map_err(|_| ParseError::Expected("Expected BU_ keyword"))?;
+            .map_err(|_| Error::Expected("Expected BU_ keyword"))?;
 
         // Expect ":" after "BU_"
-        parser
-            .expect(b":")
-            .map_err(|_| ParseError::Expected("Expected colon after BU_"))?;
+        parser.expect(b":").map_err(|_| Error::Expected("Expected colon after BU_"))?;
 
         // Skip optional whitespace after ":"
         parser.skip_newlines_and_spaces();
@@ -123,14 +122,12 @@ impl Nodes {
                     if let Some(err) = crate::check_max_limit(
                         node_names.len(),
                         MAX_NODES - 1,
-                        ParseError::Nodes(lang::NODES_TOO_MANY),
+                        Error::Nodes(lang::NODES_TOO_MANY),
                     ) {
                         return Err(err);
                     }
                     let node_str = crate::validate_name(node)?;
-                    node_names
-                        .push(node_str)
-                        .map_err(|_| ParseError::Nodes(lang::NODES_TOO_MANY))?;
+                    node_names.push(node_str).map_err(|_| Error::Nodes(lang::NODES_TOO_MANY))?;
                 }
                 Err(_) => {
                     // No more identifiers, break
@@ -144,10 +141,8 @@ impl Nodes {
         }
 
         // Validate before construction
-        Self::validate(&node_names).map_err(|e| {
-            crate::error::map_val_error(e, ParseError::Nodes, || {
-                ParseError::Nodes(lang::NODES_ERROR_PREFIX)
-            })
+        Self::validate(node_names.as_slice()).map_err(|e| {
+            crate::error::map_val_error(e, Error::Nodes, || Error::Nodes(lang::NODES_ERROR_PREFIX))
         })?;
         // Construct directly (validation already done)
         Ok(Self { nodes: node_names })
@@ -362,7 +357,7 @@ impl core::fmt::Display for Nodes {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{ParseError, Parser, error::lang};
+    use crate::{Error, Parser, error::lang};
 
     #[test]
     fn test_nodes_from_valid_line() {
@@ -416,8 +411,8 @@ mod tests {
         let result = Nodes::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Nodes(msg) => assert!(msg == lang::NODES_DUPLICATE_NAME),
-            _ => panic!("Expected ParseError::Nodes"),
+            Error::Nodes(msg) => assert!(msg == lang::NODES_DUPLICATE_NAME),
+            _ => panic!("Expected Error::Nodes"),
         }
     }
 }

@@ -1,5 +1,4 @@
-use crate::{MAX_MESSAGES, Message, ParseError, ParseResult, error::lang};
-use mayheap::Vec;
+use crate::{Error, MAX_MESSAGES, Message, Result, compat::Vec, error::lang};
 
 /// Encapsulates the messages array and count for a DBC
 ///
@@ -11,11 +10,11 @@ pub struct MessageList {
 
 impl MessageList {
     /// Create MessageList from a slice of messages by cloning them
-    pub(crate) fn new(messages: &[Message]) -> ParseResult<Self> {
+    pub(crate) fn new(messages: &[Message]) -> Result<Self> {
         if let Some(err) = crate::check_max_limit(
             messages.len(),
             MAX_MESSAGES,
-            ParseError::Message(lang::NODES_TOO_MANY),
+            Error::Message(lang::NODES_TOO_MANY),
         ) {
             return Err(err);
         }

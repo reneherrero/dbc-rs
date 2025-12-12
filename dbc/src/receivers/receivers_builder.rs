@@ -258,7 +258,7 @@ impl ReceiversBuilder {
             if let Some(err) = crate::check_max_limit(
                 self.nodes.len(),
                 MAX_RECEIVER_NODES,
-                Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY.to_string()),
+                Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY),
             ) {
                 return Err(err);
             }
@@ -266,25 +266,29 @@ impl ReceiversBuilder {
             // Make sure the nodes are not duplicated
             let mut seen = HashSet::new();
             if !self.nodes.iter().all(|item| seen.insert(item)) {
-                return Err(Error::Signal(lang::RECEIVERS_DUPLICATE_NAME.to_string()));
+                return Err(Error::Signal(lang::RECEIVERS_DUPLICATE_NAME));
             }
 
-            // Make sure the node names are not too long and convert to mayheap::String
-            let mut mayheap_nodes = Vec::with_capacity(self.nodes.len());
+            // Make sure the node names are not too long and convert to compat::String
+            use crate::compat::{String, Vec};
+            let mut compat_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }> =
+                Vec::new();
             for node in &self.nodes {
                 if let Some(err) = crate::check_max_limit(
                     node.len(),
                     MAX_NAME_SIZE,
-                    Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED.to_string()),
+                    Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED),
                 ) {
                     return Err(err);
                 }
-                let mayheap_str = mayheap::String::try_from(node.as_str())
-                    .map_err(|_| Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED.to_string()))?;
-                mayheap_nodes.push(mayheap_str);
+                let compat_str = String::try_from(node.as_str())
+                    .map_err(|_| Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED))?;
+                compat_nodes
+                    .push(compat_str)
+                    .map_err(|_| Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY))?;
             }
 
-            Ok(Receivers::new_nodes(&mayheap_nodes))
+            Ok(Receivers::new_nodes(compat_nodes.as_slice()))
         }
     }
 }
@@ -351,7 +355,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => {
-                assert!(msg.contains(lang::SIGNAL_RECEIVERS_TOO_MANY));
+                assert_eq!(msg, lang::SIGNAL_RECEIVERS_TOO_MANY);
             }
             _ => panic!("Expected Signal error"),
         }

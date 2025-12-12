@@ -101,7 +101,7 @@ impl DbcBuilder {
         let nodes = {
             let mut builder = NodesBuilder::new();
             for node in dbc.nodes().iter() {
-                // Convert mayheap::String to std::string::String for the builder
+                // Convert compat::String to std::string::String for the builder
                 let node_str = node.to_string();
                 // Should never fail for valid Dbc - unwrap is safe
                 builder = builder.add_node(node_str);

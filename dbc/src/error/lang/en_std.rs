@@ -2,19 +2,12 @@
 // std error messages (only used in std code)
 // ============================================================================
 
-// Category labels (used in Display impl which requires std)
-pub const INVALID_DATA_CATEGORY: &str = "Data Error";
-pub const SIGNAL_ERROR_CATEGORY: &str = "Signal Error";
-pub const MESSAGE_ERROR_CATEGORY: &str = "Message Error";
-pub const DBC_ERROR_CATEGORY: &str = "DBC Error";
-pub const VERSION_ERROR_CATEGORY: &str = "Version Error";
-pub const NODES_ERROR_CATEGORY: &str = "Nodes Error";
-
 // DBC file-related error messages
 pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &str =
     "Value description references non-existent message";
 pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &str =
     "Value description references non-existent signal";
+pub const VALUE_DESCRIPTIONS_TOO_MANY: &str = "Too many value descriptions: maximum allowed is 64";
 
 // Message-related error messages (only used in std contexts)
 pub const MESSAGE_ID_REQUIRED: &str = "id is required";

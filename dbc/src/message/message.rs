@@ -1,9 +1,8 @@
 use super::SignalList;
 use crate::{
-    ByteOrder, Error, MAX_NAME_SIZE, MAX_SIGNALS_PER_MESSAGE, ParseError, ParseResult, Parser,
-    Result, Signal, error::lang,
+    ByteOrder, Error, MAX_NAME_SIZE, MAX_SIGNALS_PER_MESSAGE, Parser, Result, Signal,
+    compat::String, error::lang,
 };
-use mayheap::String;
 
 /// Represents a CAN message in a DBC file.
 ///
@@ -224,11 +223,11 @@ impl Message {
         }
     }
 
-    pub(crate) fn parse(parser: &mut Parser, signals: &[Signal]) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser, signals: &[Signal]) -> Result<Self> {
         // Message parsing must always start with "BO_" keyword
         parser
             .expect(crate::BO_.as_bytes())
-            .map_err(|_| ParseError::Expected("Expected BO_ keyword"))?;
+            .map_err(|_| Error::Expected("Expected BO_ keyword"))?;
 
         // Skip whitespace
         let _ = parser.skip_whitespace();
@@ -236,23 +235,21 @@ impl Message {
         // Parse message ID
         let id = parser
             .parse_u32()
-            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_INVALID_ID))?;
+            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_INVALID_ID))?;
 
         // Skip whitespace
-        parser
-            .skip_whitespace()
-            .map_err(|_| ParseError::Expected("Expected whitespace"))?;
+        parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
 
         // Parse message name (identifier)
         let name = parser
             .parse_identifier()
-            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_NAME_EMPTY))?;
+            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_NAME_EMPTY))?;
 
         // Skip whitespace (optional before colon)
         let _ = parser.skip_whitespace();
 
         // Expect colon
-        parser.expect(b":").map_err(|_| ParseError::Expected("Expected colon"))?;
+        parser.expect(b":").map_err(|_| Error::Expected("Expected colon"))?;
 
         // Skip whitespace after colon
         let _ = parser.skip_whitespace();
@@ -260,30 +257,26 @@ impl Message {
         // Parse DLC
         let dlc = parser
             .parse_u8()
-            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_INVALID_DLC))?;
+            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_INVALID_DLC))?;
 
         // Skip whitespace
-        parser
-            .skip_whitespace()
-            .map_err(|_| ParseError::Expected("Expected whitespace"))?;
+        parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
 
         // Parse sender (identifier, until end of line or whitespace)
         let sender = parser
             .parse_identifier()
-            .map_err(|_| ParseError::Message(crate::error::lang::MESSAGE_SENDER_EMPTY))?;
+            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_SENDER_EMPTY))?;
 
         // Check for extra content after sender (invalid format)
         parser.skip_newlines_and_spaces();
         if !parser.is_empty() {
-            return Err(ParseError::Expected(
-                "Unexpected content after message sender",
-            ));
+            return Err(Error::Expected("Unexpected content after message sender"));
         }
 
         // Validate before construction
         Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| {
-            crate::error::map_val_error(e, crate::error::ParseError::Message, || {
-                crate::error::ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            crate::error::map_val_error(e, crate::error::Error::Message, || {
+                crate::error::Error::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
             })
         })?;
         // Construct directly (validation already done)
@@ -399,7 +392,7 @@ impl core::fmt::Display for Message {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{ParseError, Parser};
+    use crate::{Error, Parser};
 
     // Note: Builder tests have been moved to message_builder.rs
     // This module only tests Message parsing and direct API usage
@@ -427,10 +420,10 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Message(_) => {
+            Error::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Message"),
+            _ => panic!("Expected Error::Message"),
         }
     }
 
@@ -442,10 +435,10 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Message(_) => {
+            Error::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Message"),
+            _ => panic!("Expected Error::Message"),
         }
     }
 
@@ -457,10 +450,10 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Message(_) => {
+            Error::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Message"),
+            _ => panic!("Expected Error::Message"),
         }
     }
 
@@ -472,10 +465,10 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Message(_) => {
+            Error::Message(_) => {
                 // Expected
             }
-            _ => panic!("Expected ParseError::Message"),
+            _ => panic!("Expected Error::Message"),
         }
     }
 

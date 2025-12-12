@@ -222,15 +222,15 @@ impl NodesBuilder {
     /// ```
     pub fn build(self) -> Result<Nodes> {
         let nodes = self.extract_and_validate_nodes()?;
-        // Convert std::vec::Vec<String> to mayheap::Vec<String<MAX_NAME_SIZE>, MAX_NODES>
-        let mut result: mayheap::Vec<mayheap::String<{ MAX_NAME_SIZE }>, { MAX_NODES }> =
-            mayheap::Vec::new();
+        // Convert std::vec::Vec<String> to compat::Vec<String<MAX_NAME_SIZE>, MAX_NODES>
+        use crate::compat::{String, Vec};
+        let mut result: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
         for node_str in nodes {
-            let mayheap_str = mayheap::String::try_from(node_str.as_str())
+            let compat_str = String::try_from(node_str.as_str())
                 .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))?;
-            result.push(mayheap_str).map_err(|_| Error::Validation(lang::NODES_TOO_MANY))?;
+            result.push(compat_str).map_err(|_| Error::Validation(lang::NODES_TOO_MANY))?;
         }
-        Ok(Nodes::new(&result))
+        Ok(Nodes::new(result.as_slice()))
     }
 }
 

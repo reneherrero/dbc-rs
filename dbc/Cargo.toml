@@ -15,7 +15,7 @@ homepage.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-mayheap = { version = "0.2.0", default-features = false }
+heapless = { version = "0.8", optional = true }
 
 [package.metadata.docs.rs]
 features = ["std"]
@@ -23,9 +23,9 @@ features = ["std"]
 [features]
 default = ["std"]
 # Optional: enable when you have a global allocator (Cortex-A, Linux, etc.)
-alloc = ["mayheap/alloc"]
+alloc = []
 # Optional: enable when you want the bounded versions (almost always)
-heapless = ["mayheap/heapless"]
+heapless = ["dep:heapless"]
 # Default: enable when you want all the std features (Builders, etc.)
 std = ["alloc"]
 

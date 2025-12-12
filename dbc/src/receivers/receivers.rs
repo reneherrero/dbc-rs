@@ -1,5 +1,8 @@
-use crate::{MAX_NAME_SIZE, MAX_RECEIVER_NODES, ParseError, ParseResult, Parser, error::lang};
-use mayheap::{String, Vec};
+use crate::{
+    Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Parser, Result,
+    compat::{String, Vec},
+    error::lang,
+};
 
 /// Represents the receiver nodes for a signal in a DBC file.
 ///
@@ -69,12 +72,12 @@ impl Receivers {
         Receivers::Nodes(vec_nodes)
     }
 
-    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Skip any leading spaces (but not newlines - newlines indicate end of line)
         // If we get UnexpectedEof, we're at EOF, so return None
         match parser.skip_whitespace() {
             Ok(_) => {}
-            Err(ParseError::UnexpectedEof) => return Ok(Self::new_none()),
+            Err(Error::UnexpectedEof) => return Ok(Self::new_none()),
             Err(_) => {} // Other errors (like Expected) mean there's no whitespace, continue
         }
 
@@ -96,7 +99,7 @@ impl Receivers {
             // If we get UnexpectedEof, we're at EOF, so break
             match parser.skip_whitespace() {
                 Ok(_) => {}
-                Err(ParseError::UnexpectedEof) => break,
+                Err(Error::UnexpectedEof) => break,
                 Err(_) => {} // Other errors mean there's no whitespace, continue
             }
 
@@ -113,16 +116,16 @@ impl Receivers {
                     if let Some(err) = crate::check_max_limit(
                         nodes.len(),
                         MAX_RECEIVER_NODES - 1,
-                        ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY),
+                        Error::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY),
                     ) {
                         return Err(err);
                     }
                     let node = crate::validate_name(node)?;
                     nodes
                         .push(node)
-                        .map_err(|_| ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY))?;
+                        .map_err(|_| Error::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY))?;
                 }
-                Err(ParseError::UnexpectedEof) => break,
+                Err(Error::UnexpectedEof) => break,
                 Err(_) => {
                     // Failed to parse - if position didn't change, we're at newline or invalid char
                     if parser.pos() == pos_before {
@@ -453,37 +456,37 @@ mod tests {
         #[test]
         fn test_parse_receivers_too_many() {
             // Create a string with 65 receiver nodes (exceeds limit of 64)
-            // Use a simple approach: create byte array directly
-            let mut receivers_bytes: Vec<u8, { MAX_RECEIVER_NODES }> = Vec::new();
+            // Use std::vec::Vec since we need more than 64 bytes
+            let mut receivers_bytes = std::vec::Vec::new();
             for i in 0..65 {
                 if i > 0 {
-                    receivers_bytes.push(b' ').unwrap();
+                    receivers_bytes.push(b' ');
                 }
                 let node_str = format!("Node{i}");
-                receivers_bytes.extend_from_slice(node_str.as_bytes()).unwrap();
+                receivers_bytes.extend_from_slice(node_str.as_bytes());
             }
             let mut parser = Parser::new(&receivers_bytes).unwrap();
             let result = Receivers::parse(&mut parser);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Receivers(msg) => {
+                Error::Receivers(msg) => {
                     assert_eq!(msg, lang::SIGNAL_RECEIVERS_TOO_MANY);
                 }
-                _ => panic!("Expected ParseError::Receivers"),
+                _ => panic!("Expected Error::Receivers"),
             }
         }
 
         #[test]
         fn test_parse_receivers_at_limit() {
             // Create a string with exactly 64 receiver nodes (at the limit)
-            // Use a simple approach: create byte array directly
-            let mut receivers_bytes: Vec<u8, { MAX_RECEIVER_NODES }> = Vec::new();
+            // Use std::vec::Vec since we need more than 64 bytes
+            let mut receivers_bytes = std::vec::Vec::new();
             for i in 0..MAX_RECEIVER_NODES {
                 if i > 0 {
-                    receivers_bytes.push(b' ').unwrap();
+                    receivers_bytes.push(b' ');
                 }
                 let node_str = format!("Node{i}");
-                receivers_bytes.extend_from_slice(node_str.as_bytes()).unwrap();
+                receivers_bytes.extend_from_slice(node_str.as_bytes());
             }
             let mut parser = Parser::new(&receivers_bytes).unwrap();
             let result = Receivers::parse(&mut parser).unwrap();

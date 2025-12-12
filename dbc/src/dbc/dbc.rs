@@ -1,10 +1,9 @@
 use crate::{
-    Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, MessageList, Nodes, ParseError,
-    ParseResult, Parser, Result, Signal, Version, error::lang,
+    Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, MessageList, Nodes, Parser, Result,
+    Signal, Version, compat::Vec, error::lang,
 };
 #[cfg(feature = "std")]
 use crate::{ValueDescriptions, ValueDescriptionsList};
-use mayheap::Vec;
 #[cfg(feature = "std")]
 use std::collections::BTreeMap;
 
@@ -270,7 +269,7 @@ impl Dbc {
     /// assert_eq!(dbc.messages().len(), 1);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn parse(data: &str) -> ParseResult<Self> {
+    pub fn parse(data: &str) -> Result<Self> {
         let mut parser = Parser::new(data.as_bytes())?;
 
         let mut messages_buffer: Vec<Message, { MAX_MESSAGES }> = Vec::new();
@@ -308,8 +307,8 @@ impl Dbc {
             let keyword_result = parser.peek_next_keyword();
             let keyword = match keyword_result {
                 Ok(kw) => kw,
-                Err(ParseError::UnexpectedEof) => break,
-                Err(ParseError::Expected(_)) => {
+                Err(Error::UnexpectedEof) => break,
+                Err(Error::Expected(_)) => {
                     if parser.starts_with(b"//") {
                         parser.skip_to_end_of_line();
                         continue;
@@ -327,7 +326,7 @@ impl Dbc {
                     // Consume NS_ keyword
                     parser
                         .expect(crate::NS_.as_bytes())
-                        .map_err(|_| ParseError::Expected("Failed to consume NS_ keyword"))?;
+                        .map_err(|_| Error::Expected("Failed to consume NS_ keyword"))?;
                     parser.skip_newlines_and_spaces();
                     let _ = parser.expect(b":").ok();
                     loop {
@@ -469,7 +468,7 @@ impl Dbc {
                 BO_ => {
                     // Check limit using MAX_MESSAGES constant
                     if message_count_actual >= MAX_MESSAGES {
-                        return Err(ParseError::Nodes(lang::NODES_TOO_MANY));
+                        return Err(Error::Nodes(lang::NODES_TOO_MANY));
                     }
 
                     // Save parser position (at BO_ keyword, so Message::parse can consume it)
@@ -506,14 +505,14 @@ impl Dbc {
                             if let Some(next_byte) = parser.peek_byte_at(3) {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
-                                        return Err(ParseError::Receivers(
+                                        return Err(Error::Receivers(
                                             lang::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }
                                     // Signal::parse expects SG_ keyword, which we've already verified with starts_with
                                     let signal = Signal::parse(&mut parser)?;
                                     signals_array.push(signal).map_err(|_| {
-                                        ParseError::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY)
+                                        Error::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY)
                                     })?;
                                     continue;
                                 }
@@ -529,11 +528,11 @@ impl Dbc {
                     let mut message_parser = Parser::new(message_input)?;
 
                     // Use Message::parse which will parse the header and use our signals
-                    let message = Message::parse(&mut message_parser, &signals_array)?;
+                    let message = Message::parse(&mut message_parser, signals_array.as_slice())?;
 
                     messages_buffer
                         .push(message)
-                        .map_err(|_| ParseError::Message(lang::NODES_TOO_MANY))?;
+                        .map_err(|_| Error::Message(lang::NODES_TOO_MANY))?;
                     message_count_actual += 1;
                     continue;
                 }
@@ -573,19 +572,19 @@ impl Dbc {
         };
 
         // Convert messages buffer to slice for validation and construction
-        let messages_slice: &[Message] = &messages_buffer[..];
+        let messages_slice: &[Message] = messages_buffer.as_slice();
 
         // Validate messages (duplicate IDs, sender in nodes, etc.)
         #[cfg(feature = "std")]
         Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(|e| {
-            crate::error::map_val_error(e, ParseError::Message, || {
-                ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            crate::error::map_val_error(e, Error::Message, || {
+                Error::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
             })
         })?;
         #[cfg(not(feature = "std"))]
         Self::validate(&nodes, messages_slice).map_err(|e| {
-            crate::error::map_val_error(e, ParseError::Message, || {
-                ParseError::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+            crate::error::map_val_error(e, Error::Message, || {
+                Error::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
             })
         })?;
 
@@ -613,9 +612,9 @@ impl Dbc {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn parse_bytes(data: &[u8]) -> Result<Dbc> {
-        let content = core::str::from_utf8(data)
-            .map_err(|_e| Error::ParseError(ParseError::Expected(lang::INVALID_UTF8)))?;
-        Dbc::parse(content).map_err(Error::ParseError)
+        let content =
+            core::str::from_utf8(data).map_err(|_e| Error::Expected(lang::INVALID_UTF8))?;
+        Dbc::parse(content)
     }
 
     /// Serialize this DBC to a DBC format string
@@ -671,10 +670,7 @@ impl core::fmt::Display for Dbc {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{
-        Error,
-        error::{ParseError, lang},
-    };
+    use crate::{Error, error::lang};
 
     #[test]
     fn parses_real_dbc() {
@@ -719,10 +715,10 @@ BO_ 256 EngineData2 : 8 ECM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Message(msg) => {
+            Error::Message(msg) => {
                 assert!(msg.contains(lang::DUPLICATE_MESSAGE_ID));
             }
-            _ => panic!("Expected ParseError::Message"),
+            _ => panic!("Expected Error::Message"),
         }
     }
 
@@ -740,10 +736,10 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Message(msg) => {
+            Error::Message(msg) => {
                 assert!(msg.contains(lang::SENDER_NOT_IN_NODES));
             }
-            _ => panic!("Expected ParseError::Message"),
+            _ => panic!("Expected Error::Message"),
         }
     }
 
@@ -753,10 +749,10 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse("");
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::UnexpectedEof => {
+            Error::UnexpectedEof => {
                 // Empty file should result in unexpected EOF
             }
-            _ => panic!("Expected ParseError::UnexpectedEof"),
+            _ => panic!("Expected Error::UnexpectedEof"),
         }
     }
 
@@ -804,10 +800,10 @@ BO_ 256 Engine : 8 ECM
         let result = Dbc::parse_bytes(invalid_bytes);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::ParseError(ParseError::Expected(msg)) => {
+            Error::Expected(msg) => {
                 assert_eq!(msg, lang::INVALID_UTF8);
             }
-            _ => panic!("Expected ParseError::Expected with INVALID_UTF8"),
+            _ => panic!("Expected Error::Expected with INVALID_UTF8"),
         }
     }
 
@@ -910,65 +906,6 @@ BO_ 256 Engine : 8 ECM
 "#;
         let dbc = Dbc::parse(data).unwrap();
         assert_eq!(dbc.version().map(|v| v.to_string()), Some("".to_string()));
-    }
-
-    #[test]
-    fn test_parse_error_with_line_number() {
-        // Test that errors include line numbers (or at least that errors are returned)
-        let data = r#"VERSION "1.0"
-
-BU_: ECM
-
-BO_ 256 Engine : 8 ECM
- SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
-BO_ 257 Invalid : 8 ECM
- SG_ InvalidSignal : invalid|16@1+ (0.25,0) [0|8000] "rpm"
-"#;
-        let result = Dbc::parse(data);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        // Accept any ParseError - line number tracking is not yet implemented
-        match err {
-            ParseError::Version(_)
-            | ParseError::Message(_)
-            | ParseError::Nodes(_)
-            | ParseError::Receivers(_)
-            | ParseError::Signal(_)
-            | ParseError::UnexpectedEof
-            | ParseError::Expected(_)
-            | ParseError::InvalidChar(_)
-            | ParseError::MaxStrLength(_) => {
-                // Accept various parse errors
-            }
-        };
-        // Note: Line number tracking is not yet implemented, so we just verify an error is returned
-    }
-
-    #[test]
-    fn test_parse_error_version_with_line_number() {
-        // Test that version parsing errors are returned (line number tracking not yet implemented)
-        let data = r#"VERSION invalid
-
-BU_: ECM
-"#;
-        let result = Dbc::parse(data);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        // Accept any ParseError - line number tracking is not yet implemented
-        match err {
-            ParseError::Version(_)
-            | ParseError::Message(_)
-            | ParseError::Nodes(_)
-            | ParseError::Receivers(_)
-            | ParseError::Signal(_)
-            | ParseError::UnexpectedEof
-            | ParseError::Expected(_)
-            | ParseError::InvalidChar(_)
-            | ParseError::MaxStrLength(_) => {
-                // Accept various parse errors
-            }
-        };
-        // Note: Line number tracking is not yet implemented, so we just verify an error is returned
     }
 
     #[test]

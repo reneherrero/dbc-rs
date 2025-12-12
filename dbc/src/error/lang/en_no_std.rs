@@ -1,8 +1,8 @@
 // ============================================================================
-// no_std error messages (used in ParseError, Error::Validation, Error::Decoding)
+// no_std error messages (used in Error::Validation, Error::Decoding, and other errors)
 // ============================================================================
 
-// Parser error messages
+// Error messages
 pub const EXPECTED_WHITESPACE: &str = "Expected whitespace";
 pub const EXPECTED_PATTERN: &str = "Expected pattern";
 pub const EXPECTED_KEYWORD: &str = "Expected keyword";
@@ -14,7 +14,6 @@ pub const PARSE_NUMBER_FAILED: &str = "Failed to parse number";
 pub const UNEXPECTED_EOF: &str = "Unexpected end of input";
 pub const INVALID_CHARACTER: &str = "Invalid character";
 pub const STRING_LENGTH_EXCEEDS_MAX: &str = "String length exceeds maximum";
-pub const PARSE_ERROR_PREFIX: &str = "Parse Error";
 pub const DECODING_ERROR_PREFIX: &str = "Decoding Error";
 pub const VALIDATION_ERROR_PREFIX: &str = "Validation Error";
 pub const VERSION_ERROR_PREFIX: &str = "Version error";
@@ -23,7 +22,7 @@ pub const RECEIVERS_ERROR_PREFIX: &str = "Receivers error";
 pub const NODES_ERROR_PREFIX: &str = "Nodes error";
 pub const SIGNAL_ERROR_PREFIX: &str = "Signal error";
 
-// Signal parsing error messages
+// Signal error messages
 pub const SIGNAL_PARSE_INVALID_START_BIT: &str = "Invalid start_bit";
 pub const SIGNAL_PARSE_INVALID_LENGTH: &str = "Invalid length";
 pub const SIGNAL_PARSE_INVALID_FACTOR: &str = "Invalid factor";

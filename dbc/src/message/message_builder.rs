@@ -73,10 +73,10 @@ impl MessageBuilder {
     }
 
     fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<SignalBuilder>)> {
-        let id = self.id.ok_or(Error::Message(lang::MESSAGE_ID_REQUIRED.to_string()))?;
-        let name = self.name.ok_or(Error::Message(lang::MESSAGE_NAME_EMPTY.to_string()))?;
-        let dlc = self.dlc.ok_or(Error::Message(lang::MESSAGE_DLC_REQUIRED.to_string()))?;
-        let sender = self.sender.ok_or(Error::Message(lang::MESSAGE_SENDER_EMPTY.to_string()))?;
+        let id = self.id.ok_or(Error::Message(lang::MESSAGE_ID_REQUIRED))?;
+        let name = self.name.ok_or(Error::Message(lang::MESSAGE_NAME_EMPTY))?;
+        let dlc = self.dlc.ok_or(Error::Message(lang::MESSAGE_DLC_REQUIRED))?;
+        let sender = self.sender.ok_or(Error::Message(lang::MESSAGE_SENDER_EMPTY))?;
         Ok((id, name, dlc, sender, self.signals))
     }
 
@@ -84,10 +84,10 @@ impl MessageBuilder {
     pub fn validate(mut self) -> Result<Self> {
         // Extract fields (this consumes signals, but we'll reconstruct)
         let signals_clone = self.signals.clone();
-        let id = self.id.ok_or(Error::Message(lang::MESSAGE_ID_REQUIRED.to_string()))?;
-        let name = self.name.ok_or(Error::Message(lang::MESSAGE_NAME_EMPTY.to_string()))?;
-        let dlc = self.dlc.ok_or(Error::Message(lang::MESSAGE_DLC_REQUIRED.to_string()))?;
-        let sender = self.sender.ok_or(Error::Message(lang::MESSAGE_SENDER_EMPTY.to_string()))?;
+        let id = self.id.ok_or(Error::Message(lang::MESSAGE_ID_REQUIRED))?;
+        let name = self.name.ok_or(Error::Message(lang::MESSAGE_NAME_EMPTY))?;
+        let dlc = self.dlc.ok_or(Error::Message(lang::MESSAGE_DLC_REQUIRED))?;
+        let sender = self.sender.ok_or(Error::Message(lang::MESSAGE_SENDER_EMPTY))?;
         // Build signals for validation using cloned signals
         let built_signals: Vec<Signal> = signals_clone
             .into_iter()

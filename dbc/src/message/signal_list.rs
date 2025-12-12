@@ -1,5 +1,4 @@
-use crate::{MAX_SIGNALS_PER_MESSAGE, Signal};
-use mayheap::Vec;
+use crate::{MAX_SIGNALS_PER_MESSAGE, Signal, compat::Vec};
 
 /// Encapsulates the signals array for a message
 ///
@@ -24,7 +23,7 @@ impl From<std::vec::Vec<Signal>> for SignalList {
 
 impl From<Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }>> for SignalList {
     fn from(signals: Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }>) -> Self {
-        Self::from_slice(&signals)
+        Self::from_slice(signals.as_slice())
     }
 }
 

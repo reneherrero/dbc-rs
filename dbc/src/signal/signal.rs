@@ -1,8 +1,6 @@
 use crate::{
-    ByteOrder, Error, MAX_NAME_SIZE, ParseError, ParseResult, Parser, Receivers, Result,
-    error::lang,
+    ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result, compat::String, error::lang,
 };
-use mayheap::String;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
@@ -82,31 +80,31 @@ impl Signal {
         }
     }
 
-    fn parse_position<'b>(parser: &mut Parser<'b>) -> ParseResult<(u16, u16, ByteOrder, bool)> {
+    fn parse_position<'b>(parser: &mut Parser<'b>) -> Result<(u16, u16, ByteOrder, bool)> {
         // Parse start_bit
         let start_bit = match parser.parse_u32() {
             Ok(v) => v as u16,
             Err(_) => {
-                return Err(ParseError::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
+                return Err(Error::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
             }
         };
 
         // Validate start_bit range
         if start_bit > 511 {
-            return Err(ParseError::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
+            return Err(Error::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
         }
 
         // Expect pipe
-        parser.expect(b"|").map_err(|_| ParseError::Expected("Expected pipe"))?;
+        parser.expect(b"|").map_err(|_| Error::Expected("Expected pipe"))?;
 
         // Parse length
         let length = parser
             .parse_u32()
-            .map_err(|_| ParseError::Signal(lang::SIGNAL_PARSE_INVALID_LENGTH))?
+            .map_err(|_| Error::Signal(lang::SIGNAL_PARSE_INVALID_LENGTH))?
             as u16;
 
         // Expect @
-        parser.expect(b"@").map_err(|_| ParseError::Expected("Expected @"))?;
+        parser.expect(b"@").map_err(|_| Error::Expected("Expected @"))?;
 
         // Parse byte order (0 or 1)
         // Try to expect '0' or '1' directly
@@ -115,13 +113,13 @@ impl Signal {
         } else if parser.expect(b"1").is_ok() {
             b'1'
         } else {
-            return Err(ParseError::Expected("Expected byte order"));
+            return Err(Error::Expected("Expected byte order"));
         };
 
         let byte_order = match bo_byte {
             b'0' => ByteOrder::BigEndian,    // 0 = Motorola (big-endian)
             b'1' => ByteOrder::LittleEndian, // 1 = Intel (little-endian)
-            _ => return Err(ParseError::InvalidChar(bo_byte as char)),
+            _ => return Err(Error::InvalidChar(bo_byte as char)),
         };
 
         // Parse sign (+ or -)
@@ -130,23 +128,23 @@ impl Signal {
         } else if parser.expect(b"-").is_ok() {
             b'-'
         } else {
-            return Err(ParseError::Expected("Expected sign (+ or -)"));
+            return Err(Error::Expected("Expected sign (+ or -)"));
         };
 
         let unsigned = match sign_byte {
             b'+' => true,
             b'-' => false,
-            _ => return Err(ParseError::InvalidChar(sign_byte as char)),
+            _ => return Err(Error::InvalidChar(sign_byte as char)),
         };
 
         Ok((start_bit, length, byte_order, unsigned))
     }
 
-    fn parse_factor_offset<'b>(parser: &mut Parser<'b>) -> ParseResult<(f64, f64)> {
+    fn parse_factor_offset<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
         // Expect opening parenthesis
         parser
             .expect(b"(")
-            .map_err(|_| ParseError::Expected("Expected opening parenthesis"))?;
+            .map_err(|_| Error::Expected("Expected opening parenthesis"))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -163,13 +161,13 @@ impl Signal {
                     0.0 // Empty factor
                 } else {
                     // Position changed but parsing failed - invalid format
-                    return Err(ParseError::Signal(lang::SIGNAL_PARSE_INVALID_FACTOR));
+                    return Err(Error::Signal(lang::SIGNAL_PARSE_INVALID_FACTOR));
                 }
             }
         };
 
         // Expect comma
-        parser.expect(b",").map_err(|_| ParseError::Expected("Expected comma"))?;
+        parser.expect(b",").map_err(|_| Error::Expected("Expected comma"))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -183,7 +181,7 @@ impl Signal {
                 if parser.pos() == pos_before {
                     0.0 // Empty offset
                 } else {
-                    return Err(ParseError::Signal(
+                    return Err(Error::Signal(
                         crate::error::lang::SIGNAL_PARSE_INVALID_OFFSET,
                     ));
                 }
@@ -196,16 +194,14 @@ impl Signal {
         // Expect closing parenthesis
         parser
             .expect(b")")
-            .map_err(|_| ParseError::Expected("Expected closing parenthesis"))?;
+            .map_err(|_| Error::Expected("Expected closing parenthesis"))?;
 
         Ok((factor, offset))
     }
 
-    fn parse_range<'b>(parser: &mut Parser<'b>) -> ParseResult<(f64, f64)> {
+    fn parse_range<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
         // Expect opening bracket
-        parser
-            .expect(b"[")
-            .map_err(|_| ParseError::Expected("Expected opening bracket"))?;
+        parser.expect(b"[").map_err(|_| Error::Expected("Expected opening bracket"))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -219,15 +215,13 @@ impl Signal {
                 if parser.pos() == pos_before {
                     0.0 // Empty min
                 } else {
-                    return Err(ParseError::Signal(
-                        crate::error::lang::SIGNAL_PARSE_INVALID_MIN,
-                    ));
+                    return Err(Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MIN));
                 }
             }
         };
 
         // Expect pipe
-        parser.expect(b"|").map_err(|_| ParseError::Expected("Expected pipe"))?;
+        parser.expect(b"|").map_err(|_| Error::Expected("Expected pipe"))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -241,9 +235,7 @@ impl Signal {
                 if parser.pos() == pos_before {
                     0.0 // Empty max
                 } else {
-                    return Err(ParseError::Signal(
-                        crate::error::lang::SIGNAL_PARSE_INVALID_MAX,
-                    ));
+                    return Err(Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MAX));
                 }
             }
         };
@@ -252,43 +244,37 @@ impl Signal {
         parser.skip_newlines_and_spaces();
 
         // Expect closing bracket
-        parser
-            .expect(b"]")
-            .map_err(|_| ParseError::Expected("Expected closing bracket"))?;
+        parser.expect(b"]").map_err(|_| Error::Expected("Expected closing bracket"))?;
 
         Ok((min, max))
     }
 
-    fn parse_unit(parser: &mut Parser) -> ParseResult<Option<String<{ MAX_NAME_SIZE }>>> {
+    fn parse_unit(parser: &mut Parser) -> Result<Option<String<{ MAX_NAME_SIZE }>>> {
         // Expect opening quote
-        parser
-            .expect(b"\"")
-            .map_err(|_| ParseError::Expected("Expected opening quote"))?;
+        parser.expect(b"\"").map_err(|_| Error::Expected("Expected opening quote"))?;
 
         // Use take_until_quote to read the unit (allow any printable characters)
         let unit_bytes = parser.take_until_quote(false, MAX_NAME_SIZE).map_err(|e| match e {
-            ParseError::MaxStrLength(_) => {
-                ParseError::Signal(crate::error::lang::SIGNAL_PARSE_UNIT_TOO_LONG)
-            }
-            _ => ParseError::Expected("Expected closing quote"),
+            Error::MaxStrLength(_) => Error::Signal(crate::error::lang::SIGNAL_PARSE_UNIT_TOO_LONG),
+            _ => Error::Expected("Expected closing quote"),
         })?;
 
         // Convert bytes to string slice
-        let unit = core::str::from_utf8(unit_bytes)
-            .map_err(|_e| ParseError::Expected(lang::INVALID_UTF8))?;
+        let unit =
+            core::str::from_utf8(unit_bytes).map_err(|_e| Error::Expected(lang::INVALID_UTF8))?;
 
-        let unit: String<{ MAX_NAME_SIZE }> = String::try_from(unit)
-            .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+        let unit: String<{ MAX_NAME_SIZE }> =
+            String::try_from(unit).map_err(|_| Error::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
 
         let unit = if unit.is_empty() { None } else { Some(unit) };
         Ok(unit)
     }
 
-    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Signal parsing must always start with "SG_" keyword
         parser
             .expect(crate::SG_.as_bytes())
-            .map_err(|_| ParseError::Expected("Expected SG_ keyword"))?;
+            .map_err(|_| Error::Expected("Expected SG_ keyword"))?;
 
         // Skip whitespace after "SG_"
         parser.skip_newlines_and_spaces();
@@ -296,7 +282,7 @@ impl Signal {
         // Parse signal name (identifier)
         let name = parser
             .parse_identifier()
-            .map_err(|_| ParseError::Signal(crate::error::lang::SIGNAL_NAME_EMPTY))?;
+            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_NAME_EMPTY))?;
 
         // Skip whitespace (optional before colon) - handle multiplexer indicator
         // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
@@ -332,7 +318,7 @@ impl Signal {
         }
 
         // Expect colon
-        parser.expect(b":").map_err(|_| ParseError::Expected("Expected colon"))?;
+        parser.expect(b":").map_err(|_| Error::Expected("Expected colon"))?;
 
         // Skip whitespace after colon
         parser.skip_newlines_and_spaces();
@@ -367,8 +353,8 @@ impl Signal {
 
         // Validate before construction
         Self::validate(name, length, min, max).map_err(|e| {
-            crate::error::map_val_error(e, ParseError::Signal, || {
-                ParseError::Signal(crate::error::lang::SIGNAL_ERROR_PREFIX)
+            crate::error::map_val_error(e, Error::Signal, || {
+                Error::Signal(crate::error::lang::SIGNAL_ERROR_PREFIX)
             })
         })?;
 
@@ -468,7 +454,7 @@ impl Signal {
     /// # Returns
     ///
     /// * `Ok(f64)` - The physical value (raw * factor + offset)
-    /// * `Err(ParseError)` - If the signal extends beyond the data length
+    /// * `Err(Error)` - If the signal extends beyond the data length
     ///
     /// # Examples
     ///
@@ -686,10 +672,7 @@ impl core::fmt::Display for Signal {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{
-        Parser,
-        error::{ParseError, lang},
-    };
+    use crate::{Parser, error::lang};
 
     #[test]
     fn test_parse_valid_signal() {
@@ -798,14 +781,14 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Signal(msg) => {
+            Error::Signal(msg) => {
                 // Check for either the old constant or the new formatted message
                 assert!(
                     msg.contains(lang::SIGNAL_PARSE_INVALID_START_BIT)
                         || msg.contains("Signal 'RPM'")
                 );
             }
-            _ => panic!("Expected ParseError::Signal"),
+            _ => panic!("Expected Error::Signal"),
         }
     }
 
@@ -816,10 +799,10 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Signal(msg) => {
+            Error::Signal(msg) => {
                 assert!(msg.contains(lang::INVALID_RANGE));
             }
-            e => panic!("Expected ParseError::Signal, got: {:?}", e),
+            e => panic!("Expected Error::Signal, got: {:?}", e),
         }
     }
 
@@ -843,7 +826,7 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Signal(msg) => {
+            Error::Signal(msg) => {
                 // Check for either the old constant or the new formatted message
                 assert!(
                     msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)
@@ -851,7 +834,7 @@ mod tests {
                         || msg.contains("513")
                 );
             }
-            e => panic!("Expected ParseError::Signal, got: {:?}", e),
+            e => panic!("Expected Error::Signal, got: {:?}", e),
         }
     }
 
@@ -862,7 +845,7 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Signal(msg) => {
+            Error::Signal(msg) => {
                 // Check for either the old constant or the new formatted message
                 assert!(
                     msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)
@@ -870,7 +853,7 @@ mod tests {
                         || msg.contains("0 bits")
                 );
             }
-            e => panic!("Expected ParseError::Signal, got: {:?}", e),
+            e => panic!("Expected Error::Signal, got: {:?}", e),
         }
     }
 
@@ -880,8 +863,8 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            ParseError::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_LENGTH)),
-            e => panic!("Expected ParseError::Signal, got: {:?}", e),
+            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_LENGTH)),
+            e => panic!("Expected Error::Signal, got: {:?}", e),
         }
     }
 

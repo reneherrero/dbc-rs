@@ -1,4 +1,4 @@
-use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions};
+use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions, error::lang};
 
 /// Builder for creating `ValueDescriptions` programmatically.
 ///
@@ -100,7 +100,7 @@ impl ValueDescriptionsBuilder {
         if let Some(err) = crate::check_max_limit(
             self.entries.len(),
             MAX_VALUE_DESCRIPTIONS,
-            Error::InvalidData("Too many value descriptions".to_string()),
+            Error::Decoding(lang::VALUE_DESCRIPTIONS_TOO_MANY),
         ) {
             return Err(err);
         }

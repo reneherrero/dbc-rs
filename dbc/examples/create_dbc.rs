@@ -123,7 +123,7 @@ fn main() -> Result<(), dbc_rs::Error> {
     // Save the DBC to a file
     let dbc_string = dbc.to_dbc_string();
     std::fs::write("output.dbc", dbc_string)
-        .map_err(|e| dbc_rs::Error::InvalidData(format!("Failed to write file: {}", e)))?;
+        .map_err(|_| dbc_rs::Error::Decoding("Failed to write file"))?;
     println!("\nDBC file saved to 'output.dbc'");
 
     Ok(())

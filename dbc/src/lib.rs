@@ -5,7 +5,7 @@
 //! ## Features
 //!
 //! - **`no_std` compatible**: Works in embedded environments without the standard library
-//! - **Zero dependencies**: Pure Rust implementation
+//! - **Minimal dependencies**: Only `heapless` when using `heapless` feature (zero dependencies with `alloc`/`std`)
 //! - **Memory efficient**: Uses `Vec` (via `alloc`) for dynamic collections
 //! - **Type-safe**: Strong typing for all DBC elements
 //!
@@ -37,6 +37,7 @@ extern crate std;
 extern crate alloc;
 
 mod byte_order;
+mod compat;
 mod dbc;
 mod error;
 mod message;
@@ -52,7 +53,7 @@ pub use byte_order::ByteOrder;
 #[cfg(feature = "std")]
 pub use dbc::ValueDescriptionsList;
 pub use dbc::{Dbc, MessageList};
-pub use error::{Error, ParseError, ParseResult, Result};
+pub use error::{Error, Result};
 pub use message::{Message, SignalList};
 pub use nodes::Nodes;
 pub use receivers::Receivers;
@@ -80,12 +81,25 @@ pub(crate) use parser::Parser;
 ///
 /// This centralizes the common pattern of converting a string reference to
 /// `String<{ MAX_NAME_SIZE }>` with proper error handling.
+///
+/// # Errors
+///
+/// Returns `Error::Expected` with `MAX_NAME_SIZE_EXCEEDED` message if the name
+/// exceeds `MAX_NAME_SIZE` (64 characters by default).
 #[inline]
-pub(crate) fn validate_name<S: AsRef<str>>(
-    name: S,
-) -> ParseResult<mayheap::String<{ MAX_NAME_SIZE }>> {
-    mayheap::String::try_from(name.as_ref())
-        .map_err(|_| ParseError::Version(error::lang::MAX_NAME_SIZE_EXCEEDED))
+pub(crate) fn validate_name<S: AsRef<str>>(name: S) -> Result<compat::String<{ MAX_NAME_SIZE }>> {
+    let name_str: &str = name.as_ref();
+
+    // Explicitly check length before conversion to ensure MAX_NAME_SIZE enforcement
+    // This check works for both alloc and heapless features
+    if name_str.len() > MAX_NAME_SIZE {
+        return Err(Error::Expected(error::lang::MAX_NAME_SIZE_EXCEEDED));
+    }
+
+    // Convert to compat::String - this will also check the limit internally,
+    // but we've already checked above for clarity and early error reporting
+    compat::String::try_from(name_str)
+        .map_err(|_| Error::Expected(error::lang::MAX_NAME_SIZE_EXCEEDED))
 }
 
 /// Helper function to check if a length exceeds a maximum limit.

@@ -1,4 +1,4 @@
-use crate::{DBC_KEYWORDS, ParseError, ParseResult, error::lang};
+use crate::{DBC_KEYWORDS, Error, Result, error::lang};
 
 #[derive(Debug)]
 pub struct Parser<'a> {
@@ -8,9 +8,9 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: &'a [u8]) -> ParseResult<Self> {
+    pub fn new(input: &'a [u8]) -> Result<Self> {
         if input.is_empty() {
-            return Err(ParseError::UnexpectedEof);
+            return Err(Error::UnexpectedEof);
         }
         Ok(Self {
             input,
@@ -32,9 +32,9 @@ impl<'a> Parser<'a> {
         self.line
     }
 
-    pub fn skip_whitespace(&mut self) -> ParseResult<&mut Self> {
+    pub fn skip_whitespace(&mut self) -> Result<&mut Self> {
         if self.pos >= self.input.len() {
-            return Err(ParseError::UnexpectedEof);
+            return Err(Error::UnexpectedEof);
         }
 
         if self.input[self.pos] == b' ' {
@@ -43,7 +43,7 @@ impl<'a> Parser<'a> {
             }
             Ok(self)
         } else {
-            Err(ParseError::Expected(lang::EXPECTED_WHITESPACE))
+            Err(Error::Expected(lang::EXPECTED_WHITESPACE))
         }
     }
 
@@ -70,13 +70,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn peek_next_keyword(&mut self) -> ParseResult<&'a str> {
+    pub fn peek_next_keyword(&mut self) -> Result<&'a str> {
         // Skip newlines and spaces to find the next keyword
         self.skip_newlines_and_spaces();
 
         // Check if we're at EOF
         if self.pos >= self.input.len() {
-            return Err(ParseError::UnexpectedEof);
+            return Err(Error::UnexpectedEof);
         }
 
         // Try to match each keyword (checking longer ones first)
@@ -103,17 +103,17 @@ impl<'a> Parser<'a> {
         }
 
         // No keyword matched
-        Err(ParseError::Expected(lang::EXPECTED_KEYWORD))
+        Err(Error::Expected(lang::EXPECTED_KEYWORD))
     }
 
-    pub fn expect(&mut self, expected: &[u8]) -> ParseResult<&mut Self> {
+    pub fn expect(&mut self, expected: &[u8]) -> Result<&mut Self> {
         if expected.is_empty() {
             return Ok(self);
         }
 
         // Check if we have enough remaining bytes
         if self.input.len() - self.pos < expected.len() {
-            return Err(ParseError::Expected(lang::EXPECTED_PATTERN));
+            return Err(Error::Expected(lang::EXPECTED_PATTERN));
         }
 
         if self.starts_with(expected) {
@@ -147,7 +147,7 @@ impl<'a> Parser<'a> {
             self.pos = end_pos;
             Ok(self)
         } else {
-            Err(ParseError::Expected(lang::EXPECTED_PATTERN))
+            Err(Error::Expected(lang::EXPECTED_PATTERN))
         }
     }
 
@@ -155,7 +155,7 @@ impl<'a> Parser<'a> {
         &mut self,
         c_identifier: bool,
         max_str_length: usize,
-    ) -> ParseResult<&'a [u8]> {
+    ) -> Result<&'a [u8]> {
         let start_pos = self.pos;
         let mut is_first_char = true;
 
@@ -165,7 +165,7 @@ impl<'a> Parser<'a> {
             // Check if we've exceeded max length before processing the byte
             let current_length = self.pos - start_pos;
             if current_length > max_str_length {
-                return Err(ParseError::MaxStrLength(max_str_length));
+                return Err(Error::MaxStrLength(max_str_length));
             }
 
             match byte {
@@ -177,20 +177,20 @@ impl<'a> Parser<'a> {
                     return Ok(slice);
                 }
                 b'\\' | b'\t' | b'\n' | b'\r' => {
-                    return Err(ParseError::InvalidChar(byte as char));
+                    return Err(Error::InvalidChar(byte as char));
                 }
                 _ => {
                     if c_identifier {
                         if is_first_char {
                             // First char must be alpha or underscore
                             if !(byte.is_ascii_alphabetic() || byte == b'_') {
-                                return Err(ParseError::InvalidChar(byte as char));
+                                return Err(Error::InvalidChar(byte as char));
                             }
                             is_first_char = false;
                         } else {
                             // Subsequent chars must be alphanumeric or underscore
                             if !(byte.is_ascii_alphanumeric() || byte == b'_') {
-                                return Err(ParseError::InvalidChar(byte as char));
+                                return Err(Error::InvalidChar(byte as char));
                             }
                         }
                     } else {
@@ -201,7 +201,7 @@ impl<'a> Parser<'a> {
                         // any byte that's not a control character, quote, or backslash
                         if byte < 32 || byte == 127 {
                             // Control character or DEL - reject
-                            return Err(ParseError::InvalidChar(byte as char));
+                            return Err(Error::InvalidChar(byte as char));
                         }
                         // Allow all other bytes (including UTF-8 continuation bytes)
                     }
@@ -211,7 +211,7 @@ impl<'a> Parser<'a> {
         }
 
         // Reached EOF without finding quote
-        Err(ParseError::UnexpectedEof)
+        Err(Error::UnexpectedEof)
     }
 
     #[inline]
@@ -263,7 +263,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn parse_u8(&mut self) -> ParseResult<u8> {
+    pub(crate) fn parse_u8(&mut self) -> Result<u8> {
         let start_pos = self.pos;
         // Read until whitespace, colon, or end of input
         while self.pos < self.input.len() {
@@ -273,23 +273,21 @@ impl<'a> Parser<'a> {
             } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
                 break;
             } else {
-                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+                return Err(Error::Expected(lang::EXPECTED_NUMBER));
             }
         }
 
         if self.pos == start_pos {
-            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+            return Err(Error::Expected(lang::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
-        num_str
-            .parse::<u8>()
-            .map_err(|_| ParseError::Expected(lang::INVALID_NUMBER_FORMAT))
+        let num_str =
+            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
+        num_str.parse::<u8>().map_err(|_| Error::Expected(lang::INVALID_NUMBER_FORMAT))
     }
 
-    pub(crate) fn parse_u32(&mut self) -> ParseResult<u32> {
+    pub(crate) fn parse_u32(&mut self) -> Result<u32> {
         let start_pos = self.pos;
         // Read until whitespace, colon, pipe, @, or end of input
         while self.pos < self.input.len() {
@@ -299,24 +297,22 @@ impl<'a> Parser<'a> {
             } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@') {
                 break;
             } else {
-                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+                return Err(Error::Expected(lang::EXPECTED_NUMBER));
             }
         }
 
         if self.pos == start_pos {
-            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+            return Err(Error::Expected(lang::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
-        num_str
-            .parse::<u32>()
-            .map_err(|_| ParseError::Expected(lang::INVALID_NUMBER_FORMAT))
+        let num_str =
+            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
+        num_str.parse::<u32>().map_err(|_| Error::Expected(lang::INVALID_NUMBER_FORMAT))
     }
 
     #[cfg(feature = "std")]
-    pub(crate) fn parse_i64(&mut self) -> ParseResult<i64> {
+    pub(crate) fn parse_i64(&mut self) -> Result<i64> {
         let start_pos = self.pos;
         let mut has_sign = false;
 
@@ -337,23 +333,21 @@ impl<'a> Parser<'a> {
             ) {
                 break;
             } else {
-                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+                return Err(Error::Expected(lang::EXPECTED_NUMBER));
             }
         }
 
         if self.pos == start_pos || (has_sign && self.pos == start_pos + 1) {
-            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+            return Err(Error::Expected(lang::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
-        num_str
-            .parse::<i64>()
-            .map_err(|_| ParseError::Expected(lang::INVALID_NUMBER_FORMAT))
+        let num_str =
+            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
+        num_str.parse::<i64>().map_err(|_| Error::Expected(lang::INVALID_NUMBER_FORMAT))
     }
 
-    pub(crate) fn parse_f64(&mut self) -> ParseResult<f64> {
+    pub(crate) fn parse_f64(&mut self) -> Result<f64> {
         let start_pos = self.pos;
         let mut has_dot = false;
         let mut has_e = false;
@@ -389,23 +383,21 @@ impl<'a> Parser<'a> {
             ) {
                 break;
             } else {
-                return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+                return Err(Error::Expected(lang::EXPECTED_NUMBER));
             }
         }
 
         if self.pos == start_pos {
-            return Err(ParseError::Expected(lang::EXPECTED_NUMBER));
+            return Err(Error::Expected(lang::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
-            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
-        num_str
-            .parse::<f64>()
-            .map_err(|_| ParseError::Expected(lang::PARSE_NUMBER_FAILED))
+        let num_str =
+            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
+        num_str.parse::<f64>().map_err(|_| Error::Expected(lang::PARSE_NUMBER_FAILED))
     }
 
-    pub(crate) fn parse_identifier(&mut self) -> ParseResult<&'a str> {
+    pub(crate) fn parse_identifier(&mut self) -> Result<&'a str> {
         let start_pos = self.pos;
         let mut is_first_char = true;
 
@@ -418,23 +410,23 @@ impl<'a> Parser<'a> {
                 } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
                     break;
                 } else {
-                    return Err(ParseError::InvalidChar(byte as char));
+                    return Err(Error::InvalidChar(byte as char));
                 }
             } else if byte.is_ascii_alphanumeric() || byte == b'_' {
                 self.pos += 1;
             } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
                 break;
             } else {
-                return Err(ParseError::InvalidChar(byte as char));
+                return Err(Error::InvalidChar(byte as char));
             }
         }
 
         if self.pos == start_pos {
-            return Err(ParseError::Expected(lang::EXPECTED_IDENTIFIER));
+            return Err(Error::Expected(lang::EXPECTED_IDENTIFIER));
         }
 
         let id_bytes = &self.input[start_pos..self.pos];
-        core::str::from_utf8(id_bytes).map_err(|_| ParseError::Expected(lang::INVALID_UTF8))
+        core::str::from_utf8(id_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))
     }
 }
 
@@ -461,8 +453,8 @@ mod tests {
             let result = Parser::new(input);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::UnexpectedEof => {}
-                _ => panic!("Expected ParseError::UnexpectedEof"),
+                Error::UnexpectedEof => {}
+                _ => panic!("Expected Error::UnexpectedEof"),
             }
         }
 
@@ -590,8 +582,8 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
-                _ => panic!("Expected ParseError"),
+                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                _ => panic!("Expected Error"),
             }
         }
 
@@ -602,8 +594,8 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
-                _ => panic!("Expected ParseError"),
+                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                _ => panic!("Expected Error"),
             }
         }
 
@@ -614,8 +606,8 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
-                _ => panic!("Expected ParseError"),
+                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                _ => panic!("Expected Error"),
             }
         }
 
@@ -626,8 +618,8 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
-                _ => panic!("Expected ParseError"),
+                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                _ => panic!("Expected Error"),
             }
         }
 
@@ -638,8 +630,8 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
-                _ => panic!("Expected ParseError"),
+                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                _ => panic!("Expected Error"),
             }
             // Input should remain unchanged
             assert_eq!(parser.remaining(), b"test");
@@ -655,8 +647,8 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::UnexpectedEof => {}
-                _ => panic!("Expected ParseError"),
+                Error::UnexpectedEof => {}
+                _ => panic!("Expected Error"),
             }
         }
 
@@ -677,8 +669,8 @@ mod tests {
             let result = parser.skip_whitespace().and_then(|p| p.skip_whitespace());
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
-                _ => panic!("Expected ParseError"),
+                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                _ => panic!("Expected Error"),
             }
         }
     }
@@ -705,8 +697,8 @@ mod tests {
             let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(_) => {}
-                _ => panic!("Expected ParseError::Expected"),
+                Error::Expected(_) => {}
+                _ => panic!("Expected Error::Expected"),
             }
             // Position should remain unchanged
             assert_eq!(parser.pos, 0);
@@ -720,8 +712,8 @@ mod tests {
             let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(_) => {}
-                _ => panic!("Expected ParseError::Expected"),
+                Error::Expected(_) => {}
+                _ => panic!("Expected Error::Expected"),
             }
         }
 
@@ -733,8 +725,8 @@ mod tests {
             let result = parser.expect(VERSION.as_bytes());
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::Expected(_) => {}
-                _ => panic!("Expected ParseError::Expected"),
+                Error::Expected(_) => {}
+                _ => panic!("Expected Error::Expected"),
             }
         }
 
@@ -804,8 +796,8 @@ mod tests {
             let result = parser.take_until_quote(true, 256);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::InvalidChar(c) => assert_eq!(c, '1'),
-                _ => panic!("Expected ParseError::InvalidChar"),
+                Error::InvalidChar(c) => assert_eq!(c, '1'),
+                _ => panic!("Expected Error::InvalidChar"),
             }
         }
 
@@ -816,8 +808,8 @@ mod tests {
             let result = parser.take_until_quote(true, 256);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::InvalidChar(c) => assert_eq!(c, '-'),
-                _ => panic!("Expected ParseError::InvalidChar"),
+                Error::InvalidChar(c) => assert_eq!(c, '-'),
+                _ => panic!("Expected Error::InvalidChar"),
             }
         }
 
@@ -838,8 +830,8 @@ mod tests {
             let result = parser.take_until_quote(false, 256);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::InvalidChar(c) => assert_eq!(c, '\\'),
-                _ => panic!("Expected ParseError::InvalidChar"),
+                Error::InvalidChar(c) => assert_eq!(c, '\\'),
+                _ => panic!("Expected Error::InvalidChar"),
             }
         }
 
@@ -850,8 +842,8 @@ mod tests {
             let result = parser.take_until_quote(false, 256);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::InvalidChar(c) => assert_eq!(c, '\t'),
-                _ => panic!("Expected ParseError::InvalidChar"),
+                Error::InvalidChar(c) => assert_eq!(c, '\t'),
+                _ => panic!("Expected Error::InvalidChar"),
             }
         }
 
@@ -862,8 +854,8 @@ mod tests {
             let result = parser.take_until_quote(false, 256);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::InvalidChar(c) => assert_eq!(c, '\n'),
-                _ => panic!("Expected ParseError::InvalidChar"),
+                Error::InvalidChar(c) => assert_eq!(c, '\n'),
+                _ => panic!("Expected Error::InvalidChar"),
             }
         }
 
@@ -874,8 +866,8 @@ mod tests {
             let result = parser.take_until_quote(false, 256);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::InvalidChar(c) => assert_eq!(c, '\r'),
-                _ => panic!("Expected ParseError::InvalidChar"),
+                Error::InvalidChar(c) => assert_eq!(c, '\r'),
+                _ => panic!("Expected Error::InvalidChar"),
             }
         }
 
@@ -886,8 +878,8 @@ mod tests {
             let result = parser.take_until_quote(false, 256);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::UnexpectedEof => {}
-                _ => panic!("Expected ParseError::UnexpectedEof"),
+                Error::UnexpectedEof => {}
+                _ => panic!("Expected Error::UnexpectedEof"),
             }
         }
 
@@ -919,8 +911,8 @@ mod tests {
             let result = parser.take_until_quote(false, 10);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::MaxStrLength(max) => assert_eq!(max, 10),
-                _ => panic!("Expected ParseError::MaxStrLength"),
+                Error::MaxStrLength(max) => assert_eq!(max, 10),
+                _ => panic!("Expected Error::MaxStrLength"),
             }
         }
 
@@ -941,8 +933,8 @@ mod tests {
             let result = parser.take_until_quote(true, 20);
             assert!(result.is_err());
             match result.unwrap_err() {
-                ParseError::MaxStrLength(max) => assert_eq!(max, 20),
-                _ => panic!("Expected ParseError::MaxStrLength"),
+                Error::MaxStrLength(max) => assert_eq!(max, 20),
+                _ => panic!("Expected Error::MaxStrLength"),
             }
         }
     }

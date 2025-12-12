@@ -1,8 +1,8 @@
 use crate::{
     MAX_NAME_SIZE, Parser, VERSION,
-    error::{ParseError, ParseResult, lang},
+    compat::{String, Vec},
+    error::{Error, Result, lang},
 };
-use mayheap::{String, Vec};
 
 /// Represents a version string from a DBC file.
 ///
@@ -76,7 +76,7 @@ impl Version {
     ///
     /// # Returns
     ///
-    /// Returns `Ok(Version)` if parsing succeeds, or `Err(ParseError)` if:
+    /// Returns `Ok(Version)` if parsing succeeds, or `Err(Error)` if:
     /// - The opening quote is missing
     /// - The closing quote is missing
     /// - The version string exceeds the maximum length (255 characters)
@@ -99,25 +99,25 @@ impl Version {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[must_use = "parse result should be checked"]
-    pub(crate) fn parse(parser: &mut Parser) -> ParseResult<Self> {
+    pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Version parsing must always start with "VERSION" keyword
         parser
             .expect(VERSION.as_bytes())
-            .map_err(|_| ParseError::Expected("Expected 'VERSION' keyword"))?;
+            .map_err(|_| Error::Expected("Expected 'VERSION' keyword"))?;
 
         // Skip whitespace and expect quote
         parser
             .skip_whitespace()?
             .expect(b"\"")
-            .map_err(|_| ParseError::Expected("Expected opening quote after VERSION"))?;
+            .map_err(|_| Error::Expected("Expected opening quote after VERSION"))?;
 
         let version_bytes = parser.take_until_quote(false, MAX_NAME_SIZE)?;
 
         // Convert bytes to string slice using the parser's input
         let v = Vec::<u8, { MAX_NAME_SIZE }>::from_slice(version_bytes)
-            .map_err(|_| ParseError::Expected(lang::INVALID_UTF8))?;
+            .map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
         let version_str = String::<{ MAX_NAME_SIZE }>::from_utf8(v)
-            .map_err(|_| ParseError::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+            .map_err(|_| Error::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
 
         // Construct directly (validation already done during parsing)
         Ok(Version::new(version_str))
@@ -142,7 +142,7 @@ impl Version {
     /// ```
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.version
+        self.version.as_str()
     }
 
     /// Converts the version to its DBC file representation.
@@ -231,7 +231,7 @@ impl core::fmt::Display for Version {
 mod tests {
     use super::Version;
     use crate::Parser;
-    use crate::error::ParseError;
+    use crate::error::Error;
 
     // Helper function to assert version string (works in all configurations)
     fn assert_version_str(version: &Version, expected: &str) {
@@ -255,7 +255,7 @@ mod tests {
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap_err();
         match version {
-            ParseError::Expected(_) => {}
+            Error::Expected(_) => {}
             _ => panic!("Expected Expected error, got {:?}", version),
         }
     }
@@ -266,7 +266,7 @@ mod tests {
         let result = Parser::new(line);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::UnexpectedEof => {}
+            Error::UnexpectedEof => {}
             _ => panic!("Expected UnexpectedEof"),
         }
     }
@@ -278,7 +278,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Expected(_) => {}
+            Error::Expected(_) => {}
             _ => panic!("Expected Expected error"),
         }
     }
@@ -290,7 +290,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Expected(_) => {}
+            Error::Expected(_) => {}
             _ => panic!("Expected Expected error"),
         }
     }
@@ -340,7 +340,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::UnexpectedEof => {}
+            Error::UnexpectedEof => {}
             _ => panic!("Expected UnexpectedEof"),
         }
     }
@@ -352,7 +352,7 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            ParseError::Expected(_) => {}
+            Error::Expected(_) => {}
             _ => panic!("Expected Expected error"),
         }
     }

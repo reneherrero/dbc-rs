@@ -28,7 +28,7 @@ BO_ 512 Brake : 4 TCM
     if let Ok(mut file) = std::fs::File::open("tests/data/simple.dbc") {
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)
-            .map_err(|e| dbc_rs::Error::Dbc(format!("Read error: {}", e)))?;
+            .map_err(|_| dbc_rs::Error::Decoding("Failed to read file"))?;
         let dbc_file = Dbc::parse_bytes(&buffer)?;
         println!("Parsed {} messages from file", dbc_file.messages().len());
     } else {
