@@ -120,5 +120,11 @@ fn main() -> Result<(), dbc_rs::Error> {
     // The DBC object is now ready to use
     // You can access messages, signals, and other data through the getter methods
 
+    // Save the DBC to a file
+    let dbc_string = dbc.to_dbc_string();
+    std::fs::write("output.dbc", dbc_string)
+        .map_err(|e| dbc_rs::Error::InvalidData(format!("Failed to write file: {}", e)))?;
+    println!("\nDBC file saved to 'output.dbc'");
+
     Ok(())
 }
