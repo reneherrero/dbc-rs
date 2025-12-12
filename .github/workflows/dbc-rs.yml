@@ -82,6 +82,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Test heapless feature (x86_64)
         env:
+          DBC_MAX_MESSAGES: 100
           RUST_MIN_STACK: 8388608
         run: cargo test --verbose --no-default-features --features heapless -p dbc-rs --lib
       - name: Build heapless (x86_64, release)
