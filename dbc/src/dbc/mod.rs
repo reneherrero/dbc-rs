@@ -10,7 +10,7 @@ mod dbc_builder;
 #[cfg(feature = "std")]
 pub use dbc_builder::DbcBuilder;
 
-pub use dbc_impl::Dbc;
+pub use dbc_impl::{Dbc, ExtendedMultiplexing};
 pub use message_list::MessageList;
 
 #[cfg(feature = "std")]

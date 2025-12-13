@@ -49,6 +49,7 @@ mod nodes;
 mod parser;
 mod receivers;
 mod signal;
+mod signal_type;
 #[cfg(feature = "std")]
 mod value_descriptions;
 #[cfg(feature = "std")]
@@ -58,12 +59,13 @@ mod version;
 pub use byte_order::ByteOrder;
 #[cfg(feature = "std")]
 pub use dbc::ValueDescriptionsList;
-pub use dbc::{Dbc, MessageList};
+pub use dbc::{Dbc, ExtendedMultiplexing, MessageList};
 pub use error::{Error, Result};
 pub use message::{Message, SignalList};
 pub use nodes::Nodes;
 pub use receivers::Receivers;
 pub use signal::{MultiplexerIndicator, Signal};
+pub use signal_type::{SignalExtendedValueType, SignalType, SignalTypeReference, SignalTypeValue};
 #[cfg(feature = "std")]
 pub use value_descriptions::{ValueDescriptions, ValueDescriptionsBuilder};
 pub use version::Version;
@@ -165,6 +167,7 @@ pub(crate) const SIG_TYPE_REF_: &str = "SIG_TYPE_REF_";
 pub(crate) const NS_DESC_: &str = "NS_DESC_";
 pub(crate) const BA_DEF_REL_: &str = "BA_DEF_REL_";
 pub(crate) const BA_SGTYPE_: &str = "BA_SGTYPE_";
+pub(crate) const SGTYPE_: &str = "SGTYPE_";
 pub(crate) const SGTYPE_VAL_: &str = "SGTYPE_VAL_";
 pub(crate) const BU_SG_REL_: &str = "BU_SG_REL_";
 pub(crate) const BU_EV_REL_: &str = "BU_EV_REL_";
@@ -188,7 +191,8 @@ const DBC_KEYWORDS: &[&str] = &[
     NS_DESC_,
     BA_DEF_REL_,
     BA_SGTYPE_,
-    SGTYPE_VAL_,
+    SGTYPE_VAL_, // Must come before SGTYPE_ (longer keyword first)
+    SGTYPE_,
     VAL_TABLE_,
     SIG_GROUP_,
     SIG_VALTYPE_,

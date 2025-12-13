@@ -376,6 +376,185 @@ impl Message {
         &self.signals
     }
 
+    /// Get active signals based on multiplexer switch value from CAN data
+    ///
+    /// For multiplexed messages, this method filters signals based on the current
+    /// multiplexer switch value. Only signals that should be active for the current
+    /// switch value are returned.
+    ///
+    /// **Basic Multiplexing:**
+    /// - Returns all normal signals (not multiplexed)
+    /// - Returns the multiplexer switch signal
+    /// - Returns only multiplexed signals (`m0`, `m1`, etc.) that match the switch value
+    ///
+    /// **Non-multiplexed messages:**
+    /// - Returns all signals
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - CAN message data bytes
+    ///
+    /// # Returns
+    ///
+    /// Vector of references to active signals
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"
+    /// # VERSION "1.0"
+    /// # BU_: ECM
+    /// # BO_ 400 MultiplexedMsg : 8 ECM
+    /// #  SG_ MuxSwitch M : 0|8@1+ (1,0) [0|255] ""
+    /// #  SG_ Signal_0 m0 : 8|16@1+ (0.1,0) [0|1000] "kPa"
+    /// #  SG_ Signal_1 m1 : 8|16@1+ (0.01,0) [0|100] "°C"
+    /// # "#)?;
+    /// let message = dbc.messages().find_by_id(400).unwrap();
+    /// let data = [0u8; 8]; // Switch value = 0
+    /// let active_signals = message.get_active_signals(&data);
+    /// // Only MuxSwitch and Signal_0 are active
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn get_active_signals(&self, data: &[u8]) -> std::vec::Vec<&Signal> {
+        // Find multiplexer switch signal
+        let mux_switch = self.signals().iter().find(|s| s.is_multiplexer_switch());
+
+        if let Some(switch_signal) = mux_switch {
+            // Decode switch value
+            let switch_value = match switch_signal.decode(data) {
+                Ok(v) => v as u8,
+                Err(_) => {
+                    // If decoding fails, return all signals (fallback)
+                    return self.signals().iter().collect();
+                }
+            };
+
+            // Collect active signals:
+            // 1. Normal signals (not multiplexed)
+            // 2. The switch signal itself
+            // 3. Multiplexed signals matching the switch value
+            let mut active: std::vec::Vec<&Signal> = std::vec::Vec::new();
+
+            for signal in self.signals().iter() {
+                match signal.multiplexer() {
+                    crate::MultiplexerIndicator::Normal => {
+                        // Normal signals are always active
+                        active.push(signal);
+                    }
+                    crate::MultiplexerIndicator::Switch => {
+                        // Switch signal is always active
+                        active.push(signal);
+                    }
+                    crate::MultiplexerIndicator::Multiplexed(mux_value) => {
+                        // Only include if mux value matches switch value
+                        if mux_value == switch_value {
+                            active.push(signal);
+                        }
+                    }
+                }
+            }
+
+            active
+        } else {
+            // No multiplexing - return all signals
+            self.signals().iter().collect()
+        }
+    }
+
+    /// Get active signals with extended multiplexing support
+    ///
+    /// Similar to `get_active_signals()`, but also handles extended multiplexing
+    /// (`SG_MUL_VAL_`) which allows signals to be active for value ranges.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - CAN message data bytes
+    /// * `extended_multiplexing` - Extended multiplexing entries for this message
+    ///
+    /// # Returns
+    ///
+    /// Vector of references to active signals
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"
+    /// # VERSION "1.0"
+    /// # BU_: ECM
+    /// # BO_ 500 ComplexMux : 8 ECM
+    /// #  SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
+    /// #  SG_ Signal_A m0 : 16|16@1+ (0.1,0) [0|100] ""
+    /// # SG_MUL_VAL_ 500 Signal_A Mux1 0-5,10-15 ;
+    /// # "#)?;
+    /// let message = dbc.messages().find_by_id(500).unwrap();
+    /// let extended = dbc.extended_multiplexing_for_message(500);
+    /// let data = [5u8, 0, 0, 0, 0, 0, 0, 0]; // Switch value = 5
+    /// let active_signals = message.get_active_signals_with_extended(&data, &extended);
+    /// // Signal_A is active because 5 is in range 0-5
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn get_active_signals_with_extended(
+        &self,
+        data: &[u8],
+        extended_multiplexing: &[crate::ExtendedMultiplexing],
+    ) -> std::vec::Vec<&Signal> {
+        // Start with basic multiplexing filtering
+        let mut active = self.get_active_signals(data);
+
+        // Find multiplexer switch signal
+        let mux_switch = self.signals().iter().find(|s| s.is_multiplexer_switch());
+
+        if let Some(switch_signal) = mux_switch {
+            // Decode switch value
+            let switch_value = match switch_signal.decode(data) {
+                Ok(v) => v as u8,
+                Err(_) => {
+                    // If decoding fails, return basic filtering result
+                    return active;
+                }
+            };
+
+            // Check extended multiplexing entries
+            // Extended multiplexing can override basic multiplexing behavior
+            for ext_mux in extended_multiplexing {
+                // Check if this extended mux entry applies to the current switch
+                if ext_mux.multiplexer_switch() != switch_signal.name() {
+                    continue;
+                }
+
+                // Find the signal referenced by this extended mux entry
+                let Some(signal) = self.signals().find(ext_mux.signal_name()) else {
+                    continue;
+                };
+
+                // Check if switch value is in any of the value ranges
+                let in_range = ext_mux.value_ranges().iter().any(|(min, max)| {
+                    switch_value >= *min && switch_value <= *max
+                });
+
+                if in_range {
+                    // Switch value is in range - ensure signal is active
+                    if !active.iter().any(|s| s.name() == signal.name()) {
+                        active.push(signal);
+                    }
+                } else {
+                    // Switch value not in range - remove signal
+                    // Extended mux overrides basic mux: if extended mux says signal is not active,
+                    // remove it even if basic mux would include it
+                    active.retain(|s| s.name() != signal.name());
+                }
+            }
+        }
+
+        active
+    }
+
     #[cfg(feature = "std")]
     #[must_use]
     pub fn to_dbc_string(&self) -> std::string::String {

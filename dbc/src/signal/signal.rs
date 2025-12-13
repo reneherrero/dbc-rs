@@ -545,7 +545,44 @@ impl Signal {
     /// assert_eq!(rpm, 2000.0);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    /// Decode signal value from CAN data (integer decoding, default)
+    ///
+    /// This method decodes the signal as an integer. For float/double signals,
+    /// use `decode_with_value_type()` instead.
     pub fn decode(&self, data: &[u8]) -> Result<f64> {
+        self.decode_with_value_type(data, None)
+    }
+
+    /// Decode signal value from CAN data with optional value type
+    ///
+    /// If `value_type` is `Some(Float32)` or `Some(Float64)`, the signal bits
+    /// are interpreted as IEEE 754 floating-point values. Otherwise, integer
+    /// decoding is used (default).
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - CAN message data bytes
+    /// * `value_type` - Optional signal value type (from `SIG_VALTYPE_` entry)
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::{Signal, SignalExtendedValueType};
+    /// # let signal = Signal::new(/* ... */)?;
+    /// let data = [0x40, 0x49, 0x0F, 0xDB]; // IEEE 754 float32: 3.14159...
+    ///
+    /// // Decode as integer (default)
+    /// let int_value = signal.decode(&data)?;
+    ///
+    /// // Decode as float32
+    /// let float_value = signal.decode_with_value_type(&data, Some(SignalExtendedValueType::Float32))?;
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn decode_with_value_type(
+        &self,
+        data: &[u8],
+        value_type: Option<crate::signal_type::SignalExtendedValueType>,
+    ) -> Result<f64> {
         let start_bit = self.start_bit as usize;
         let length = self.length as usize;
         let end_byte = (start_bit + length - 1) / 8;
@@ -554,29 +591,71 @@ impl Signal {
             return Err(Error::Decoding(lang::SIGNAL_EXTENDS_BEYOND_DATA));
         }
 
-        // Extract bits based on byte order
-        let raw_value = match self.byte_order {
-            ByteOrder::LittleEndian => Self::extract_bits_little_endian(data, start_bit, length),
-            ByteOrder::BigEndian => Self::extract_bits_big_endian(data, start_bit, length),
-        };
+        // Handle float/double decoding
+        let physical_value = match value_type {
+            Some(crate::signal_type::SignalExtendedValueType::Float32) => {
+                if length != 32 {
+                    return Err(Error::Decoding("Float32 signals must be exactly 32 bits"));
+                }
+                // Extract 32 bits as IEEE 754 float
+                let raw_bits = match self.byte_order {
+                    ByteOrder::LittleEndian => {
+                        Self::extract_bits_little_endian(data, start_bit, 32) as u32
+                    }
+                    ByteOrder::BigEndian => {
+                        Self::extract_bits_big_endian(data, start_bit, 32) as u32
+                    }
+                };
+                let float_value = f32::from_bits(raw_bits);
+                // Apply factor and offset
+                (float_value as f64) * self.factor + self.offset
+            }
+            Some(crate::signal_type::SignalExtendedValueType::Float64) => {
+                if length != 64 {
+                    return Err(Error::Decoding("Float64 signals must be exactly 64 bits"));
+                }
+                // Extract 64 bits as IEEE 754 double
+                let raw_bits = match self.byte_order {
+                    ByteOrder::LittleEndian => {
+                        Self::extract_bits_little_endian(data, start_bit, 64)
+                    }
+                    ByteOrder::BigEndian => Self::extract_bits_big_endian(data, start_bit, 64),
+                };
+                let double_value = f64::from_bits(raw_bits);
+                // Apply factor and offset
+                double_value * self.factor + self.offset
+            }
+            _ => {
+                // Integer decoding (default)
+                // Extract bits based on byte order
+                let raw_value = match self.byte_order {
+                    ByteOrder::LittleEndian => {
+                        Self::extract_bits_little_endian(data, start_bit, length)
+                    }
+                    ByteOrder::BigEndian => Self::extract_bits_big_endian(data, start_bit, length),
+                };
 
-        // Convert to signed/unsigned
-        let value = if self.unsigned {
-            raw_value as i64
-        } else {
-            // Sign extend for signed values
-            let sign_bit = 1u64 << (length - 1);
-            if (raw_value & sign_bit) != 0 {
-                // Negative value - sign extend
-                let mask = !((1u64 << length) - 1);
-                (raw_value | mask) as i64
-            } else {
-                raw_value as i64
+                // Convert to signed/unsigned
+                let value = if self.unsigned {
+                    raw_value as i64
+                } else {
+                    // Sign extend for signed values
+                    let sign_bit = 1u64 << (length - 1);
+                    if (raw_value & sign_bit) != 0 {
+                        // Negative value - sign extend
+                        let mask = !((1u64 << length) - 1);
+                        (raw_value | mask) as i64
+                    } else {
+                        raw_value as i64
+                    }
+                };
+
+                // Apply factor and offset to get physical value
+                (value as f64) * self.factor + self.offset
             }
         };
 
-        // Apply factor and offset to get physical value
-        Ok((value as f64) * self.factor + self.offset)
+        Ok(physical_value)
     }
 
     /// Extract bits from data using little-endian byte order.

@@ -625,6 +625,10 @@ impl DbcBuilder {
             comments,
             value_tables,
             extended_multiplexing,
+            std::collections::BTreeMap::new(), // signal_value_types - not yet supported in builder
+            std::vec::Vec::new(),              // signal_types - not yet supported in builder
+            std::vec::Vec::new(), // signal_type_references - not yet supported in builder
+            std::vec::Vec::new(), // signal_type_values - not yet supported in builder
         ))
     }
 }

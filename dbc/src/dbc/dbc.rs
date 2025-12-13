@@ -63,9 +63,19 @@ pub struct Dbc {
     #[cfg(feature = "std")]
     #[allow(dead_code)] // Fields are stored but not yet exposed via public API
     extended_multiplexing: std::vec::Vec<ExtendedMultiplexing>,
+    #[cfg(feature = "std")]
+    signal_value_types: std::collections::BTreeMap<(u32, std::string::String), crate::signal_type::SignalExtendedValueType>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    signal_types: std::vec::Vec<crate::signal_type::SignalType>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    signal_type_references: std::vec::Vec<crate::signal_type::SignalTypeReference>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    signal_type_values: std::vec::Vec<crate::signal_type::SignalTypeValue>,
 }
 
-#[allow(dead_code)] // Used by builder and parser
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtendedMultiplexing {
     message_id: u32,
@@ -88,6 +98,26 @@ impl ExtendedMultiplexing {
             multiplexer_switch,
             value_ranges,
         }
+    }
+
+    #[must_use]
+    pub fn message_id(&self) -> u32 {
+        self.message_id
+    }
+
+    #[must_use]
+    pub fn signal_name(&self) -> &str {
+        self.signal_name.as_str()
+    }
+
+    #[must_use]
+    pub fn multiplexer_switch(&self) -> &str {
+        self.multiplexer_switch.as_str()
+    }
+
+    #[must_use]
+    pub fn value_ranges(&self) -> &[(u8, u8)] {
+        self.value_ranges.as_slice()
     }
 }
 
@@ -176,12 +206,16 @@ impl Dbc {
             nodes,
             messages,
             value_descriptions,
-            std::vec::Vec::new(),
-            std::vec::Vec::new(),
-            std::vec::Vec::new(),
-            std::vec::Vec::new(),
-            std::vec::Vec::new(),
-            std::vec::Vec::new(),
+            std::vec::Vec::new(), // attributes
+            std::vec::Vec::new(), // attribute_defaults
+            std::vec::Vec::new(), // attribute_values
+            std::vec::Vec::new(), // comments
+            std::vec::Vec::new(), // value_tables
+            std::vec::Vec::new(), // extended_multiplexing
+            std::collections::BTreeMap::new(), // signal_value_types
+            std::vec::Vec::new(), // signal_types
+            std::vec::Vec::new(), // signal_type_references
+            std::vec::Vec::new(), // signal_type_values
         )
     }
 
@@ -198,6 +232,10 @@ impl Dbc {
         comments: std::vec::Vec<Comment>,
         value_tables: std::vec::Vec<ValueTable>,
         extended_multiplexing: std::vec::Vec<ExtendedMultiplexing>,
+        signal_value_types: std::collections::BTreeMap<(u32, std::string::String), crate::signal_type::SignalExtendedValueType>,
+        signal_types: std::vec::Vec<crate::signal_type::SignalType>,
+        signal_type_references: std::vec::Vec<crate::signal_type::SignalTypeReference>,
+        signal_type_values: std::vec::Vec<crate::signal_type::SignalTypeValue>,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
@@ -211,6 +249,10 @@ impl Dbc {
             comments,
             value_tables,
             extended_multiplexing,
+            signal_value_types,
+            signal_types,
+            signal_type_references,
+            signal_type_values,
         }
     }
 
@@ -301,6 +343,137 @@ impl Dbc {
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn get_signal_value_type(
+        &self,
+        message_id: u32,
+        signal_name: &str,
+    ) -> Option<crate::signal_type::SignalExtendedValueType> {
+        self.signal_value_types
+            .get(&(message_id, signal_name.to_string()))
+            .copied()
+    }
+
+    /// Get all signal types defined in the DBC file
+    ///
+    /// # Returns
+    ///
+    /// Vector of signal type definitions
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"
+    /// # VERSION "1.0"
+    /// # BU_: ECM
+    /// # SGTYPE_ SignalType1 : 16;
+    /// # "#)?;
+    /// let signal_types = dbc.signal_types();
+    /// assert_eq!(signal_types.len(), 1);
+    /// assert_eq!(signal_types[0].name(), "SignalType1");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn signal_types(&self) -> &[crate::signal_type::SignalType] {
+        &self.signal_types
+    }
+
+    /// Get all signal type references (SIG_TYPE_REF_)
+    ///
+    /// # Returns
+    ///
+    /// Vector of signal type references
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"
+    /// # VERSION "1.0"
+    /// # BU_: ECM
+    /// # BO_ 256 EngineData : 8 ECM
+    /// #  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *
+    /// # SIG_TYPE_REF_ 256 RPM : SignalType1;
+    /// # "#)?;
+    /// let refs = dbc.signal_type_references();
+    /// assert_eq!(refs.len(), 1);
+    /// assert_eq!(refs[0].signal_name(), "RPM");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn signal_type_references(&self) -> &[crate::signal_type::SignalTypeReference] {
+        &self.signal_type_references
+    }
+
+    /// Get all signal type value descriptions (SGTYPE_VAL_)
+    ///
+    /// # Returns
+    ///
+    /// Vector of signal type value descriptions
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"
+    /// # VERSION "1.0"
+    /// # BU_: ECM
+    /// # SGTYPE_VAL_ SignalType1 0 "Zero" 1 "One";
+    /// # "#)?;
+    /// let values = dbc.signal_type_values();
+    /// assert_eq!(values.len(), 2);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn signal_type_values(&self) -> &[crate::signal_type::SignalTypeValue] {
+        &self.signal_type_values
+    }
+
+    /// Get extended multiplexing entries for a specific message
+    ///
+    /// Returns all `SG_MUL_VAL_` entries that apply to the specified message.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_id` - The CAN message ID
+    ///
+    /// # Returns
+    ///
+    /// Vector of extended multiplexing entries for the message
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"
+    /// # VERSION "1.0"
+    /// # BU_: ECM
+    /// # BO_ 500 ComplexMux : 8 ECM
+    /// #  SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
+    /// #  SG_ Signal_A m0 : 16|16@1+ (0.1,0) [0|100] ""
+    /// # SG_MUL_VAL_ 500 Signal_A Mux1 0-5,10-15 ;
+    /// # "#)?;
+    /// let extended = dbc.extended_multiplexing_for_message(500);
+    /// assert_eq!(extended.len(), 1);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn extended_multiplexing_for_message(
+        &self,
+        message_id: u32,
+    ) -> std::vec::Vec<&ExtendedMultiplexing> {
+        self.extended_multiplexing
+            .iter()
+            .filter(|ext_mux| ext_mux.message_id == message_id)
+            .collect()
+    }
+
     /// Get a reference to the value descriptions list
     ///
     /// # Examples
@@ -364,8 +537,9 @@ impl Dbc {
 
         // Parse version, nodes, and messages
         use crate::{
-            BA_, BA_DEF_, BA_DEF_DEF_, BO_, BO_TX_BU_, BS_, BU_, CM_, EV_, NS_, SG_, SIG_GROUP_,
-            SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
+            BA_, BA_DEF_, BA_DEF_DEF_, BA_DEF_SGTYPE_, BA_SGTYPE_, BO_, BO_TX_BU_, BS_, BU_, CM_,
+            EV_, NS_, SG_, SG_MUL_VAL_, SIG_GROUP_, SIG_TYPE_REF_, SIG_VALTYPE_, SGTYPE_,
+            SGTYPE_VAL_, VAL_, VAL_TABLE_, VERSION,
         };
 
         let mut version: Option<Version> = None;
@@ -399,6 +573,18 @@ impl Dbc {
         let mut value_tables_buffer: std::vec::Vec<ValueTable> = std::vec::Vec::new();
         #[cfg(feature = "std")]
         let mut extended_multiplexing_buffer: std::vec::Vec<ExtendedMultiplexing> =
+            std::vec::Vec::new();
+        #[cfg(feature = "std")]
+        let mut signal_value_types_buffer: std::collections::BTreeMap<(u32, std::string::String), crate::signal_type::SignalExtendedValueType> =
+            std::collections::BTreeMap::new();
+        #[cfg(feature = "std")]
+        let mut signal_types_buffer: std::vec::Vec<crate::signal_type::SignalType> =
+            std::vec::Vec::new();
+        #[cfg(feature = "std")]
+        let mut signal_type_references_buffer: std::vec::Vec<crate::signal_type::SignalTypeReference> =
+            std::vec::Vec::new();
+        #[cfg(feature = "std")]
+        let mut signal_type_values_buffer: std::vec::Vec<crate::signal_type::SignalTypeValue> =
             std::vec::Vec::new();
 
         loop {
@@ -611,10 +797,55 @@ impl Dbc {
                     }
                     continue;
                 }
-                BS_ | SIG_GROUP_ | SIG_VALTYPE_ | EV_ | BO_TX_BU_ => {
+                BS_ | SIG_GROUP_ | EV_ | BO_TX_BU_ => {
                     // Consume keyword then skip to end of line (not yet implemented)
                     let _ = parser.expect(keyword.as_bytes()).ok();
                     parser.skip_to_end_of_line();
+                    continue;
+                }
+                SIG_VALTYPE_ => {
+                    #[cfg(feature = "std")]
+                    {
+                        // Parse SIG_VALTYPE_ message_id signal_name : value_type ;
+                        if parser.expect(crate::SIG_VALTYPE_.as_bytes()).is_err() {
+                            parser.skip_to_end_of_line();
+                            continue;
+                        }
+                        parser.skip_newlines_and_spaces();
+                        
+                        if let Ok((message_id, signal_name, value_type)) = (|| -> Result<(u32, std::string::String, crate::signal_type::SignalExtendedValueType)> {
+                            let message_id = parser.parse_u32()?;
+                            parser.skip_newlines_and_spaces();
+                            let signal_name = parser.parse_identifier()?;
+                            let signal_name = signal_name.to_string();
+                            parser.skip_newlines_and_spaces();
+                            
+                            // Expect colon
+                            parser.expect(b":").map_err(|_| Error::Expected("Expected ':' after signal name"))?;
+                            parser.skip_newlines_and_spaces();
+                            
+                            // Parse value type (0, 1, or 2)
+                            let value_type_num = parser.parse_u32()?;
+                            if value_type_num > 2 {
+                                return Err(Error::Validation(lang::INVALID_SIGNAL_VALUE_TYPE));
+                            }
+                            let value_type = crate::signal_type::SignalExtendedValueType::from_u8(value_type_num as u8)?;
+                            
+                            parser.skip_newlines_and_spaces();
+                            parser.expect(b";").ok(); // Semicolon is optional
+                            
+                            Ok((message_id, signal_name, value_type))
+                        })() {
+                            signal_value_types_buffer.insert((message_id, signal_name), value_type);
+                        } else {
+                            parser.skip_to_end_of_line();
+                        }
+                    }
+                    #[cfg(not(feature = "std"))]
+                    {
+                        let _ = parser.expect(crate::SIG_VALTYPE_.as_bytes()).ok();
+                        parser.skip_to_end_of_line();
+                    }
                     continue;
                 }
                 VAL_TABLE_ => {
@@ -1199,8 +1430,7 @@ impl Dbc {
                     message_count_actual += 1;
                     continue;
                 }
-                #[allow(non_snake_case)]
-                _SG_MUL_VAL_ => {
+                SG_MUL_VAL_ => {
                     #[cfg(feature = "std")]
                     {
                         // Consume SG_MUL_VAL_ keyword
@@ -1286,6 +1516,95 @@ impl Dbc {
                     }
                     continue;
                 }
+                SGTYPE_ => {
+                    #[cfg(feature = "std")]
+                    {
+                        // Consume SGTYPE_ keyword
+                        if parser.expect(crate::SGTYPE_.as_bytes()).is_err() {
+                            parser.skip_to_end_of_line();
+                            continue;
+                        }
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse: SGTYPE_ type_name : size ;
+                        // Example: SGTYPE_ SignalType1 : 16;
+                        if let Ok(ext_type) = crate::signal_type::parse::parse_signal_type(&mut parser) {
+                            signal_types_buffer.push(ext_type);
+                        } else {
+                            // If parsing fails, just skip the line
+                            parser.skip_to_end_of_line();
+                        }
+                    }
+                    #[cfg(not(feature = "std"))]
+                    {
+                        let _ = parser.expect(crate::SGTYPE_.as_bytes()).ok();
+                        parser.skip_to_end_of_line();
+                    }
+                    continue;
+                }
+                SIG_TYPE_REF_ => {
+                    #[cfg(feature = "std")]
+                    {
+                        // Consume SIG_TYPE_REF_ keyword
+                        if parser.expect(crate::SIG_TYPE_REF_.as_bytes()).is_err() {
+                            parser.skip_to_end_of_line();
+                            continue;
+                        }
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse: SIG_TYPE_REF_ message_id signal_name : type_name ;
+                        // Example: SIG_TYPE_REF_ 256 RPM : SignalType1;
+                        if let Ok(ext_ref) =
+                            crate::signal_type::parse::parse_signal_type_reference(&mut parser)
+                        {
+                            signal_type_references_buffer.push(ext_ref);
+                        } else {
+                            // If parsing fails, just skip the line
+                            parser.skip_to_end_of_line();
+                        }
+                    }
+                    #[cfg(not(feature = "std"))]
+                    {
+                        let _ = parser.expect(crate::SIG_TYPE_REF_.as_bytes()).ok();
+                        parser.skip_to_end_of_line();
+                    }
+                    continue;
+                }
+                SGTYPE_VAL_ => {
+                    #[cfg(feature = "std")]
+                    {
+                        // Consume SGTYPE_VAL_ keyword
+                        if parser.expect(crate::SGTYPE_VAL_.as_bytes()).is_err() {
+                            parser.skip_to_end_of_line();
+                            continue;
+                        }
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse: SGTYPE_VAL_ type_name value "description" value "description" ... ;
+                        // Example: SGTYPE_VAL_ SignalType1 0 "Zero" 1 "One" 2 "Two";
+                        if let Ok(values) = crate::signal_type::parse::parse_signal_type_values(&mut parser)
+                        {
+                            signal_type_values_buffer.extend(values);
+                        } else {
+                            // If parsing fails, just skip the line
+                            parser.skip_to_end_of_line();
+                        }
+                    }
+                    #[cfg(not(feature = "std"))]
+                    {
+                        let _ = parser.expect(crate::SGTYPE_VAL_.as_bytes()).ok();
+                        parser.skip_to_end_of_line();
+                    }
+                    continue;
+                }
+                BA_DEF_SGTYPE_ | BA_SGTYPE_ => {
+                    // Attribute definitions and values for signal types
+                    // Similar to BA_DEF_ and BA_ but for signal types
+                    // For now, skip these (can be implemented later if needed)
+                    let _ = parser.expect(keyword.as_bytes()).ok();
+                    parser.skip_to_end_of_line();
+                    continue;
+                }
                 #[allow(unreachable_patterns)]
                 // False positive: peek_next_keyword returns longest match first
                 SG_ => {
@@ -1362,6 +1681,14 @@ impl Dbc {
             value_tables: value_tables_buffer,
             #[cfg(feature = "std")]
             extended_multiplexing: extended_multiplexing_buffer,
+            #[cfg(feature = "std")]
+            signal_value_types: signal_value_types_buffer,
+            #[cfg(feature = "std")]
+            signal_types: signal_types_buffer,
+            #[cfg(feature = "std")]
+            signal_type_references: signal_type_references_buffer,
+            #[cfg(feature = "std")]
+            signal_type_values: signal_type_values_buffer,
         })
     }
 
