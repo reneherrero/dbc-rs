@@ -66,12 +66,12 @@ This checklist ensures all steps are completed before publishing a new release o
 - [ ] **Builds successfully in `no_std` + `heapless` mode**
   ```bash
   # x86_64
-  DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --package dbc-rs
+  DBC_MAX_MESSAGES=512 cargo build --release --no-default-features --features heapless --package dbc-rs
   
-  # Embedded target (requires DBC_MAX_MESSAGES reduction)
-  DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf --package dbc-rs
+  # Embedded target (requires DBC_MAX_MESSAGES reduction, must be power of 2 for heapless)
+  DBC_MAX_MESSAGES=512 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf --package dbc-rs
   ```
-  Note: For embedded targets, the default of 10000 causes stack overflow with heapless Vec. Override with `DBC_MAX_MESSAGES` (recommended: 100-500).
+  Note: For embedded targets, the default of 8192 may cause stack overflow with heapless Vec. Override with `DBC_MAX_MESSAGES` (must be a power of 2 for heapless, recommended: 256-512). build.rs validates that all heapless values are powers of 2.
 
 - [ ] **Builds successfully on MSRV (1.85.0)**
   ```bash
@@ -274,8 +274,8 @@ RUST_MIN_STACK=8388608 cargo test --no-default-features --features heapless -p d
 # Builds - all configurations (release builds)
 cargo build --release -p dbc-rs  # std (default)
 cargo build --release --no-default-features --features alloc -p dbc-rs  # alloc only
-DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless -p dbc-rs  # heapless x86_64
-DBC_MAX_MESSAGES=500 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs  # heapless embedded
+DBC_MAX_MESSAGES=512 cargo build --release --no-default-features --features heapless -p dbc-rs  # heapless x86_64
+DBC_MAX_MESSAGES=512 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs  # heapless embedded (must be power of 2)
 cargo build --release --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs  # alloc embedded
 
 # Clippy - all configurations

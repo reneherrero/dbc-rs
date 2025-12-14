@@ -88,7 +88,6 @@ For embedded targets without standard library:
 dbc-rs = { version = "0.1.0-beta.3", default-features = false, features = ["heapless"] }
 ```
 
-**Note:** For embedded builds, you may need to set `DBC_MAX_MESSAGES` to a smaller value (e.g., 500) to avoid stack overflow. See the [Building](#building) section for details.
 
 ### Basic Usage
 
@@ -165,7 +164,7 @@ Build for embedded targets (no_std):
 
 ```bash
 # For embedded targets, reduce MAX_MESSAGES to avoid stack overflow
-DBC_MAX_MESSAGES=500 cargo build --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
+DBC_MAX_MESSAGES=512 cargo build --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
 ```
 
 **Note:** The `-p dbc-rs` flag ensures only the library is built (excluding `dbc-cli` which requires `std`). The `DBC_MAX_MESSAGES` environment variable reduces stack allocation for memory-constrained targets.

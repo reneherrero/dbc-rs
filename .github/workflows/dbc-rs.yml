@@ -48,11 +48,11 @@ jobs:
         run: cargo build --release --verbose --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs
       - name: Check library without std (no_std + heapless)
         env:
-          DBC_MAX_MESSAGES: 500
+          DBC_MAX_MESSAGES: 512
         run: cargo check --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
       - name: Build library without std (no_std + heapless, release)
         env:
-          DBC_MAX_MESSAGES: 500
+          DBC_MAX_MESSAGES: 512
         run: cargo build --release --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
 
   test-alloc:
@@ -82,18 +82,18 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Test heapless feature (x86_64)
         env:
-          DBC_MAX_MESSAGES: 100
+          DBC_MAX_MESSAGES: 128
           RUST_MIN_STACK: 8388608
         run: cargo test --verbose --no-default-features --features heapless -p dbc-rs --lib
       - name: Build heapless (x86_64, release)
         env:
-          DBC_MAX_MESSAGES: 500
+          DBC_MAX_MESSAGES: 512
         run: cargo build --release --verbose --no-default-features --features heapless -p dbc-rs
       - name: Install embedded target
         run: rustup target add thumbv7em-none-eabihf
       - name: Build heapless on embedded target
         env:
-          DBC_MAX_MESSAGES: 500
+          DBC_MAX_MESSAGES: 512
         run: cargo build --release --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
 
 
@@ -126,11 +126,11 @@ jobs:
         run: cargo build --release --verbose --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs
       - name: Check library without std (no_std + heapless, MSRV)
         env:
-          DBC_MAX_MESSAGES: 500
+          DBC_MAX_MESSAGES: 512
         run: cargo check --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
       - name: Build library without std (no_std + heapless, MSRV, release)
         env:
-          DBC_MAX_MESSAGES: 500
+          DBC_MAX_MESSAGES: 512
         run: cargo build --release --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
 
   lint:
