@@ -57,30 +57,29 @@ impl Message {
                 // be_bits = [7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 23, 22, ...]
                 // This means: BE bit 0 -> physical bit 7, BE bit 7 -> physical bit 0
                 //            BE bit 8 -> physical bit 15, BE bit 15 -> physical bit 8
-                // To find the physical bit range:
-                // 1. Find the index of start_bit in the be_bits sequence
-                // 2. MSB (physical) = be_bits[idx]
-                // 3. LSB (physical) = be_bits[idx + length - 1]
-                // We can calculate this directly:
+                // To find the physical bit range, we need to map all BE bits from start_bit
+                // to (start_bit + length - 1) to physical bits and find the min/max.
                 // For BE bit N: byte_num = N / 8, bit_in_byte = N % 8
                 // Physical bit = byte_num * 8 + (7 - bit_in_byte)
-                let byte_num = start / 8;
-                let bit_in_byte = start % 8;
-                let physical_msb = byte_num * 8 + (7 - bit_in_byte);
 
-                // Calculate LSB: move forward (length - 1) positions in the BE sequence
-                // BE bit (start + length - 1) maps to physical bit
-                let lsb_be_bit = start + len - 1;
-                let lsb_byte_num = lsb_be_bit / 8;
-                let lsb_bit_in_byte = lsb_be_bit % 8;
-                let physical_lsb = lsb_byte_num * 8 + (7 - lsb_bit_in_byte);
+                // Calculate physical bits for all BE bits in the signal range
+                let mut min_physical = u16::MAX;
+                let mut max_physical = 0u16;
 
-                // Ensure lsb <= msb (they should be in that order for big-endian)
-                if physical_lsb <= physical_msb {
-                    (physical_lsb, physical_msb)
-                } else {
-                    (physical_msb, physical_lsb)
+                for be_bit in start..start + len {
+                    let byte_num = be_bit / 8;
+                    let bit_in_byte = be_bit % 8;
+                    let physical_bit = byte_num * 8 + (7 - bit_in_byte);
+
+                    if physical_bit < min_physical {
+                        min_physical = physical_bit;
+                    }
+                    if physical_bit > max_physical {
+                        max_physical = physical_bit;
+                    }
                 }
+
+                (min_physical, max_physical)
             }
         }
     }

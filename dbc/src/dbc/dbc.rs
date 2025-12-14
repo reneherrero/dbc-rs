@@ -522,6 +522,49 @@ impl Dbc {
         &self.signal_type_values
     }
 
+    /// Get signal type value descriptions for a specific signal type name
+    ///
+    /// This method finds all `SignalTypeValue` entries that reference the given
+    /// signal type name, allowing you to access value descriptions (enumerations)
+    /// for a `SignalType`.
+    ///
+    /// # Arguments
+    ///
+    /// * `type_name` - The name of the signal type to find values for
+    ///
+    /// # Returns
+    ///
+    /// Vector of signal type value descriptions that match the given type name
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc = Dbc::parse(r#"
+    /// # VERSION "1.0"
+    /// # BU_: ECM
+    /// # SGTYPE_ TempSensor : 16;
+    /// # SGTYPE_VAL_ TempSensor 0 "Cold" 100 "Normal" 200 "Hot";
+    /// # "#)?;
+    /// let signal_type = &dbc.signal_types()[0];
+    /// let values = dbc.signal_type_values_for(signal_type.name());
+    /// assert_eq!(values.len(), 3);
+    /// assert_eq!(values[0].value(), 0);
+    /// assert_eq!(values[0].description(), "Cold");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[cfg(feature = "std")]
+    #[must_use]
+    pub fn signal_type_values_for(
+        &self,
+        type_name: &str,
+    ) -> std::vec::Vec<&crate::signal_type::SignalTypeValue> {
+        self.signal_type_values
+            .iter()
+            .filter(|val| val.type_name() == type_name)
+            .collect()
+    }
+
     /// Get extended multiplexing entries for a specific message
     ///
     /// Returns all `SG_MUL_VAL_` entries that apply to the specified message.
@@ -1620,9 +1663,7 @@ impl Dbc {
 
                         // Parse: SGTYPE_ type_name : size ;
                         // Example: SGTYPE_ SignalType1 : 16;
-                        if let Ok(ext_type) =
-                            crate::signal_type::parse::parse_signal_type(&mut parser)
-                        {
+                        if let Ok(ext_type) = crate::signal_type::SignalType::parse(&mut parser) {
                             signal_types_buffer.push(ext_type);
                         } else {
                             // If parsing fails, just skip the line
@@ -1649,7 +1690,7 @@ impl Dbc {
                         // Parse: SIG_TYPE_REF_ message_id signal_name : type_name ;
                         // Example: SIG_TYPE_REF_ 256 RPM : SignalType1;
                         if let Ok(ext_ref) =
-                            crate::signal_type::parse::parse_signal_type_reference(&mut parser)
+                            crate::signal_type::SignalTypeReference::parse(&mut parser)
                         {
                             signal_type_references_buffer.push(ext_ref);
                         } else {
@@ -1676,8 +1717,7 @@ impl Dbc {
 
                         // Parse: SGTYPE_VAL_ type_name value "description" value "description" ... ;
                         // Example: SGTYPE_VAL_ SignalType1 0 "Zero" 1 "One" 2 "Two";
-                        if let Ok(values) =
-                            crate::signal_type::parse::parse_signal_type_values(&mut parser)
+                        if let Ok(values) = crate::signal_type::SignalTypeValue::parse(&mut parser)
                         {
                             signal_type_values_buffer.extend(values);
                         } else {

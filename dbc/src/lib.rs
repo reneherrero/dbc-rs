@@ -65,7 +65,9 @@ pub use message::{Message, SignalList};
 pub use nodes::Nodes;
 pub use receivers::Receivers;
 pub use signal::Signal;
-pub use signal_type::{SignalExtendedValueType, SignalType, SignalTypeReference, SignalTypeValue};
+pub use signal_type::{
+    SignalExtendedValueType, SignalType, SignalTypeName, SignalTypeReference, SignalTypeValue,
+};
 #[cfg(feature = "std")]
 pub use value_descriptions::{ValueDescriptions, ValueDescriptionsBuilder};
 pub use version::Version;

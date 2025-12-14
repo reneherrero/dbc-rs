@@ -1,0 +1,22 @@
+VERSION "1.0"
+
+NS_ :
+    SGTYPE_
+    SGTYPE_VAL_
+    SIG_TYPE_REF_
+
+BS_:
+
+BU_: ECU
+
+SGTYPE_ TempType : 16@1+ (0.1,-40) [-40|200] "degC" 0 ;
+
+SGTYPE_VAL_ TempType 0 "Cold" 1 "Normal" 2 "Hot" ;
+
+BO_ 100 EngineData: 8 ECU
+ SG_ EngineTemp : 0|16@1+ (0.1,-40) [-40|200] "degC" Vector__XXX
+ SG_ EngineRPM : 16|16@1+ (1,0) [0|8000] "rpm" Vector__XXX
+
+SIG_TYPE_REF_ 100 EngineTemp : TempType ;
+
+

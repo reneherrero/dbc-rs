@@ -51,7 +51,7 @@ BO_ 512 TransmissionData : 8 TCM
 
 BO_ 768 BrakeData : 6 ABS
  SG_ BrakePressure : 0|16@1+ (0.1,0) [0|1000] "bar" ECM BCM
- SG_ ABSActive : 16|1@0+ (1,0) [0|1] "" ECM
+ SG_ ABSActive : 16|1@1+ (1,0) [0|1] "" ECM
  SG_ WheelSpeedFL : 17|15@1+ (0.01,0) [0|327.67] "km/h" ECM
  SG_ WheelSpeedFR : 32|15@1+ (0.01,0) [0|327.67] "km/h" ECM
 

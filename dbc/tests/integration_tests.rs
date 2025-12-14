@@ -559,4 +559,893 @@ mod std {
         // // J1939-specific attributes in the file include NmJ1939Function, NmStationAddress, etc.
         // // See SPECIFICATIONS.md Section 17.3: J1939-Specific Attributes
     }
+
+    // ============================================================================
+    // Signal Type Tests (SGTYPE_, SIG_TYPE_REF_, SGTYPE_VAL_)
+    // ============================================================================
+
+    #[test]
+    fn test_parse_sgtype_definition() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_");
+        let signal_types = dbc.signal_types();
+        assert_eq!(signal_types.len(), 1);
+        assert_eq!(signal_types[0].name(), "SignalType1");
+        assert_eq!(signal_types[0].size(), 16);
+    }
+
+    #[test]
+    fn test_parse_sgtype_multiple() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+SGTYPE_ SignalType2 : 32;
+SGTYPE_ SignalType3 : 8;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SGTYPE_");
+        let signal_types = dbc.signal_types();
+        assert_eq!(signal_types.len(), 3);
+        assert_eq!(signal_types[0].name(), "SignalType1");
+        assert_eq!(signal_types[0].size(), 16);
+        assert_eq!(signal_types[1].name(), "SignalType2");
+        assert_eq!(signal_types[1].size(), 32);
+        assert_eq!(signal_types[2].name(), "SignalType3");
+        assert_eq!(signal_types[2].size(), 8);
+    }
+
+    #[test]
+    fn test_parse_sgtype_without_semicolon() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_ without semicolon");
+        let signal_types = dbc.signal_types();
+        assert_eq!(signal_types.len(), 1);
+        assert_eq!(signal_types[0].name(), "SignalType1");
+        assert_eq!(signal_types[0].size(), 16);
+    }
+
+    #[test]
+    fn test_parse_sig_type_ref() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+SIG_TYPE_REF_ 256 RPM : SignalType1;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SIG_TYPE_REF_");
+        let refs = dbc.signal_type_references();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].message_id(), 256);
+        assert_eq!(refs[0].signal_name(), "RPM");
+        assert_eq!(refs[0].type_name(), "SignalType1");
+    }
+
+    #[test]
+    fn test_parse_sig_type_ref_multiple() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+SGTYPE_ SignalType2 : 8;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
+
+SIG_TYPE_REF_ 256 RPM : SignalType1;
+SIG_TYPE_REF_ 256 Temperature : SignalType2;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SIG_TYPE_REF_");
+        let refs = dbc.signal_type_references();
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].message_id(), 256);
+        assert_eq!(refs[0].signal_name(), "RPM");
+        assert_eq!(refs[0].type_name(), "SignalType1");
+        assert_eq!(refs[1].message_id(), 256);
+        assert_eq!(refs[1].signal_name(), "Temperature");
+        assert_eq!(refs[1].type_name(), "SignalType2");
+    }
+
+    #[test]
+    fn test_parse_sig_type_ref_without_semicolon() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+SIG_TYPE_REF_ 256 RPM : SignalType1
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SIG_TYPE_REF_ without semicolon");
+        let refs = dbc.signal_type_references();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].message_id(), 256);
+        assert_eq!(refs[0].signal_name(), "RPM");
+        assert_eq!(refs[0].type_name(), "SignalType1");
+    }
+
+    #[test]
+    fn test_parse_sgtype_val() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+SGTYPE_VAL_ SignalType1 0 "Value0" 1 "Value1" 2 "Value2" ;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_VAL_");
+        let values = dbc.signal_type_values();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0].type_name(), "SignalType1");
+        assert_eq!(values[0].value(), 0);
+        assert_eq!(values[0].description(), "Value0");
+        assert_eq!(values[1].value(), 1);
+        assert_eq!(values[1].description(), "Value1");
+        assert_eq!(values[2].value(), 2);
+        assert_eq!(values[2].description(), "Value2");
+    }
+
+    #[test]
+    fn test_parse_sgtype_val_multiple_types() {
+        use dbc_rs::SignalTypeValue;
+
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+SGTYPE_ SignalType2 : 8;
+
+SGTYPE_VAL_ SignalType1 0 "Zero" 1 "One" ;
+SGTYPE_VAL_ SignalType2 0 "Off" 1 "On" 2 "Error" ;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SGTYPE_VAL_");
+        let values = dbc.signal_type_values();
+        assert_eq!(values.len(), 5);
+
+        // Check SignalType1 values
+        let type1_values: Vec<&SignalTypeValue> =
+            values.iter().filter(|v| v.type_name() == "SignalType1").collect();
+        assert_eq!(type1_values.len(), 2);
+        assert_eq!(type1_values[0].value(), 0);
+        assert_eq!(type1_values[0].description(), "Zero");
+        assert_eq!(type1_values[1].value(), 1);
+        assert_eq!(type1_values[1].description(), "One");
+
+        // Check SignalType2 values
+        let type2_values: Vec<&SignalTypeValue> =
+            values.iter().filter(|v| v.type_name() == "SignalType2").collect();
+        assert_eq!(type2_values.len(), 3);
+        assert_eq!(type2_values[0].value(), 0);
+        assert_eq!(type2_values[0].description(), "Off");
+        assert_eq!(type2_values[1].value(), 1);
+        assert_eq!(type2_values[1].description(), "On");
+        assert_eq!(type2_values[2].value(), 2);
+        assert_eq!(type2_values[2].description(), "Error");
+    }
+
+    #[test]
+    fn test_parse_sgtype_val_single_value() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+SGTYPE_VAL_ SignalType1 0 "Zero" ;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_VAL_ with single value");
+        let values = dbc.signal_type_values();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].type_name(), "SignalType1");
+        assert_eq!(values[0].value(), 0);
+        assert_eq!(values[0].description(), "Zero");
+    }
+
+    #[test]
+    fn test_parse_all_signal_types_together() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+SGTYPE_ SignalType2 : 8;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Status : 16|8@1+ (1,0) [0|255] "" *
+
+SIG_TYPE_REF_ 256 RPM : SignalType1;
+SIG_TYPE_REF_ 256 Status : SignalType2;
+
+SGTYPE_VAL_ SignalType1 0 "Idle" 1000 "Running" 2000 "Max" ;
+SGTYPE_VAL_ SignalType2 0 "Off" 1 "On" 2 "Error" ;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse all signal types together");
+
+        // Check signal types
+        assert_eq!(dbc.signal_types().len(), 2);
+
+        // Check signal type references
+        assert_eq!(dbc.signal_type_references().len(), 2);
+
+        // Check signal type values
+        // SignalType1 has 3 values (0 "Idle", 1000 "Running", 2000 "Max")
+        // SignalType2 has 3 values (0 "Off", 1 "On", 2 "Error")
+        // Total: 6 values
+        assert_eq!(dbc.signal_type_values().len(), 6);
+
+        // Verify message exists
+        let message = dbc.messages().find_by_id(256).unwrap();
+        assert_eq!(message.name(), "EngineData");
+        assert_eq!(message.signals().len(), 2);
+    }
+
+    #[test]
+    fn test_complete_signal_type_workflow() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ :
+    SGTYPE_
+    SIG_TYPE_REF_
+    SGTYPE_VAL_
+    SIG_VALTYPE_
+    VAL_
+
+BS_:
+
+BU_: ECU1 ECU2
+
+// 1. Define a reusable signal type (template)
+SGTYPE_ TempSensor : 16;
+
+// 2. Define value table (enum) for the type
+SGTYPE_VAL_ TempSensor 
+    0 "Cold" 
+    100 "Normal" 
+    200 "Hot" 
+    255 "Error" ;
+
+// 3. Message with signals using the type and float
+BO_ 256 VehicleStatus: 8 ECU1
+ SG_ EngineTemp : 0|16@1+ (1,0) [0|65535] "°C" Vector__XXX
+ SG_ CabinTemp : 16|16@1+ (1,0) [0|65535] "°C" Vector__XXX
+ SG_ BatteryVoltageFloat : 32|32@1+ (0.001, 0) [0|60] "V" Vector__XXX
+
+// 4. Reference the signal type for signals
+SIG_TYPE_REF_ 256 EngineTemp : TempSensor;
+SIG_TYPE_REF_ 256 CabinTemp : TempSensor;
+
+// 5. Mark a signal as IEEE float (32-bit)
+SIG_VALTYPE_ 256 BatteryVoltageFloat : 1 ;  // 1 = float, 2 = double
+
+// Optional: Normal VAL_ for a non-typed signal (for comparison)
+BO_ 512 GearStatus: 1 ECU2
+ SG_ Gear : 0|8@1+ (1,0) [0|5] "" Vector__XXX
+
+VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse complete signal type workflow");
+
+        // Check signal type definition
+        let signal_types = dbc.signal_types();
+        assert_eq!(signal_types.len(), 1);
+        assert_eq!(signal_types[0].name(), "TempSensor");
+        assert_eq!(signal_types[0].size(), 16);
+
+        // Check signal type values using the helper method
+        let temp_sensor_values = dbc.signal_type_values_for("TempSensor");
+        assert_eq!(temp_sensor_values.len(), 4);
+        assert_eq!(temp_sensor_values[0].value(), 0);
+        assert_eq!(temp_sensor_values[0].description(), "Cold");
+        assert_eq!(temp_sensor_values[1].value(), 100);
+        assert_eq!(temp_sensor_values[1].description(), "Normal");
+        assert_eq!(temp_sensor_values[2].value(), 200);
+        assert_eq!(temp_sensor_values[2].description(), "Hot");
+        assert_eq!(temp_sensor_values[3].value(), 255);
+        assert_eq!(temp_sensor_values[3].description(), "Error");
+
+        // Check signal type references
+        let refs = dbc.signal_type_references();
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].message_id(), 256);
+        assert_eq!(refs[0].signal_name(), "EngineTemp");
+        assert_eq!(refs[0].type_name(), "TempSensor");
+        assert_eq!(refs[1].message_id(), 256);
+        assert_eq!(refs[1].signal_name(), "CabinTemp");
+        assert_eq!(refs[1].type_name(), "TempSensor");
+
+        // Check extended value type (float)
+        use dbc_rs::SignalExtendedValueType;
+        assert_eq!(
+            dbc.get_signal_value_type(256, "BatteryVoltageFloat"),
+            Some(SignalExtendedValueType::Float32)
+        );
+
+        // Verify messages exist
+        let vehicle_status = dbc.messages().find_by_id(256).unwrap();
+        assert_eq!(vehicle_status.name(), "VehicleStatus");
+        assert_eq!(vehicle_status.signals().len(), 3);
+
+        let gear_status = dbc.messages().find_by_id(512).unwrap();
+        assert_eq!(gear_status.name(), "GearStatus");
+        assert_eq!(gear_status.signals().len(), 1);
+
+        // Test decoding VehicleStatus message (ID 256)
+        // EngineTemp: 100 (raw value) = 100.0°C (factor 1, offset 0)
+        // CabinTemp: 200 (raw value) = 200.0°C (factor 1, offset 0)
+        // Note: BatteryVoltageFloat uses float32 which requires special decoding (not tested here)
+        // Little-endian: EngineTemp=0x64 0x00, CabinTemp=0xC8 0x00
+        let vehicle_status_payload = [0x64, 0x00, 0xC8, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded =
+            dbc.decode(256, &vehicle_status_payload).expect("Should decode VehicleStatus");
+        assert_eq!(decoded.len(), 3);
+
+        // Verify EngineTemp (integer signal)
+        let engine_temp = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "EngineTemp")
+            .expect("Should find EngineTemp");
+        assert!(
+            (engine_temp.1 - 100.0).abs() < 0.001,
+            "EngineTemp should be 100.0"
+        );
+        assert_eq!(engine_temp.2, Some("°C"));
+
+        // Verify CabinTemp (integer signal)
+        let cabin_temp = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "CabinTemp")
+            .expect("Should find CabinTemp");
+        assert!(
+            (cabin_temp.1 - 200.0).abs() < 0.001,
+            "CabinTemp should be 200.0"
+        );
+        assert_eq!(cabin_temp.2, Some("°C"));
+
+        // Test decoding GearStatus message (ID 512)
+        // Gear: 3 = "D" (Drive)
+        let gear_status_payload = [0x03];
+        let decoded_gear = dbc.decode(512, &gear_status_payload).expect("Should decode GearStatus");
+        assert_eq!(decoded_gear.len(), 1);
+
+        let gear = decoded_gear
+            .iter()
+            .find(|(name, _, _)| *name == "Gear")
+            .expect("Should find Gear");
+        assert!((gear.1 - 3.0).abs() < 0.001, "Gear should be 3.0");
+        // Empty unit string "" is converted to None during parsing
+        assert_eq!(gear.2, None);
+    }
+
+    #[test]
+    fn test_decode_complete_dbc_all_signals() {
+        // Comprehensive decode test for complete.dbc that tests every signal
+        let content =
+            read_to_string("tests/data/complete.dbc").expect("Failed to read complete.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse complete.dbc");
+
+        // Message 256: EngineData (8 bytes)
+        // Signals: RPM (BE, 0|16@0+), Temperature (BE, 16|8@0-), ThrottlePosition (BE, 24|8@0+), OilPressure (LE, 32|16@1+)
+        // Use payload with OilPressure set to 1.0 kPa (raw=100, LE at bytes 4-5: [0x64, 0x00])
+        // Other signals will decode to their raw*factor+offset values
+        let engine_payload = [0x00, 0x00, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &engine_payload).expect("Should decode EngineData");
+
+        // Verify all 4 signals are decoded
+        assert_eq!(decoded.len(), 4, "EngineData should have 4 signals");
+
+        // Verify all signals are present and have correct units
+        let rpm = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "RPM")
+            .expect("Should find RPM signal");
+        assert_eq!(rpm.2, Some("rpm"), "RPM should have 'rpm' unit");
+
+        let temp = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "Temperature")
+            .expect("Should find Temperature signal");
+        assert_eq!(temp.2, Some("°C"), "Temperature should have '°C' unit");
+
+        let throttle = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "ThrottlePosition")
+            .expect("Should find ThrottlePosition signal");
+        assert_eq!(
+            throttle.2,
+            Some("%"),
+            "ThrottlePosition should have '%' unit"
+        );
+
+        // OilPressure: 1.0 kPa (raw 100 * 0.01) - LE signal at bit 32 (byte 4-5)
+        let oil = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "OilPressure")
+            .expect("Should find OilPressure signal");
+        assert!(
+            (oil.1 - 1.0).abs() < 0.01,
+            "OilPressure should be ~1.0, got {}",
+            oil.1
+        );
+        assert_eq!(oil.2, Some("kPa"), "OilPressure should have 'kPa' unit");
+
+        // Message 512: TransmissionData (8 bytes)
+        // Signals: GearPosition (BE, 0|8@0+), ClutchEngaged (BE, 8|1@0+), Torque (LE, 16|16@1-), TransmissionTemp (BE, 32|8@0-)
+        // Use payload with Torque set to -100 Nm (raw=-1000, LE signed at bytes 2-3: [0x18, 0xFC])
+        let trans_payload = [0x00, 0x00, 0x18, 0xFC, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(512, &trans_payload).expect("Should decode TransmissionData");
+        assert_eq!(decoded.len(), 4, "TransmissionData should have 4 signals");
+
+        // Verify all signals are present
+        let gear = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "GearPosition")
+            .expect("Should find GearPosition signal");
+        assert_eq!(gear.2, None, "GearPosition should have empty unit");
+
+        let clutch = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "ClutchEngaged")
+            .expect("Should find ClutchEngaged signal");
+        assert_eq!(clutch.2, None, "ClutchEngaged should have empty unit");
+
+        // Torque: -100 Nm (raw -1000 * 0.1) - LE signed signal at bit 16 (byte 2-3)
+        let torque = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "Torque")
+            .expect("Should find Torque signal");
+        assert!(
+            (torque.1 - (-100.0)).abs() < 0.1,
+            "Torque should be ~-100, got {}",
+            torque.1
+        );
+        assert_eq!(torque.2, Some("Nm"), "Torque should have 'Nm' unit");
+
+        let trans_temp = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "TransmissionTemp")
+            .expect("Should find TransmissionTemp signal");
+        assert_eq!(
+            trans_temp.2,
+            Some("°C"),
+            "TransmissionTemp should have '°C' unit"
+        );
+
+        // Message 768: BrakeData (6 bytes)
+        // Signals: BrakePressure (LE, 0|16@1+), ABSActive (LE, 16|1@1+), WheelSpeedFL (LE, 17|15@1+), WheelSpeedFR (LE, 32|15@1+)
+        // Use payload with BrakePressure=250bar (raw=2500 LE at bytes 0-1: [0xC4, 0x09])
+        // and WheelSpeedFR=120km/h (raw=12000 LE at bytes 4-5: [0xE0, 0x2E])
+        // Other signals will decode but we'll verify units and presence
+        let brake_payload = [0xC4, 0x09, 0x00, 0x00, 0xE0, 0x2E, 0x00, 0x00];
+        let decoded = dbc.decode(768, &brake_payload).expect("Should decode BrakeData");
+        assert_eq!(decoded.len(), 4, "BrakeData should have 4 signals");
+
+        // BrakePressure: 250 bar (raw 2500 * 0.1) - LE at bit 0 (byte 0-1)
+        let pressure = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "BrakePressure")
+            .expect("Should find BrakePressure signal");
+        assert!(
+            (pressure.1 - 250.0).abs() < 0.1,
+            "BrakePressure should be ~250, got {}",
+            pressure.1
+        );
+        assert_eq!(
+            pressure.2,
+            Some("bar"),
+            "BrakePressure should have 'bar' unit"
+        );
+
+        // Verify all signals are present with correct units
+        let abs = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "ABSActive")
+            .expect("Should find ABSActive signal");
+        assert_eq!(abs.2, None, "ABSActive should have empty unit");
+
+        let fl = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "WheelSpeedFL")
+            .expect("Should find WheelSpeedFL signal");
+        assert_eq!(fl.2, Some("km/h"), "WheelSpeedFL should have 'km/h' unit");
+
+        // WheelSpeedFR: 120 km/h (raw 12000 * 0.01) - LE at bit 32 (byte 4-5)
+        let fr = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "WheelSpeedFR")
+            .expect("Should find WheelSpeedFR signal");
+        assert!(
+            (fr.1 - 120.0).abs() < 0.1,
+            "WheelSpeedFR should be ~120, got {}",
+            fr.1
+        );
+        assert_eq!(fr.2, Some("km/h"), "WheelSpeedFR should have 'km/h' unit");
+
+        // Message 1024: SensorData (6 bytes)
+        // Signals: Voltage (BE, 0|16@0+), Current (BE, 16|16@0-), Humidity (BE, 32|8@0+)
+        // Verify all signals decode correctly with their units
+        let sensor_payload = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(1024, &sensor_payload).expect("Should decode SensorData");
+        assert_eq!(decoded.len(), 3, "SensorData should have 3 signals");
+
+        // Verify all signals are present with correct units
+        let voltage = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "Voltage")
+            .expect("Should find Voltage signal");
+        assert_eq!(voltage.2, Some("V"), "Voltage should have 'V' unit");
+
+        let current = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "Current")
+            .expect("Should find Current signal");
+        assert_eq!(current.2, Some("A"), "Current should have 'A' unit");
+
+        let humidity = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "Humidity")
+            .expect("Should find Humidity signal");
+        assert_eq!(humidity.2, Some("%"), "Humidity should have '%' unit");
+    }
+
+    #[test]
+    fn test_decode_signal_type_dbc_all_signals() {
+        // Comprehensive decode test for signal_type.dbc that tests every signal
+        let content =
+            read_to_string("tests/data/signal_type.dbc").expect("Failed to read signal_type.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse signal_type.dbc");
+
+        // Message 100: EngineData (8 bytes)
+        // Signals: EngineTemp (LE, 0|16@1+), EngineRPM (LE, 16|16@1+)
+        // EngineTemp: 0°C (raw = (0 - (-40)) / 0.1 = 400 = 0x0190 LE -> [0x90, 0x01])
+        // EngineRPM: 2000 rpm (raw = 2000 / 1 = 2000 = 0x07D0 LE -> [0xD0, 0x07])
+        let engine_payload = [0x90, 0x01, 0xD0, 0x07, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(100, &engine_payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 2, "EngineData should have 2 signals");
+
+        // EngineTemp: 0°C (raw 400 * 0.1 + (-40)) - LE unsigned at bit 0 (byte 0-1)
+        let engine_temp = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "EngineTemp")
+            .expect("Should find EngineTemp signal");
+        assert!(
+            (engine_temp.1 - 0.0).abs() < 0.01,
+            "EngineTemp should be ~0.0, got {}",
+            engine_temp.1
+        );
+        assert_eq!(
+            engine_temp.2,
+            Some("degC"),
+            "EngineTemp should have 'degC' unit"
+        );
+
+        // EngineRPM: 2000 rpm (raw 2000 * 1) - LE unsigned at bit 16 (byte 2-3)
+        let engine_rpm = decoded
+            .iter()
+            .find(|(name, _, _)| *name == "EngineRPM")
+            .expect("Should find EngineRPM signal");
+        assert!(
+            (engine_rpm.1 - 2000.0).abs() < 0.1,
+            "EngineRPM should be ~2000, got {}",
+            engine_rpm.1
+        );
+        assert_eq!(
+            engine_rpm.2,
+            Some("rpm"),
+            "EngineRPM should have 'rpm' unit"
+        );
+
+        // Test with different values
+        // EngineTemp: 25°C (raw = (25 - (-40)) / 0.1 = 650 = 0x028A LE -> [0x8A, 0x02])
+        // EngineRPM: 1500 rpm (raw = 1500 = 0x05DC LE -> [0xDC, 0x05])
+        let engine_payload2 = [0x8A, 0x02, 0xDC, 0x05, 0x00, 0x00, 0x00, 0x00];
+        let decoded2 = dbc
+            .decode(100, &engine_payload2)
+            .expect("Should decode EngineData with different values");
+
+        let engine_temp2 = decoded2
+            .iter()
+            .find(|(name, _, _)| *name == "EngineTemp")
+            .expect("Should find EngineTemp signal");
+        assert!(
+            (engine_temp2.1 - 25.0).abs() < 0.01,
+            "EngineTemp should be ~25.0, got {}",
+            engine_temp2.1
+        );
+
+        let engine_rpm2 = decoded2
+            .iter()
+            .find(|(name, _, _)| *name == "EngineRPM")
+            .expect("Should find EngineRPM signal");
+        assert!(
+            (engine_rpm2.1 - 1500.0).abs() < 0.1,
+            "EngineRPM should be ~1500, got {}",
+            engine_rpm2.1
+        );
+
+        // Test with SGTYPE_VAL_ referenced values
+        // EngineTemp: "Cold" = 0 (raw = 0 / 0.1 = 0, but with offset: 0 * 0.1 + (-40) = -40°C)
+        // Actually, raw value 0 means physical value: 0 * 0.1 + (-40) = -40°C
+        // But the value description "Cold" maps to raw value 0
+        // Let's test with raw value 1 which should map to "Normal" and be (1 * 0.1 + (-40)) = -39.9°C
+        // Or better: raw value 400 = 0°C (we already tested this)
+        // For "Normal" (value 1), we need raw = 1, so physical = 1 * 0.1 + (-40) = -39.9°C
+        let engine_payload_cold = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded_cold = dbc
+            .decode(100, &engine_payload_cold)
+            .expect("Should decode EngineData with cold value");
+
+        let engine_temp_cold = decoded_cold
+            .iter()
+            .find(|(name, _, _)| *name == "EngineTemp")
+            .expect("Should find EngineTemp signal");
+        assert!(
+            (engine_temp_cold.1 - (-40.0)).abs() < 0.01,
+            "EngineTemp should be ~-40.0 (Cold), got {}",
+            engine_temp_cold.1
+        );
+
+        // Test "Normal" value: raw = 1 -> physical = 1 * 0.1 + (-40) = -39.9°C
+        let engine_payload_normal = [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded_normal = dbc
+            .decode(100, &engine_payload_normal)
+            .expect("Should decode EngineData with normal value");
+
+        let engine_temp_normal = decoded_normal
+            .iter()
+            .find(|(name, _, _)| *name == "EngineTemp")
+            .expect("Should find EngineTemp signal");
+        assert!(
+            (engine_temp_normal.1 - (-39.9)).abs() < 0.01,
+            "EngineTemp should be ~-39.9 (Normal), got {}",
+            engine_temp_normal.1
+        );
+
+        // Test "Hot" value: raw = 2 -> physical = 2 * 0.1 + (-40) = -39.8°C
+        let engine_payload_hot = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded_hot = dbc
+            .decode(100, &engine_payload_hot)
+            .expect("Should decode EngineData with hot value");
+
+        let engine_temp_hot = decoded_hot
+            .iter()
+            .find(|(name, _, _)| *name == "EngineTemp")
+            .expect("Should find EngineTemp signal");
+        assert!(
+            (engine_temp_hot.1 - (-39.8)).abs() < 0.01,
+            "EngineTemp should be ~-39.8 (Hot), got {}",
+            engine_temp_hot.1
+        );
+    }
+
+    // ============================================================================
+    // New Symbols (NS_) Comprehensive Tests
+    // ============================================================================
+
+    #[test]
+    fn test_parse_ns_empty() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_:
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse empty NS_");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_with_all_symbols() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with all symbol types");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_with_tabs() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with tabs");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_with_spaces() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with spaces");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_minimal_symbols() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with minimal symbols");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_with_mixed_whitespace() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ :
+	NS_DESC_
+    CM_
+	BA_DEF_
+    VAL_
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with mixed tabs and spaces");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_with_colon_space() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ : 
+    NS_DESC_
+    CM_
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with colon and space");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_with_colon_no_space() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_:
+    NS_DESC_
+    CM_
+
+BU_: ECM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with colon and no space");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_ns_in_complete_dbc() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+
+BU_: ECM TCM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+CM_ "Network comment";
+CM_ BO_ 256 "Message comment";
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ in complete DBC");
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().find_by_id(256).unwrap();
+        assert_eq!(message.name(), "EngineData");
+    }
 }
