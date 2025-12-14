@@ -54,3 +54,5 @@ pub const MESSAGE_DLC_TOO_LARGE: &str = "Message DLC cannot exceed 64 bytes (CAN
 pub const MESSAGE_ID_OUT_OF_RANGE: &str = "Message ID out of valid range";
 pub const MESSAGE_INVALID_ID: &str = "Invalid message ID";
 pub const MESSAGE_INVALID_DLC: &str = "Invalid DLC";
+pub const MESSAGE_NOT_FOUND: &str = "Message ID not found in database";
+pub const PAYLOAD_LENGTH_MISMATCH: &str = "Payload length does not match message DLC";

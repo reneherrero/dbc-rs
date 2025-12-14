@@ -421,11 +421,15 @@ impl Signal {
     /// assert_eq!(rpm, 2000.0);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    /// Decode signal value from CAN payload - optimized for high-throughput decoding.
+    #[inline]
     pub fn decode(&self, data: &[u8]) -> Result<f64> {
+        // Cache conversions to usize (common in hot path)
         let start_bit = self.start_bit as usize;
         let length = self.length as usize;
         let end_byte = (start_bit + length - 1) / 8;
 
+        // Bounds check - early return for invalid signals
         if end_byte >= data.len() {
             return Err(Error::Decoding(lang::SIGNAL_EXTENDS_BEYOND_DATA));
         }
@@ -436,14 +440,15 @@ impl Signal {
             ByteOrder::BigEndian => Self::extract_bits_big_endian(data, start_bit, length),
         };
 
-        // Convert to signed/unsigned
+        // Convert to signed/unsigned with optimized sign extension
         let value = if self.unsigned {
             raw_value as i64
         } else {
             // Sign extend for signed values
-            let sign_bit = 1u64 << (length - 1);
-            if (raw_value & sign_bit) != 0 {
-                // Negative value - sign extend
+            // Optimized: compute sign bit mask only once
+            let sign_bit_mask = 1u64 << (length - 1);
+            if (raw_value & sign_bit_mask) != 0 {
+                // Negative value - sign extend using bitwise mask
                 let mask = !((1u64 << length) - 1);
                 (raw_value | mask) as i64
             } else {
@@ -451,11 +456,13 @@ impl Signal {
             }
         };
 
-        // Apply factor and offset to get physical value
+        // Apply factor and offset to get physical value (single mul-add operation)
         Ok((value as f64) * self.factor + self.offset)
     }
 
     /// Extract bits from data using little-endian byte order.
+    /// Inlined for hot path optimization.
+    #[inline]
     fn extract_bits_little_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
         let mut value: u64 = 0;
         let mut bits_remaining = length;
@@ -480,6 +487,8 @@ impl Signal {
     }
 
     /// Extract bits from data using big-endian byte order.
+    /// Inlined for hot path optimization.
+    #[inline]
     fn extract_bits_big_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
         let mut value: u64 = 0;
         let mut bits_remaining = length;

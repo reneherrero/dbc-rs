@@ -33,7 +33,7 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
+#[cfg(all(feature = "alloc", not(feature = "heapless")))]
 extern crate alloc;
 
 mod byte_order;
