@@ -629,6 +629,8 @@ impl DbcBuilder {
             std::vec::Vec::new(),              // signal_types - not yet supported in builder
             std::vec::Vec::new(), // signal_type_references - not yet supported in builder
             std::vec::Vec::new(), // signal_type_values - not yet supported in builder
+            None,                 // bit_timing - not yet supported in builder
+            std::vec::Vec::new(), // signal_groups - not yet supported in builder
         ))
     }
 }

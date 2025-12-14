@@ -639,9 +639,13 @@ value_descriptions_for_env_var = 'VAL_' env_var_name { value_description } ';' ;
 ### 13.1 Signal Types (Rarely Used)
 
 ```bnf
-signal_type = 'SGTYPE_' signal_type_name ':' signal_size '@' byte_order value_type 
-    '(' factor ',' offset ')' '[' minimum '|' maximum ']' unit default_value ',' value_table ';' ;
-signal_type_ref = 'SGTYPE_' message_id signal_name ':' signal_type_name ';' ;
+signal_types = {signal_type} ;
+signal_type = 'SGTYPE_' signal_type_name ':' signal_size '@' byte_order value_type '(' factor ',' offset ')' '[' minimum '|' maximum ']' unit default_value ',' value_table ';' ;
+signal_type_name = DBC_identifier ;
+default_value = double ;
+value_table = value_table_name ;
+signal_type_refs = {signal_type_ref} ;
+signal_type_ref = 'SIG_TYPE_REF_' message_id signal_name ':' signal_type_name ';' ;
 ```
 
 **Purpose:** Define reusable signal properties
@@ -649,13 +653,14 @@ signal_type_ref = 'SGTYPE_' message_id signal_name ':' signal_type_name ';' ;
 ### 13.2 Signal Groups
 
 ```bnf
-signal_group = 'SIG_GROUP_' message_id signal_group_name repetitions ':' { signal_name } ';' ;
+signal_groups = 'SIG_GROUP_' message_id signal_group_name repetitions { signal_name } ';' ;
+signal_group_name = DBC_identifier ;
 repetitions = unsigned_integer ;
 ```
 
 **Example:**
 ```
-SIG_GROUP_ 100 EngineParams 1 : EngineSpeed EngineTemp EnginePressure ;
+SIG_GROUP_ 256 EngineGroup 1 RPM Temperature ThrottlePosition;
 ```
 
 **Purpose:**

@@ -1140,12 +1140,13 @@ VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
         let dbc = Dbc::parse(&content).expect("Failed to parse signal_type.dbc");
 
         // Message 100: EngineData (8 bytes)
-        // Signals: EngineTemp (LE, 0|16@1+), EngineRPM (LE, 16|16@1+)
+        // Signals: EngineTemp (LE, 0|16@1+), OilPressure (LE, 16|16@1+), EngineRPM (LE, 32|16@1+)
         // EngineTemp: 0°C (raw = (0 - (-40)) / 0.1 = 400 = 0x0190 LE -> [0x90, 0x01])
+        // OilPressure: 5.0 kPa (raw = 5.0 / 0.01 = 500 = 0x01F4 LE -> [0xF4, 0x01])
         // EngineRPM: 2000 rpm (raw = 2000 / 1 = 2000 = 0x07D0 LE -> [0xD0, 0x07])
-        let engine_payload = [0x90, 0x01, 0xD0, 0x07, 0x00, 0x00, 0x00, 0x00];
+        let engine_payload = [0x90, 0x01, 0xF4, 0x01, 0xD0, 0x07, 0x00, 0x00];
         let decoded = dbc.decode(100, &engine_payload).expect("Should decode EngineData");
-        assert_eq!(decoded.len(), 2, "EngineData should have 2 signals");
+        assert_eq!(decoded.len(), 3, "EngineData should have 3 signals");
 
         // EngineTemp: 0°C (raw 400 * 0.1 + (-40)) - LE unsigned at bit 0 (byte 0-1)
         let engine_temp = decoded
@@ -1181,8 +1182,9 @@ VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
 
         // Test with different values
         // EngineTemp: 25°C (raw = (25 - (-40)) / 0.1 = 650 = 0x028A LE -> [0x8A, 0x02])
+        // OilPressure: 10.0 kPa (raw = 10.0 / 0.01 = 1000 = 0x03E8 LE -> [0xE8, 0x03])
         // EngineRPM: 1500 rpm (raw = 1500 = 0x05DC LE -> [0xDC, 0x05])
-        let engine_payload2 = [0x8A, 0x02, 0xDC, 0x05, 0x00, 0x00, 0x00, 0x00];
+        let engine_payload2 = [0x8A, 0x02, 0xE8, 0x03, 0xDC, 0x05, 0x00, 0x00];
         let decoded2 = dbc
             .decode(100, &engine_payload2)
             .expect("Should decode EngineData with different values");
@@ -1214,6 +1216,7 @@ VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
         // Let's test with raw value 1 which should map to "Normal" and be (1 * 0.1 + (-40)) = -39.9°C
         // Or better: raw value 400 = 0°C (we already tested this)
         // For "Normal" (value 1), we need raw = 1, so physical = 1 * 0.1 + (-40) = -39.9°C
+        // OilPressure at bit 16 (bytes 2-3), EngineRPM at bit 32 (bytes 4-5)
         let engine_payload_cold = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         let decoded_cold = dbc
             .decode(100, &engine_payload_cold)
@@ -1230,6 +1233,7 @@ VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
         );
 
         // Test "Normal" value: raw = 1 -> physical = 1 * 0.1 + (-40) = -39.9°C
+        // OilPressure at bit 16 (bytes 2-3), EngineRPM at bit 32 (bytes 4-5)
         let engine_payload_normal = [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         let decoded_normal = dbc
             .decode(100, &engine_payload_normal)
@@ -1246,6 +1250,7 @@ VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
         );
 
         // Test "Hot" value: raw = 2 -> physical = 2 * 0.1 + (-40) = -39.8°C
+        // OilPressure at bit 16 (bytes 2-3), EngineRPM at bit 32 (bytes 4-5)
         let engine_payload_hot = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
         let decoded_hot = dbc
             .decode(100, &engine_payload_hot)

@@ -76,6 +76,11 @@ pub struct Dbc {
     #[cfg(feature = "std")]
     #[allow(dead_code)] // Fields are stored but not yet exposed via public API
     signal_type_values: std::vec::Vec<crate::signal_type::SignalTypeValue>,
+    #[allow(dead_code)] // Field is stored but not yet exposed via public API
+    bit_timing: Option<BitTiming>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    signal_groups: std::vec::Vec<SignalGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -120,6 +125,107 @@ impl ExtendedMultiplexing {
     #[must_use]
     pub fn value_ranges(&self) -> &[(u8, u8)] {
         self.value_ranges.as_slice()
+    }
+}
+
+/// Bit Timing definition (BS_)
+///
+/// Represents the bit timing configuration for the CAN bus.
+/// Typically empty or obsolete in modern CAN systems.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BitTiming {
+    baudrate: Option<u32>,
+    btr1: Option<u32>,
+    btr2: Option<u32>,
+}
+
+impl BitTiming {
+    /// Create a new BitTiming with optional values
+    pub(crate) fn new(baudrate: Option<u32>, btr1: Option<u32>, btr2: Option<u32>) -> Self {
+        Self {
+            baudrate,
+            btr1,
+            btr2,
+        }
+    }
+
+    /// Get the baudrate (if set)
+    #[must_use]
+    #[allow(dead_code)] // Method is part of public API but not yet used
+    pub fn baudrate(&self) -> Option<u32> {
+        self.baudrate
+    }
+
+    /// Get BTR1 (if set)
+    #[must_use]
+    #[allow(dead_code)] // Method is part of public API but not yet used
+    pub fn btr1(&self) -> Option<u32> {
+        self.btr1
+    }
+
+    /// Get BTR2 (if set)
+    #[must_use]
+    #[allow(dead_code)] // Method is part of public API but not yet used
+    pub fn btr2(&self) -> Option<u32> {
+        self.btr2
+    }
+}
+
+/// Signal Group definition (SIG_GROUP_)
+///
+/// Represents a group of related signals within a message.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg(feature = "std")]
+pub struct SignalGroup {
+    message_id: u32,
+    signal_group_name: std::string::String,
+    repetitions: u32,
+    signal_names: std::vec::Vec<std::string::String>,
+}
+
+#[cfg(feature = "std")]
+impl SignalGroup {
+    /// Create a new SignalGroup
+    pub(crate) fn new(
+        message_id: u32,
+        signal_group_name: std::string::String,
+        repetitions: u32,
+        signal_names: std::vec::Vec<std::string::String>,
+    ) -> Self {
+        Self {
+            message_id,
+            signal_group_name,
+            repetitions,
+            signal_names,
+        }
+    }
+
+    /// Get the message ID
+    #[must_use]
+    #[allow(dead_code)] // Method is part of public API but not yet used
+    pub fn message_id(&self) -> u32 {
+        self.message_id
+    }
+
+    /// Get the signal group name
+    #[must_use]
+    #[allow(dead_code)] // Method is part of public API but not yet used
+    pub fn signal_group_name(&self) -> &str {
+        &self.signal_group_name
+    }
+
+    /// Get the repetitions value
+    #[must_use]
+    #[allow(dead_code)] // Method is part of public API but not yet used
+    pub fn repetitions(&self) -> u32 {
+        self.repetitions
+    }
+
+    /// Get the list of signal names
+    #[must_use]
+    #[allow(dead_code)] // Method is part of public API but not yet used
+    pub fn signal_names(&self) -> &[std::string::String] {
+        &self.signal_names
     }
 }
 
@@ -220,6 +326,9 @@ impl Dbc {
             std::vec::Vec::new(),              // signal_types
             std::vec::Vec::new(),              // signal_type_references
             std::vec::Vec::new(),              // signal_type_values
+            None,                              // bit_timing
+            #[cfg(feature = "std")]
+            std::vec::Vec::new(), // signal_groups
         )
     }
 
@@ -243,6 +352,8 @@ impl Dbc {
         signal_types: std::vec::Vec<crate::signal_type::SignalType>,
         signal_type_references: std::vec::Vec<crate::signal_type::SignalTypeReference>,
         signal_type_values: std::vec::Vec<crate::signal_type::SignalTypeValue>,
+        bit_timing: Option<BitTiming>,
+        signal_groups: std::vec::Vec<SignalGroup>,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
@@ -260,6 +371,9 @@ impl Dbc {
             signal_types,
             signal_type_references,
             signal_type_values,
+            bit_timing,
+            #[cfg(feature = "std")]
+            signal_groups,
         }
     }
 
@@ -675,6 +789,7 @@ impl Dbc {
 
         let mut version: Option<Version> = None;
         let mut nodes: Option<Nodes> = None;
+        let mut bit_timing: Option<BitTiming> = None;
 
         // Store value descriptions during parsing: (message_id, signal_name, value, description)
         #[cfg(feature = "std")]
@@ -721,6 +836,8 @@ impl Dbc {
         let mut signal_type_values_buffer: std::vec::Vec<
             crate::signal_type::SignalTypeValue,
         > = std::vec::Vec::new();
+        #[cfg(feature = "std")]
+        let mut signal_groups_buffer: std::vec::Vec<SignalGroup> = std::vec::Vec::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -932,7 +1049,140 @@ impl Dbc {
                     }
                     continue;
                 }
-                BS_ | SIG_GROUP_ | EV_ | BO_TX_BU_ => {
+                BS_ => {
+                    // Parse BS_: [baudrate ':' BTR1 ',' BTR2]
+                    if parser.expect(crate::BS_.as_bytes()).is_err() {
+                        parser.skip_to_end_of_line();
+                        continue;
+                    }
+                    parser.skip_newlines_and_spaces();
+
+                    // Expect colon after BS_
+                    if parser.expect(b":").is_err() {
+                        parser.skip_to_end_of_line();
+                        continue;
+                    }
+                    parser.skip_newlines_and_spaces();
+
+                    // Parse optional baudrate
+                    let baudrate = parser.parse_u32().ok();
+                    parser.skip_newlines_and_spaces();
+
+                    let (btr1, btr2) = if parser.expect(b":").is_ok() {
+                        // Parse BTR1 and BTR2
+                        parser.skip_newlines_and_spaces();
+                        let btr1_val = parser.parse_u32().ok();
+                        parser.skip_newlines_and_spaces();
+                        if parser.expect(b",").is_ok() {
+                            parser.skip_newlines_and_spaces();
+                            let btr2_val = parser.parse_u32().ok();
+                            (btr1_val, btr2_val)
+                        } else {
+                            (btr1_val, None)
+                        }
+                    } else {
+                        (None, None)
+                    };
+
+                    // Store bit timing (only first one if multiple)
+                    if bit_timing.is_none() {
+                        bit_timing = Some(BitTiming::new(baudrate, btr1, btr2));
+                    }
+
+                    // Skip to end of line in case of trailing content
+                    parser.skip_to_end_of_line();
+                    continue;
+                }
+                SIG_GROUP_ => {
+                    #[cfg(feature = "std")]
+                    {
+                        // Parse SIG_GROUP_ message_id signal_group_name repetitions signal_name1 signal_name2 ... ;
+                        if parser.expect(crate::SIG_GROUP_.as_bytes()).is_err() {
+                            parser.skip_to_end_of_line();
+                            continue;
+                        }
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse message_id
+                        let message_id = match parser.parse_u32() {
+                            Ok(id) => id,
+                            Err(_) => {
+                                parser.skip_to_end_of_line();
+                                continue;
+                            }
+                        };
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse signal_group_name
+                        let signal_group_name = match parser.parse_identifier() {
+                            Ok(name) => match crate::validate_name(name) {
+                                Ok(valid_name) => valid_name.as_str().to_string(),
+                                Err(_) => {
+                                    parser.skip_to_end_of_line();
+                                    continue;
+                                }
+                            },
+                            Err(_) => {
+                                parser.skip_to_end_of_line();
+                                continue;
+                            }
+                        };
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse repetitions
+                        let repetitions = match parser.parse_u32() {
+                            Ok(rep) => rep,
+                            Err(_) => {
+                                parser.skip_to_end_of_line();
+                                continue;
+                            }
+                        };
+                        parser.skip_newlines_and_spaces();
+
+                        // Parse signal names (space-separated list)
+                        let mut signal_names = std::vec::Vec::new();
+                        loop {
+                            // Check if we've reached semicolon or end of input
+                            if parser.starts_with(b";") {
+                                break;
+                            }
+                            // Check if we've reached end of input
+                            if parser.peek_byte_at(0).is_none() {
+                                break;
+                            }
+                            match parser.parse_identifier() {
+                                Ok(name) => match crate::validate_name(name) {
+                                    Ok(valid_name) => {
+                                        signal_names.push(valid_name.as_str().to_string());
+                                        parser.skip_newlines_and_spaces();
+                                    }
+                                    Err(_) => break,
+                                },
+                                Err(_) => break,
+                            }
+                        }
+
+                        // Optional semicolon
+                        if parser.starts_with(b";") {
+                            parser.expect(b";").ok();
+                        }
+
+                        signal_groups_buffer.push(SignalGroup::new(
+                            message_id,
+                            signal_group_name,
+                            repetitions,
+                            signal_names,
+                        ));
+                    }
+                    #[cfg(not(feature = "std"))]
+                    {
+                        // In no_std mode, consume SIG_GROUP_ keyword and skip the rest
+                        let _ = parser.expect(crate::SIG_GROUP_.as_bytes()).ok();
+                        parser.skip_to_end_of_line();
+                    }
+                    continue;
+                }
+                EV_ | BO_TX_BU_ => {
                     // Consume keyword then skip to end of line (not yet implemented)
                     let _ = parser.expect(keyword.as_bytes()).ok();
                     parser.skip_to_end_of_line();
@@ -1824,6 +2074,9 @@ impl Dbc {
             signal_type_references: signal_type_references_buffer,
             #[cfg(feature = "std")]
             signal_type_values: signal_type_values_buffer,
+            bit_timing,
+            #[cfg(feature = "std")]
+            signal_groups: signal_groups_buffer,
         })
     }
 
