@@ -1,6 +1,5 @@
 use std::{collections::HashSet, string::String};
 
-use crate::error::lang;
 use crate::{Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Result};
 
 use super::Receivers;
@@ -261,7 +260,7 @@ impl ReceiversBuilder {
             if let Some(err) = crate::check_max_limit(
                 self.nodes.len(),
                 MAX_RECEIVER_NODES,
-                Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY),
+                Error::Signal(Error::SIGNAL_RECEIVERS_TOO_MANY),
             ) {
                 return Err(err);
             }
@@ -269,7 +268,7 @@ impl ReceiversBuilder {
             // Make sure the nodes are not duplicated
             let mut seen = HashSet::new();
             if !self.nodes.iter().all(|item| seen.insert(item)) {
-                return Err(Error::Signal(lang::RECEIVERS_DUPLICATE_NAME));
+                return Err(Error::Signal(Error::RECEIVERS_DUPLICATE_NAME));
             }
 
             // Make sure the node names are not too long and convert to compat::String
@@ -280,15 +279,15 @@ impl ReceiversBuilder {
                 if let Some(err) = crate::check_max_limit(
                     node.len(),
                     MAX_NAME_SIZE,
-                    Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED),
+                    Error::Signal(Error::MAX_NAME_SIZE_EXCEEDED),
                 ) {
                     return Err(err);
                 }
                 let compat_str = String::try_from(node.as_str())
-                    .map_err(|_| Error::Signal(lang::MAX_NAME_SIZE_EXCEEDED))?;
+                    .map_err(|_| Error::Signal(Error::MAX_NAME_SIZE_EXCEEDED))?;
                 compat_nodes
                     .push(compat_str)
-                    .map_err(|_| Error::Signal(lang::SIGNAL_RECEIVERS_TOO_MANY))?;
+                    .map_err(|_| Error::Signal(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
             }
 
             Ok(Receivers::new_nodes(compat_nodes.as_slice()))
@@ -358,7 +357,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => {
-                assert_eq!(msg, lang::SIGNAL_RECEIVERS_TOO_MANY);
+                assert_eq!(msg, Error::SIGNAL_RECEIVERS_TOO_MANY);
             }
             _ => panic!("Expected Signal error"),
         }

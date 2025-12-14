@@ -1,5 +1,4 @@
 use crate::compat::Vec;
-use crate::error::lang;
 use crate::{Error, MAX_MESSAGES, Message, Result};
 
 /// Encapsulates the messages array and count for a DBC
@@ -22,7 +21,7 @@ impl MessageList {
         if let Some(err) = crate::check_max_limit(
             messages.len(),
             MAX_MESSAGES,
-            Error::Message(lang::NODES_TOO_MANY),
+            Error::Message(Error::NODES_TOO_MANY),
         ) {
             return Err(err);
         }

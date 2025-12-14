@@ -2,7 +2,6 @@
 use std::collections::BTreeMap;
 
 use crate::compat::Vec;
-use crate::error::lang;
 use crate::{
     Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, MessageList, Nodes, Parser, Result,
     Signal, Version,
@@ -61,7 +60,9 @@ impl Dbc {
                 if let Some(message_id) = message_id_opt {
                     let message_exists = messages.iter().any(|msg| msg.id() == message_id);
                     if !message_exists {
-                        return Err(Error::Validation(lang::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND));
+                        return Err(Error::Validation(
+                            Error::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND,
+                        ));
                     }
 
                     // Check if signal exists in the message
@@ -69,14 +70,14 @@ impl Dbc {
                         msg.id() == message_id && msg.signals().find(signal_name).is_some()
                     });
                     if !signal_exists {
-                        return Err(Error::Validation(lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
+                        return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
                     }
                 } else {
                     // For global value descriptions (message_id is None), check if signal exists in any message
                     let signal_exists =
                         messages.iter().any(|msg| msg.signals().find(signal_name).is_some());
                     if !signal_exists {
-                        return Err(Error::Validation(lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
+                        return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
                     }
                 }
             }
@@ -97,7 +98,7 @@ impl Dbc {
         for (i, msg1) in messages.iter().enumerate() {
             for msg2 in messages.iter().skip(i + 1) {
                 if msg1.id() == msg2.id() {
-                    return Err(Error::Validation(lang::DUPLICATE_MESSAGE_ID));
+                    return Err(Error::Validation(Error::DUPLICATE_MESSAGE_ID));
                 }
             }
         }
@@ -107,7 +108,7 @@ impl Dbc {
         if !nodes.is_empty() {
             for msg in messages {
                 if !nodes.contains(msg.sender()) {
-                    return Err(Error::Validation(lang::SENDER_NOT_IN_NODES));
+                    return Err(Error::Validation(Error::SENDER_NOT_IN_NODES));
                 }
             }
         }
@@ -249,14 +250,14 @@ impl Dbc {
         // Find message by ID (performance-critical lookup)
         // Uses optimized index when available (O(1) with heapless, O(log n) with alloc)
         let message =
-            self.messages.find_by_id(id).ok_or(Error::Decoding(lang::MESSAGE_NOT_FOUND))?;
+            self.messages.find_by_id(id).ok_or(Error::Decoding(Error::MESSAGE_NOT_FOUND))?;
 
         // Cache DLC conversion to avoid repeated casts
         let dlc = message.dlc() as usize;
 
         // Validate payload length matches message DLC (early return before any decoding)
         if payload.len() < dlc {
-            return Err(Error::Decoding(lang::PAYLOAD_LENGTH_MISMATCH));
+            return Err(Error::Decoding(Error::PAYLOAD_LENGTH_MISMATCH));
         }
 
         // Allocate Vec for decoded signals (name, value, unit)
@@ -272,7 +273,7 @@ impl Dbc {
             // Push with error handling - capacity is checked by Vec
             decoded_signals
                 .push((signal.name(), value, signal.unit()))
-                .map_err(|_| Error::Decoding(lang::MESSAGE_TOO_MANY_SIGNALS))?;
+                .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
         }
 
         Ok(decoded_signals)
@@ -554,7 +555,7 @@ impl Dbc {
                 BO_ => {
                     // Check limit using MAX_MESSAGES constant
                     if message_count_actual >= MAX_MESSAGES {
-                        return Err(Error::Nodes(lang::NODES_TOO_MANY));
+                        return Err(Error::Nodes(Error::NODES_TOO_MANY));
                     }
 
                     // Save parser position (at BO_ keyword, so Message::parse can consume it)
@@ -592,13 +593,13 @@ impl Dbc {
                                 if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
                                     if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
                                         return Err(Error::Receivers(
-                                            lang::SIGNAL_RECEIVERS_TOO_MANY,
+                                            Error::SIGNAL_RECEIVERS_TOO_MANY,
                                         ));
                                     }
                                     // Signal::parse expects SG_ keyword, which we've already verified with starts_with
                                     let signal = Signal::parse(&mut parser)?;
                                     signals_array.push(signal).map_err(|_| {
-                                        Error::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY)
+                                        Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
                                     })?;
                                     continue;
                                 }
@@ -618,7 +619,7 @@ impl Dbc {
 
                     messages_buffer
                         .push(message)
-                        .map_err(|_| Error::Message(lang::NODES_TOO_MANY))?;
+                        .map_err(|_| Error::Message(Error::NODES_TOO_MANY))?;
                     message_count_actual += 1;
                     continue;
                 }
@@ -664,13 +665,13 @@ impl Dbc {
         #[cfg(feature = "std")]
         Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(|e| {
             crate::error::map_val_error(e, Error::Message, || {
-                Error::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+                Error::Message(Error::MESSAGE_ERROR_PREFIX)
             })
         })?;
         #[cfg(not(feature = "std"))]
         Self::validate(&nodes, messages_slice).map_err(|e| {
             crate::error::map_val_error(e, Error::Message, || {
-                Error::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+                Error::Message(Error::MESSAGE_ERROR_PREFIX)
             })
         })?;
 
@@ -699,7 +700,7 @@ impl Dbc {
     /// ```
     pub fn parse_bytes(data: &[u8]) -> Result<Dbc> {
         let content =
-            core::str::from_utf8(data).map_err(|_e| Error::Expected(lang::INVALID_UTF8))?;
+            core::str::from_utf8(data).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
         Dbc::parse(content)
     }
 
@@ -756,7 +757,7 @@ impl core::fmt::Display for Dbc {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{Error, error::lang};
+    use crate::Error;
 
     #[test]
     fn parses_real_dbc() {
@@ -802,7 +803,7 @@ BO_ 256 EngineData2 : 8 ECM
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Message(msg) => {
-                assert!(msg.contains(lang::DUPLICATE_MESSAGE_ID));
+                assert!(msg.contains(Error::DUPLICATE_MESSAGE_ID));
             }
             _ => panic!("Expected Error::Message"),
         }
@@ -823,7 +824,7 @@ BO_ 256 EngineData : 8 TCM
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Message(msg) => {
-                assert!(msg.contains(lang::SENDER_NOT_IN_NODES));
+                assert!(msg.contains(Error::SENDER_NOT_IN_NODES));
             }
             _ => panic!("Expected Error::Message"),
         }
@@ -887,7 +888,7 @@ BO_ 256 Engine : 8 ECM
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Expected(msg) => {
-                assert_eq!(msg, lang::INVALID_UTF8);
+                assert_eq!(msg, Error::INVALID_UTF8);
             }
             _ => panic!("Expected Error::Expected with INVALID_UTF8"),
         }
@@ -1328,7 +1329,7 @@ BO_ 256 Engine : 8 ECM
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Decoding(msg) => {
-                assert!(msg.contains(lang::MESSAGE_NOT_FOUND));
+                assert!(msg.contains(Error::MESSAGE_NOT_FOUND));
             }
             _ => panic!("Expected Error::Decoding"),
         }
@@ -1352,7 +1353,7 @@ BO_ 256 Engine : 8 ECM
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Decoding(msg) => {
-                assert!(msg.contains(lang::PAYLOAD_LENGTH_MISMATCH));
+                assert!(msg.contains(Error::PAYLOAD_LENGTH_MISMATCH));
             }
             _ => panic!("Expected Error::Decoding"),
         }

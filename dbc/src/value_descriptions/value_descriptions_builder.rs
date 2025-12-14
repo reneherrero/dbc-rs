@@ -1,4 +1,3 @@
-use crate::error::lang;
 use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions};
 
 /// Builder for creating `ValueDescriptions` programmatically.
@@ -101,7 +100,7 @@ impl ValueDescriptionsBuilder {
         if let Some(err) = crate::check_max_limit(
             self.entries.len(),
             MAX_VALUE_DESCRIPTIONS,
-            Error::Decoding(lang::VALUE_DESCRIPTIONS_TOO_MANY),
+            Error::Decoding(Error::VALUE_DESCRIPTIONS_TOO_MANY),
         ) {
             return Err(err);
         }

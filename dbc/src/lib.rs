@@ -93,13 +93,13 @@ pub(crate) fn validate_name<S: AsRef<str>>(name: S) -> Result<compat::String<{ M
     // Explicitly check length before conversion to ensure MAX_NAME_SIZE enforcement
     // This check works for both alloc and heapless features
     if name_str.len() > MAX_NAME_SIZE {
-        return Err(Error::Expected(error::lang::MAX_NAME_SIZE_EXCEEDED));
+        return Err(Error::Expected(error::Error::MAX_NAME_SIZE_EXCEEDED));
     }
 
     // Convert to compat::String - this will also check the limit internally,
     // but we've already checked above for clarity and early error reporting
     compat::String::try_from(name_str)
-        .map_err(|_| Error::Expected(error::lang::MAX_NAME_SIZE_EXCEEDED))
+        .map_err(|_| Error::Expected(error::Error::MAX_NAME_SIZE_EXCEEDED))
 }
 
 /// Helper function to check if a length exceeds a maximum limit.
@@ -149,7 +149,9 @@ pub(crate) const EV_: &str = "EV_";
 pub(crate) const BO_TX_BU_: &str = "BO_TX_BU_";
 
 // Additional DBC keywords
+#[allow(clippy::upper_case_acronyms)]
 pub(crate) const VECTOR__INDEPENDENT_SIG_MSG: &str = "VECTOR__INDEPENDENT_SIG_MSG";
+#[allow(clippy::upper_case_acronyms)]
 pub(crate) const VECTOR__XXX: &str = "VECTOR__XXX";
 pub(crate) const BA_DEF_DEF_REL_: &str = "BA_DEF_DEF_REL_";
 pub(crate) const BA_DEF_SGTYPE_: &str = "BA_DEF_SGTYPE_";

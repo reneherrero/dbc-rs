@@ -1,4 +1,4 @@
-pub mod lang;
+mod lang;
 
 #[path = "error.rs"]
 mod error_impl;

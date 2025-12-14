@@ -1,5 +1,4 @@
 use crate::compat::String;
-use crate::error::lang;
 use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -20,7 +19,7 @@ pub struct Signal {
 impl Signal {
     pub(crate) fn validate(name: &str, length: u16, min: f64, max: f64) -> Result<()> {
         if name.trim().is_empty() {
-            return Err(Error::Validation(lang::SIGNAL_NAME_EMPTY));
+            return Err(Error::Validation(Error::SIGNAL_NAME_EMPTY));
         }
 
         // Validate length: must be between 1 and 512 bits
@@ -29,10 +28,10 @@ impl Signal {
         // Signal length is validated against message DLC in Message::validate
         // Note: name is parsed before this validation, so we can include it in error messages
         if length == 0 {
-            return Err(Error::Validation(lang::SIGNAL_LENGTH_TOO_SMALL));
+            return Err(Error::Validation(Error::SIGNAL_LENGTH_TOO_SMALL));
         }
         if length > 512 {
-            return Err(Error::Validation(lang::SIGNAL_LENGTH_TOO_LARGE));
+            return Err(Error::Validation(Error::SIGNAL_LENGTH_TOO_LARGE));
         }
 
         // Note: start_bit validation (boundary checks and overlap detection) is done in
@@ -43,7 +42,7 @@ impl Signal {
 
         // Validate min <= max
         if min > max {
-            return Err(Error::Validation(lang::INVALID_RANGE));
+            return Err(Error::Validation(Error::INVALID_RANGE));
         }
 
         Ok(())
@@ -85,13 +84,13 @@ impl Signal {
         let start_bit = match parser.parse_u32() {
             Ok(v) => v as u16,
             Err(_) => {
-                return Err(Error::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
+                return Err(Error::Signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
             }
         };
 
         // Validate start_bit range
         if start_bit > 511 {
-            return Err(Error::Signal(lang::SIGNAL_PARSE_INVALID_START_BIT));
+            return Err(Error::Signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
         }
 
         // Expect pipe
@@ -100,7 +99,7 @@ impl Signal {
         // Parse length
         let length = parser
             .parse_u32()
-            .map_err(|_| Error::Signal(lang::SIGNAL_PARSE_INVALID_LENGTH))?
+            .map_err(|_| Error::Signal(Error::SIGNAL_PARSE_INVALID_LENGTH))?
             as u16;
 
         // Expect @
@@ -150,7 +149,7 @@ impl Signal {
         // Parse factor (may be empty, default to 0.0)
         let factor = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(lang::SIGNAL_PARSE_INVALID_FACTOR))?;
+            .map_err(|_| Error::Signal(Error::SIGNAL_PARSE_INVALID_FACTOR))?;
 
         // Expect comma, then skip whitespace
         parser.expect_then_skip(b",")?;
@@ -158,7 +157,7 @@ impl Signal {
         // Parse offset (may be empty, default to 0.0)
         let offset = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_OFFSET))?;
+            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_OFFSET))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -179,7 +178,7 @@ impl Signal {
         // Parse min (may be empty, default to 0.0)
         let min = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MIN))?;
+            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_MIN))?;
 
         // Expect pipe, then skip whitespace
         parser.expect_then_skip(b"|")?;
@@ -187,7 +186,7 @@ impl Signal {
         // Parse max (may be empty, default to 0.0)
         let max = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MAX))?;
+            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_MAX))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -204,16 +203,18 @@ impl Signal {
 
         // Use take_until_quote to read the unit (allow any printable characters)
         let unit_bytes = parser.take_until_quote(false, MAX_NAME_SIZE).map_err(|e| match e {
-            Error::MaxStrLength(_) => Error::Signal(crate::error::lang::SIGNAL_PARSE_UNIT_TOO_LONG),
+            Error::MaxStrLength(_) => {
+                Error::Signal(crate::error::Error::SIGNAL_PARSE_UNIT_TOO_LONG)
+            }
             _ => Error::Expected("Expected closing quote"),
         })?;
 
         // Convert bytes to string slice
         let unit =
-            core::str::from_utf8(unit_bytes).map_err(|_e| Error::Expected(lang::INVALID_UTF8))?;
+            core::str::from_utf8(unit_bytes).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
 
         let unit: String<{ MAX_NAME_SIZE }> =
-            String::try_from(unit).map_err(|_| Error::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+            String::try_from(unit).map_err(|_| Error::Version(Error::MAX_NAME_SIZE_EXCEEDED))?;
 
         let unit = if unit.is_empty() { None } else { Some(unit) };
         Ok(unit)
@@ -224,8 +225,9 @@ impl Signal {
         parser.expect_keyword_then_skip(crate::SG_.as_bytes(), "Expected SG_ keyword")?;
 
         // Parse signal name (identifier)
-        let name = parser
-            .parse_identifier_with_error(|| Error::Signal(crate::error::lang::SIGNAL_NAME_EMPTY))?;
+        let name = parser.parse_identifier_with_error(|| {
+            Error::Signal(crate::error::Error::SIGNAL_NAME_EMPTY)
+        })?;
 
         // Skip whitespace (optional before colon) - handle multiplexer indicator
         // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
@@ -297,7 +299,7 @@ impl Signal {
         // Validate before construction
         Self::validate(name, length, min, max).map_err(|e| {
             crate::error::map_val_error(e, Error::Signal, || {
-                Error::Signal(crate::error::lang::SIGNAL_ERROR_PREFIX)
+                Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX)
             })
         })?;
 
@@ -431,7 +433,7 @@ impl Signal {
 
         // Bounds check - early return for invalid signals
         if end_byte >= data.len() {
-            return Err(Error::Decoding(lang::SIGNAL_EXTENDS_BEYOND_DATA));
+            return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
         }
 
         // Extract bits based on byte order
@@ -624,7 +626,7 @@ impl core::fmt::Display for Signal {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{Parser, error::lang};
+    use crate::Parser;
 
     #[test]
     fn test_parse_valid_signal() {
@@ -736,7 +738,7 @@ mod tests {
             Error::Signal(msg) => {
                 // Check for either the old constant or the new formatted message
                 assert!(
-                    msg.contains(lang::SIGNAL_PARSE_INVALID_START_BIT)
+                    msg.contains(Error::SIGNAL_PARSE_INVALID_START_BIT)
                         || msg.contains("Signal 'RPM'")
                 );
             }
@@ -752,7 +754,7 @@ mod tests {
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
             Error::Signal(msg) => {
-                assert!(msg.contains(lang::INVALID_RANGE));
+                assert!(msg.contains(Error::INVALID_RANGE));
             }
             e => panic!("Expected Error::Signal, got: {:?}", e),
         }
@@ -781,7 +783,7 @@ mod tests {
             Error::Signal(msg) => {
                 // Check for either the old constant or the new formatted message
                 assert!(
-                    msg.contains(lang::SIGNAL_LENGTH_TOO_LARGE)
+                    msg.contains(Error::SIGNAL_LENGTH_TOO_LARGE)
                         || msg.contains("Signal 'Test'")
                         || msg.contains("513")
                 );
@@ -800,7 +802,7 @@ mod tests {
             Error::Signal(msg) => {
                 // Check for either the old constant or the new formatted message
                 assert!(
-                    msg.contains(lang::SIGNAL_LENGTH_TOO_SMALL)
+                    msg.contains(Error::SIGNAL_LENGTH_TOO_SMALL)
                         || msg.contains("Signal 'Test'")
                         || msg.contains("0 bits")
                 );
@@ -815,7 +817,7 @@ mod tests {
         let mut parser = Parser::new(line.as_bytes()).unwrap();
         let err = Signal::parse(&mut parser).unwrap_err();
         match err {
-            Error::Signal(msg) => assert!(msg.contains(lang::SIGNAL_PARSE_INVALID_LENGTH)),
+            Error::Signal(msg) => assert!(msg.contains(Error::SIGNAL_PARSE_INVALID_LENGTH)),
             e => panic!("Expected Error::Signal, got: {:?}", e),
         }
     }

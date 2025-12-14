@@ -1,5 +1,4 @@
 use crate::compat::String;
-use crate::error::lang;
 use crate::{ByteOrder, Error, MAX_NAME_SIZE, MAX_SIGNALS_PER_MESSAGE, Parser, Result, Signal};
 
 use super::SignalList;
@@ -108,17 +107,17 @@ impl Message {
         if let Some(err) = crate::check_max_limit(
             signals.len(),
             MAX_SIGNALS_PER_MESSAGE,
-            Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS),
+            Error::Validation(Error::MESSAGE_TOO_MANY_SIGNALS),
         ) {
             return Err(err);
         }
 
         if name.trim().is_empty() {
-            return Err(Error::Validation(lang::MESSAGE_NAME_EMPTY));
+            return Err(Error::Validation(Error::MESSAGE_NAME_EMPTY));
         }
 
         if sender.trim().is_empty() {
-            return Err(Error::Validation(lang::MESSAGE_SENDER_EMPTY));
+            return Err(Error::Validation(Error::MESSAGE_SENDER_EMPTY));
         }
 
         // Validate DLC (Data Length Code): must be between 1 and 64 bytes
@@ -126,17 +125,17 @@ impl Message {
         // - Classic CAN Extended (CAN 2.0B): DLC <= 8 bytes (64 bits) maximum payload
         // - CAN FD (Flexible Data Rate, ISO/Bosch): DLC <= 64 bytes (512 bits) maximum payload
         if dlc == 0 {
-            return Err(Error::Validation(lang::MESSAGE_DLC_TOO_SMALL));
+            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_SMALL));
         }
         if dlc > 64 {
-            return Err(Error::Validation(lang::MESSAGE_DLC_TOO_LARGE));
+            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_LARGE));
         }
 
         // Validate that ID is within valid CAN ID range
         // Extended CAN IDs can be 0x00000000 to 0x1FFFFFFF (0 to 536870911)
         // IDs exceeding 0x1FFFFFFF are invalid
         if id > MAX_EXTENDED_ID {
-            return Err(Error::Validation(lang::MESSAGE_ID_OUT_OF_RANGE));
+            return Err(Error::Validation(Error::MESSAGE_ID_OUT_OF_RANGE));
         }
 
         // Validate that all signals fit within the message boundary
@@ -153,7 +152,7 @@ impl Message {
             // The signal's highest bit position must be less than max_bits
             let signal_max_bit = lsb.max(msb);
             if signal_max_bit >= max_bits {
-                return Err(Error::Validation(lang::SIGNAL_EXTENDS_BEYOND_MESSAGE));
+                return Err(Error::Validation(Error::SIGNAL_EXTENDS_BEYOND_MESSAGE));
             }
         }
 
@@ -174,7 +173,7 @@ impl Message {
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
                 // lsb1 <= msb2 && lsb2 <= msb1
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
-                    return Err(Error::Validation(lang::SIGNAL_OVERLAP));
+                    return Err(Error::Validation(Error::SIGNAL_OVERLAP));
                 }
             }
         }
@@ -209,10 +208,10 @@ impl Message {
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         let name_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(name)
-            .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))
+            .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))
             .unwrap();
         let sender_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(sender)
-            .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))
+            .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))
             .unwrap();
         Self {
             id,
@@ -234,14 +233,14 @@ impl Message {
 
         // Parse message ID
         let id = parser
-            .parse_u32_with_error(|| Error::Message(crate::error::lang::MESSAGE_INVALID_ID))?;
+            .parse_u32_with_error(|| Error::Message(crate::error::Error::MESSAGE_INVALID_ID))?;
 
         // Skip whitespace
         parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
 
         // Parse message name (identifier)
         let name = parser.parse_identifier_with_error(|| {
-            Error::Message(crate::error::lang::MESSAGE_NAME_EMPTY)
+            Error::Message(crate::error::Error::MESSAGE_NAME_EMPTY)
         })?;
 
         // Skip whitespace (optional before colon)
@@ -255,14 +254,14 @@ impl Message {
 
         // Parse DLC
         let dlc = parser
-            .parse_u8_with_error(|| Error::Message(crate::error::lang::MESSAGE_INVALID_DLC))?;
+            .parse_u8_with_error(|| Error::Message(crate::error::Error::MESSAGE_INVALID_DLC))?;
 
         // Skip whitespace (required)
         parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
 
         // Parse sender (identifier, until end of line or whitespace)
         let sender = parser.parse_identifier_with_error(|| {
-            Error::Message(crate::error::lang::MESSAGE_SENDER_EMPTY)
+            Error::Message(crate::error::Error::MESSAGE_SENDER_EMPTY)
         })?;
 
         // Check for extra content after sender (invalid format)
@@ -274,7 +273,7 @@ impl Message {
         // Validate before construction
         Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| {
             crate::error::map_val_error(e, crate::error::Error::Message, || {
-                crate::error::Error::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+                crate::error::Error::Message(crate::error::Error::MESSAGE_ERROR_PREFIX)
             })
         })?;
         // Construct directly (validation already done)

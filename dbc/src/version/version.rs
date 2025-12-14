@@ -1,5 +1,5 @@
 use crate::compat::{String, Vec};
-use crate::error::{Error, Result, lang};
+use crate::error::{Error, Result};
 use crate::{MAX_NAME_SIZE, Parser, VERSION};
 
 /// Represents a version string from a DBC file.
@@ -113,9 +113,9 @@ impl Version {
 
         // Convert bytes to string slice using the parser's input
         let v = Vec::<u8, { MAX_NAME_SIZE }>::from_slice(version_bytes)
-            .map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
+            .map_err(|_| Error::Expected(Error::INVALID_UTF8))?;
         let version_str = String::<{ MAX_NAME_SIZE }>::from_utf8(v)
-            .map_err(|_| Error::Version(lang::MAX_NAME_SIZE_EXCEEDED))?;
+            .map_err(|_| Error::Version(Error::MAX_NAME_SIZE_EXCEEDED))?;
 
         // Construct directly (validation already done during parsing)
         Ok(Version::new(version_str))

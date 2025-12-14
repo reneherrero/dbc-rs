@@ -1,5 +1,4 @@
 use crate::compat::{String, Vec};
-use crate::error::lang;
 use crate::{BU_, Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result};
 
 /// Represents a collection of node (ECU) names from a DBC file.
@@ -69,7 +68,7 @@ impl Nodes {
         if let Some(err) = crate::check_max_limit(
             nodes.len(),
             MAX_NODES,
-            Error::Validation(lang::NODES_TOO_MANY),
+            Error::Validation(Error::NODES_TOO_MANY),
         ) {
             return Err(err);
         }
@@ -78,7 +77,7 @@ impl Nodes {
         for (i, node1) in nodes.iter().enumerate() {
             for node2 in nodes.iter().skip(i + 1) {
                 if node1.as_ref() == node2.as_ref() {
-                    return Err(Error::Validation(lang::NODES_DUPLICATE_NAME));
+                    return Err(Error::Validation(Error::NODES_DUPLICATE_NAME));
                 }
             }
         }
@@ -120,12 +119,12 @@ impl Nodes {
                     if let Some(err) = crate::check_max_limit(
                         node_names.len(),
                         MAX_NODES - 1,
-                        Error::Nodes(lang::NODES_TOO_MANY),
+                        Error::Nodes(Error::NODES_TOO_MANY),
                     ) {
                         return Err(err);
                     }
                     let node_str = crate::validate_name(node)?;
-                    node_names.push(node_str).map_err(|_| Error::Nodes(lang::NODES_TOO_MANY))?;
+                    node_names.push(node_str).map_err(|_| Error::Nodes(Error::NODES_TOO_MANY))?;
                 }
                 Err(_) => {
                     // No more identifiers, break
@@ -140,7 +139,7 @@ impl Nodes {
 
         // Validate before construction
         Self::validate(node_names.as_slice()).map_err(|e| {
-            crate::error::map_val_error(e, Error::Nodes, || Error::Nodes(lang::NODES_ERROR_PREFIX))
+            crate::error::map_val_error(e, Error::Nodes, || Error::Nodes(Error::NODES_ERROR_PREFIX))
         })?;
         // Construct directly (validation already done)
         Ok(Self { nodes: node_names })
@@ -355,7 +354,7 @@ impl core::fmt::Display for Nodes {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{Error, Parser, error::lang};
+    use crate::{Error, Parser};
 
     #[test]
     fn test_nodes_from_valid_line() {
@@ -409,7 +408,7 @@ mod tests {
         let result = Nodes::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg == lang::NODES_DUPLICATE_NAME),
+            Error::Nodes(msg) => assert!(msg == Error::NODES_DUPLICATE_NAME),
             _ => panic!("Expected Error::Nodes"),
         }
     }

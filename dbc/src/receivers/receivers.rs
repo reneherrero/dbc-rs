@@ -1,5 +1,4 @@
 use crate::compat::{String, Vec};
-use crate::error::lang;
 use crate::{Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Parser, Result};
 
 /// Represents the receiver nodes for a signal in a DBC file.
@@ -112,14 +111,14 @@ impl Receivers {
                     if let Some(err) = crate::check_max_limit(
                         nodes.len(),
                         MAX_RECEIVER_NODES - 1,
-                        Error::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY),
+                        Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY),
                     ) {
                         return Err(err);
                     }
                     let node = crate::validate_name(node)?;
                     nodes
                         .push(node)
-                        .map_err(|_| Error::Receivers(lang::SIGNAL_RECEIVERS_TOO_MANY))?;
+                        .map_err(|_| Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
                 }
                 Err(Error::UnexpectedEof) => break,
                 Err(_) => {
@@ -466,7 +465,7 @@ mod tests {
             assert!(result.is_err());
             match result.unwrap_err() {
                 Error::Receivers(msg) => {
-                    assert_eq!(msg, lang::SIGNAL_RECEIVERS_TOO_MANY);
+                    assert_eq!(msg, Error::SIGNAL_RECEIVERS_TOO_MANY);
                 }
                 _ => panic!("Expected Error::Receivers"),
             }

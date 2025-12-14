@@ -1,6 +1,5 @@
 use std::{string::String, vec::Vec};
 
-use crate::error::lang;
 use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Nodes, Result};
 
 /// Builder for creating `Nodes` programmatically.
@@ -229,8 +228,8 @@ impl NodesBuilder {
         let mut result: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
         for node_str in nodes {
             let compat_str = String::try_from(node_str.as_str())
-                .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))?;
-            result.push(compat_str).map_err(|_| Error::Validation(lang::NODES_TOO_MANY))?;
+                .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))?;
+            result.push(compat_str).map_err(|_| Error::Validation(Error::NODES_TOO_MANY))?;
         }
         Ok(Nodes::new(result.as_slice()))
     }
@@ -246,14 +245,14 @@ impl Default for NodesBuilder {
 mod tests {
     #![allow(clippy::float_cmp)]
     use super::*;
-    use crate::{Error, error::lang};
+    use crate::Error;
 
     #[test]
     fn test_nodes_builder_duplicate() {
         let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Validation(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
+            Error::Validation(msg) => assert!(msg.contains(Error::NODES_DUPLICATE_NAME)),
             _ => panic!("Expected Validation error"),
         }
     }
@@ -270,7 +269,7 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Validation(msg) => {
-                assert!(msg.contains(lang::NODES_TOO_MANY));
+                assert!(msg.contains(Error::NODES_TOO_MANY));
             }
             _ => panic!("Expected Validation error"),
         }
@@ -321,7 +320,7 @@ mod tests {
         let result = NodesBuilder::new().add_node("ECM").add_node("TCM").add_node("ECM").build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Validation(msg) => assert!(msg.contains(lang::NODES_DUPLICATE_NAME)),
+            Error::Validation(msg) => assert!(msg.contains(Error::NODES_DUPLICATE_NAME)),
             _ => panic!("Expected Validation error"),
         }
     }
@@ -342,7 +341,7 @@ mod tests {
         let result = builder.add_node("NodeLast").build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Validation(msg) => assert!(msg.contains(lang::NODES_TOO_MANY)),
+            Error::Validation(msg) => assert!(msg.contains(Error::NODES_TOO_MANY)),
             _ => panic!("Expected Validation error"),
         }
     }
