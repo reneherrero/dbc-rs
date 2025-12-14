@@ -100,8 +100,8 @@ impl Nodes {
             .expect(BU_.as_bytes())
             .map_err(|_| Error::Expected("Expected BU_ keyword"))?;
 
-        // Expect ":" after "BU_"
-        parser.expect(b":").map_err(|_| Error::Expected("Expected colon after BU_"))?;
+        // Expect ":" after "BU_" (no whitespace between BU_ and :)
+        parser.expect_with_msg(b":", "Expected colon after BU_")?;
 
         // Skip optional whitespace after ":"
         parser.skip_newlines_and_spaces();
@@ -111,7 +111,7 @@ impl Nodes {
 
         loop {
             // Skip whitespace before each node name
-            let _ = parser.skip_whitespace();
+            parser.skip_whitespace_optional();
 
             // Try to parse an identifier (node name)
             // parse_identifier() will fail if we're at EOF

@@ -73,11 +73,10 @@ impl Receivers {
     pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Skip any leading spaces (but not newlines - newlines indicate end of line)
         // If we get UnexpectedEof, we're at EOF, so return None
-        match parser.skip_whitespace() {
-            Ok(_) => {}
-            Err(Error::UnexpectedEof) => return Ok(Self::new_none()),
-            Err(_) => {} // Other errors (like Expected) mean there's no whitespace, continue
+        if let Err(Error::UnexpectedEof) = parser.skip_whitespace() {
+            return Ok(Self::new_none());
         }
+        // Other errors (like Expected) mean there's no whitespace, continue
 
         // Check if next character is '*' (broadcast marker)
         if parser.expect(b"*").is_ok() {
@@ -95,11 +94,10 @@ impl Receivers {
         loop {
             // Skip spaces (but not newlines)
             // If we get UnexpectedEof, we're at EOF, so break
-            match parser.skip_whitespace() {
-                Ok(_) => {}
-                Err(Error::UnexpectedEof) => break,
-                Err(_) => {} // Other errors mean there's no whitespace, continue
+            if let Err(Error::UnexpectedEof) = parser.skip_whitespace() {
+                break;
             }
+            // Other errors mean there's no whitespace, continue
 
             // Check if we're at a newline (end of signal line)
             if parser.expect(b"\n").is_ok() || parser.expect(b"\r").is_ok() {

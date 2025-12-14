@@ -103,7 +103,7 @@ impl Version {
             .expect(VERSION.as_bytes())
             .map_err(|_| Error::Expected("Expected 'VERSION' keyword"))?;
 
-        // Skip whitespace and expect quote
+        // Skip whitespace and expect quote (whitespace is required)
         parser
             .skip_whitespace()?
             .expect(b"\"")

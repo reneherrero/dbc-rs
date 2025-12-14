@@ -95,7 +95,7 @@ impl Signal {
         }
 
         // Expect pipe
-        parser.expect(b"|").map_err(|_| Error::Expected("Expected pipe"))?;
+        parser.expect_with_msg(b"|", "Expected pipe")?;
 
         // Parse length
         let length = parser
@@ -104,7 +104,7 @@ impl Signal {
             as u16;
 
         // Expect @
-        parser.expect(b"@").map_err(|_| Error::Expected("Expected @"))?;
+        parser.expect_with_msg(b"@", "Expected @")?;
 
         // Parse byte order (0 or 1)
         // Try to expect '0' or '1' directly
@@ -142,116 +142,65 @@ impl Signal {
 
     fn parse_factor_offset<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
         // Expect opening parenthesis
-        parser
-            .expect(b"(")
-            .map_err(|_| Error::Expected("Expected opening parenthesis"))?;
+        parser.expect_with_msg(b"(", "Expected opening parenthesis")?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
 
         // Parse factor (may be empty, default to 0.0)
-        // parse_f64() stops at comma/paren without consuming them
-        // If parsing fails immediately (pos unchanged), we're at a delimiter (empty factor)
-        let pos_before = parser.pos();
-        let factor = match parser.parse_f64() {
-            Ok(val) => val,
-            Err(_) => {
-                // Check if position didn't change (we're at delimiter)
-                if parser.pos() == pos_before {
-                    0.0 // Empty factor
-                } else {
-                    // Position changed but parsing failed - invalid format
-                    return Err(Error::Signal(lang::SIGNAL_PARSE_INVALID_FACTOR));
-                }
-            }
-        };
+        let factor = parser
+            .parse_f64_or_default(0.0)
+            .map_err(|_| Error::Signal(lang::SIGNAL_PARSE_INVALID_FACTOR))?;
 
-        // Expect comma
-        parser.expect(b",").map_err(|_| Error::Expected("Expected comma"))?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
+        // Expect comma, then skip whitespace
+        parser.expect_then_skip(b",")?;
 
         // Parse offset (may be empty, default to 0.0)
-        let pos_before = parser.pos();
-        let offset = match parser.parse_f64() {
-            Ok(val) => val,
-            Err(_) => {
-                // Check if position didn't change (we're at closing paren)
-                if parser.pos() == pos_before {
-                    0.0 // Empty offset
-                } else {
-                    return Err(Error::Signal(
-                        crate::error::lang::SIGNAL_PARSE_INVALID_OFFSET,
-                    ));
-                }
-            }
-        };
+        let offset = parser
+            .parse_f64_or_default(0.0)
+            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_OFFSET))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
 
         // Expect closing parenthesis
-        parser
-            .expect(b")")
-            .map_err(|_| Error::Expected("Expected closing parenthesis"))?;
+        parser.expect_with_msg(b")", "Expected closing parenthesis")?;
 
         Ok((factor, offset))
     }
 
     fn parse_range<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
         // Expect opening bracket
-        parser.expect(b"[").map_err(|_| Error::Expected("Expected opening bracket"))?;
+        parser.expect_with_msg(b"[", "Expected opening bracket")?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
 
         // Parse min (may be empty, default to 0.0)
-        let pos_before = parser.pos();
-        let min = match parser.parse_f64() {
-            Ok(val) => val,
-            Err(_) => {
-                // Check if position didn't change (we're at pipe or closing bracket)
-                if parser.pos() == pos_before {
-                    0.0 // Empty min
-                } else {
-                    return Err(Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MIN));
-                }
-            }
-        };
+        let min = parser
+            .parse_f64_or_default(0.0)
+            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MIN))?;
 
-        // Expect pipe
-        parser.expect(b"|").map_err(|_| Error::Expected("Expected pipe"))?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
+        // Expect pipe, then skip whitespace
+        parser.expect_then_skip(b"|")?;
 
         // Parse max (may be empty, default to 0.0)
-        let pos_before = parser.pos();
-        let max = match parser.parse_f64() {
-            Ok(val) => val,
-            Err(_) => {
-                // Check if position didn't change (we're at closing bracket)
-                if parser.pos() == pos_before {
-                    0.0 // Empty max
-                } else {
-                    return Err(Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MAX));
-                }
-            }
-        };
+        let max = parser
+            .parse_f64_or_default(0.0)
+            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_PARSE_INVALID_MAX))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
 
         // Expect closing bracket
-        parser.expect(b"]").map_err(|_| Error::Expected("Expected closing bracket"))?;
+        parser.expect_with_msg(b"]", "Expected closing bracket")?;
 
         Ok((min, max))
     }
 
     fn parse_unit(parser: &mut Parser) -> Result<Option<String<{ MAX_NAME_SIZE }>>> {
         // Expect opening quote
-        parser.expect(b"\"").map_err(|_| Error::Expected("Expected opening quote"))?;
+        parser.expect_with_msg(b"\"", "Expected opening quote")?;
 
         // Use take_until_quote to read the unit (allow any printable characters)
         let unit_bytes = parser.take_until_quote(false, MAX_NAME_SIZE).map_err(|e| match e {
@@ -272,17 +221,11 @@ impl Signal {
 
     pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Signal parsing must always start with "SG_" keyword
-        parser
-            .expect(crate::SG_.as_bytes())
-            .map_err(|_| Error::Expected("Expected SG_ keyword"))?;
-
-        // Skip whitespace after "SG_"
-        parser.skip_newlines_and_spaces();
+        parser.expect_keyword_then_skip(crate::SG_.as_bytes(), "Expected SG_ keyword")?;
 
         // Parse signal name (identifier)
         let name = parser
-            .parse_identifier()
-            .map_err(|_| Error::Signal(crate::error::lang::SIGNAL_NAME_EMPTY))?;
+            .parse_identifier_with_error(|| Error::Signal(crate::error::lang::SIGNAL_NAME_EMPTY))?;
 
         // Skip whitespace (optional before colon) - handle multiplexer indicator
         // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
@@ -318,7 +261,7 @@ impl Signal {
         }
 
         // Expect colon
-        parser.expect(b":").map_err(|_| Error::Expected("Expected colon"))?;
+        parser.expect_with_msg(b":", "Expected colon")?;
 
         // Skip whitespace after colon
         parser.skip_newlines_and_spaces();
@@ -346,7 +289,7 @@ impl Signal {
 
         // Skip whitespace (but not newlines) before parsing receivers
         // Newlines indicate end of signal line, so we need to preserve them for Receivers::parse
-        let _ = parser.skip_whitespace().ok(); // Ignore error if no whitespace
+        parser.skip_whitespace_optional();
 
         // Parse receivers (may be empty/None if at end of line)
         let receivers = Receivers::parse(parser)?;
