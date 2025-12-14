@@ -44,6 +44,11 @@ name = "parse_no_std"
 path = "examples/parse_no_std.rs"
 required-features = ["alloc"]
 
+[[example]]
+name = "decode"
+path = "examples/decode.rs"
+required-features = ["std"]
+
 [dev-dependencies]
 proptest = { version = "1.9.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8.1", default-features = false }
