@@ -37,7 +37,7 @@ impl<T, const N: usize> Vec<T, N> {
             // Optimized: check length upfront, allocate with exact capacity
             if other.len() > N {
                 return Err(Error::Validation(
-                    crate::error::lang::MAX_NAME_SIZE_EXCEEDED,
+                    crate::error::Error::MAX_NAME_SIZE_EXCEEDED,
                 ));
             }
             let mut v = Self(Inner::with_capacity(other.len()));
@@ -89,7 +89,7 @@ impl<T, const N: usize> Vec<T, N> {
             let new_len = current_len.saturating_add(other.len());
             if new_len > N {
                 return Err(Error::Validation(
-                    crate::error::lang::MAX_NAME_SIZE_EXCEEDED,
+                    crate::error::Error::MAX_NAME_SIZE_EXCEEDED,
                 ));
             }
             // Reserve exact capacity if needed (avoids reallocation and over-allocation)
@@ -105,7 +105,7 @@ impl<T, const N: usize> Vec<T, N> {
         {
             self.0
                 .extend_from_slice(other)
-                .map_err(|_| Error::Validation(crate::error::lang::MAX_NAME_SIZE_EXCEEDED))
+                .map_err(|_| Error::Validation(crate::error::Error::MAX_NAME_SIZE_EXCEEDED))
         }
     }
 
@@ -117,7 +117,7 @@ impl<T, const N: usize> Vec<T, N> {
             // Optimized: check length before pushing (avoids capacity check in alloc Vec)
             if self.0.len() >= N {
                 return Err(Error::Validation(
-                    crate::error::lang::MAX_NAME_SIZE_EXCEEDED,
+                    crate::error::Error::MAX_NAME_SIZE_EXCEEDED,
                 ));
             }
             self.0.push(item);
@@ -127,7 +127,7 @@ impl<T, const N: usize> Vec<T, N> {
         {
             self.0
                 .push(item)
-                .map_err(|_| Error::Validation(crate::error::lang::MAX_NAME_SIZE_EXCEEDED))
+                .map_err(|_| Error::Validation(crate::error::Error::MAX_NAME_SIZE_EXCEEDED))
         }
     }
 

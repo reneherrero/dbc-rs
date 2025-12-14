@@ -15,6 +15,7 @@ pub struct SignalTypeReference {
 
 impl SignalTypeReference {
     /// Create a new SignalTypeReference
+    #[cfg_attr(not(feature = "std"), allow(dead_code))] // Only used in std parsing code
     pub(crate) fn new(
         message_id: u32,
         signal_name: String<{ crate::MAX_NAME_SIZE }>,
@@ -72,4 +73,3 @@ mod tests {
         assert_eq!(ref1, ref2);
     }
 }
-

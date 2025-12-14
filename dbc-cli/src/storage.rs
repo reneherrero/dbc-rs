@@ -191,14 +191,6 @@ pub fn decode_message(input: &str) -> Result<(), Box<dyn std::error::Error>> {
     let can_id = u32::from_str_radix(can_id_str, 16)
         .map_err(|_| format!("Invalid CAN ID: {}", can_id_str))?;
 
-    // Find message by ID
-    let message = dbc.messages().find_by_id(can_id).ok_or_else(|| {
-        format!(
-            "Message with ID 0x{:X} ({}) not found in DBC",
-            can_id, can_id
-        )
-    })?;
-
     // Parse data bytes (hex string, each byte is 2 hex digits)
     let data_str = data_str.trim();
     if data_str.len() % 2 != 0 {
@@ -206,8 +198,8 @@ pub fn decode_message(input: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let dlc = data_str.len() / 2;
-    if dlc > 8 {
-        return Err("CAN message data cannot exceed 8 bytes".into());
+    if dlc > 64 {
+        return Err("CAN message data cannot exceed 64 bytes (CAN FD maximum)".into());
     }
 
     let mut data = Vec::with_capacity(dlc);
@@ -218,12 +210,22 @@ pub fn decode_message(input: &str) -> Result<(), Box<dyn std::error::Error>> {
         data.push(byte);
     }
 
-    // Decode signals
+    // Decode message using high-performance decode method
+    let decoded_signals = dbc
+        .decode(can_id, &data)
+        .map_err(|e| format!("Failed to decode message: {}", e))?;
+
+    // Get message info for header display (message exists if decode succeeded)
+    let message = dbc
+        .messages()
+        .find_by_id(can_id)
+        .expect("Message should exist if decode succeeded");
     println!("Message: {} (ID: 0x{:X})", message.name(), can_id);
-    for signal in message.signals().iter() {
-        let physical_value = signal.decode(&data).map_err(|e| format!("{}", e))?;
-        let unit_str = signal.unit().map(|u| format!(" {}", u)).unwrap_or_default();
-        println!("  {}: {}{}", signal.name(), physical_value, unit_str);
+
+    // Display decoded signals with units
+    for (signal_name, value, unit) in decoded_signals.iter() {
+        let unit_str = unit.map(|u| format!(" {}", u)).unwrap_or_default();
+        println!("  {}: {}{}", signal_name, value, unit_str);
     }
 
     Ok(())

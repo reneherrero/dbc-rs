@@ -1,5 +1,4 @@
 use crate::compat::String;
-use crate::error::lang;
 use crate::{ByteOrder, Error, MAX_NAME_SIZE, MAX_SIGNALS_PER_MESSAGE, Parser, Result, Signal};
 
 use super::SignalList;
@@ -108,17 +107,17 @@ impl Message {
         if let Some(err) = crate::check_max_limit(
             signals.len(),
             MAX_SIGNALS_PER_MESSAGE,
-            Error::Validation(lang::MESSAGE_TOO_MANY_SIGNALS),
+            Error::Validation(Error::MESSAGE_TOO_MANY_SIGNALS),
         ) {
             return Err(err);
         }
 
         if name.trim().is_empty() {
-            return Err(Error::Validation(lang::MESSAGE_NAME_EMPTY));
+            return Err(Error::Validation(Error::MESSAGE_NAME_EMPTY));
         }
 
         if sender.trim().is_empty() {
-            return Err(Error::Validation(lang::MESSAGE_SENDER_EMPTY));
+            return Err(Error::Validation(Error::MESSAGE_SENDER_EMPTY));
         }
 
         // Validate DLC (Data Length Code): must be between 1 and 64 bytes
@@ -126,17 +125,17 @@ impl Message {
         // - Classic CAN Extended (CAN 2.0B): DLC <= 8 bytes (64 bits) maximum payload
         // - CAN FD (Flexible Data Rate, ISO/Bosch): DLC <= 64 bytes (512 bits) maximum payload
         if dlc == 0 {
-            return Err(Error::Validation(lang::MESSAGE_DLC_TOO_SMALL));
+            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_SMALL));
         }
         if dlc > 64 {
-            return Err(Error::Validation(lang::MESSAGE_DLC_TOO_LARGE));
+            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_LARGE));
         }
 
         // Validate that ID is within valid CAN ID range
         // Extended CAN IDs can be 0x00000000 to 0x1FFFFFFF (0 to 536870911)
         // IDs exceeding 0x1FFFFFFF are invalid
         if id > MAX_EXTENDED_ID {
-            return Err(Error::Validation(lang::MESSAGE_ID_OUT_OF_RANGE));
+            return Err(Error::Validation(Error::MESSAGE_ID_OUT_OF_RANGE));
         }
 
         // Validate that all signals fit within the message boundary
@@ -153,7 +152,7 @@ impl Message {
             // The signal's highest bit position must be less than max_bits
             let signal_max_bit = lsb.max(msb);
             if signal_max_bit >= max_bits {
-                return Err(Error::Validation(lang::SIGNAL_EXTENDS_BEYOND_MESSAGE));
+                return Err(Error::Validation(Error::SIGNAL_EXTENDS_BEYOND_MESSAGE));
             }
         }
 
@@ -161,7 +160,6 @@ impl Message {
         // Check if any two signals overlap in the same message
         // Must account for byte order: little-endian signals extend forward,
         // big-endian signals extend backward from start_bit
-        // Multiplexed signals can overlap if they have different multiplexer values
         // We iterate over pairs without collecting to avoid alloc
         for (i, sig1) in signals.iter().enumerate() {
             let (sig1_lsb, sig1_msb) =
@@ -175,31 +173,9 @@ impl Message {
                 // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
                 // lsb1 <= msb2 && lsb2 <= msb1
                 if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
-                    // Allow overlap for multiplexed signals with different values
-                    let sig1_mux = sig1.multiplexer();
-                    let sig2_mux = sig2.multiplexer();
-                    let can_overlap = match (sig1_mux, sig2_mux) {
-                        (
-                            crate::MultiplexerIndicator::Multiplexed(v1),
-                            crate::MultiplexerIndicator::Multiplexed(v2),
-                        ) => v1 != v2,
-                        (crate::MultiplexerIndicator::Switch, _)
-                        | (_, crate::MultiplexerIndicator::Switch) => false, // Switch signals cannot overlap
-                        _ => false, // Normal signals cannot overlap
-                    };
-                    if !can_overlap {
-                        return Err(Error::Validation(lang::SIGNAL_OVERLAP));
-                    }
+                    return Err(Error::Validation(Error::SIGNAL_OVERLAP));
                 }
             }
-        }
-
-        // Validate multiplexer switches: must have exactly one switch signal per message
-        let switch_count = signals.iter().filter(|s| s.is_multiplexer_switch()).count();
-        if switch_count > 1 {
-            return Err(Error::Validation(
-                "Multiple multiplexer switches in message",
-            ));
         }
 
         Ok(())
@@ -232,10 +208,10 @@ impl Message {
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         let name_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(name)
-            .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))
+            .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))
             .unwrap();
         let sender_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(sender)
-            .map_err(|_| Error::Validation(lang::MAX_NAME_SIZE_EXCEEDED))
+            .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))
             .unwrap();
         Self {
             id,
@@ -257,38 +233,36 @@ impl Message {
 
         // Parse message ID
         let id = parser
-            .parse_u32()
-            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_INVALID_ID))?;
+            .parse_u32_with_error(|| Error::Message(crate::error::Error::MESSAGE_INVALID_ID))?;
 
         // Skip whitespace
         parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
 
         // Parse message name (identifier)
-        let name = parser
-            .parse_identifier()
-            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_NAME_EMPTY))?;
+        let name = parser.parse_identifier_with_error(|| {
+            Error::Message(crate::error::Error::MESSAGE_NAME_EMPTY)
+        })?;
 
         // Skip whitespace (optional before colon)
         let _ = parser.skip_whitespace();
 
         // Expect colon
-        parser.expect(b":").map_err(|_| Error::Expected("Expected colon"))?;
+        parser.expect_with_msg(b":", "Expected colon")?;
 
         // Skip whitespace after colon
         let _ = parser.skip_whitespace();
 
         // Parse DLC
         let dlc = parser
-            .parse_u8()
-            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_INVALID_DLC))?;
+            .parse_u8_with_error(|| Error::Message(crate::error::Error::MESSAGE_INVALID_DLC))?;
 
-        // Skip whitespace
+        // Skip whitespace (required)
         parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
 
         // Parse sender (identifier, until end of line or whitespace)
-        let sender = parser
-            .parse_identifier()
-            .map_err(|_| Error::Message(crate::error::lang::MESSAGE_SENDER_EMPTY))?;
+        let sender = parser.parse_identifier_with_error(|| {
+            Error::Message(crate::error::Error::MESSAGE_SENDER_EMPTY)
+        })?;
 
         // Check for extra content after sender (invalid format)
         parser.skip_newlines_and_spaces();
@@ -299,7 +273,7 @@ impl Message {
         // Validate before construction
         Self::validate_internal(id, name, dlc, sender, signals).map_err(|e| {
             crate::error::map_val_error(e, crate::error::Error::Message, || {
-                crate::error::Error::Message(crate::error::lang::MESSAGE_ERROR_PREFIX)
+                crate::error::Error::Message(crate::error::Error::MESSAGE_ERROR_PREFIX)
             })
         })?;
         // Construct directly (validation already done)
@@ -374,185 +348,6 @@ impl Message {
     #[must_use]
     pub fn signals(&self) -> &SignalList {
         &self.signals
-    }
-
-    /// Get active signals based on multiplexer switch value from CAN data
-    ///
-    /// For multiplexed messages, this method filters signals based on the current
-    /// multiplexer switch value. Only signals that should be active for the current
-    /// switch value are returned.
-    ///
-    /// **Basic Multiplexing:**
-    /// - Returns all normal signals (not multiplexed)
-    /// - Returns the multiplexer switch signal
-    /// - Returns only multiplexed signals (`m0`, `m1`, etc.) that match the switch value
-    ///
-    /// **Non-multiplexed messages:**
-    /// - Returns all signals
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - CAN message data bytes
-    ///
-    /// # Returns
-    ///
-    /// Vector of references to active signals
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use dbc_rs::Dbc;
-    /// # let dbc = Dbc::parse(r#"
-    /// # VERSION "1.0"
-    /// # BU_: ECM
-    /// # BO_ 400 MultiplexedMsg : 8 ECM
-    /// #  SG_ MuxSwitch M : 0|8@1+ (1,0) [0|255] ""
-    /// #  SG_ Signal_0 m0 : 8|16@1+ (0.1,0) [0|1000] "kPa"
-    /// #  SG_ Signal_1 m1 : 8|16@1+ (0.01,0) [0|100] "°C"
-    /// # "#)?;
-    /// let message = dbc.messages().find_by_id(400).unwrap();
-    /// let data = [0u8; 8]; // Switch value = 0
-    /// let active_signals = message.get_active_signals(&data);
-    /// // Only MuxSwitch and Signal_0 are active
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[cfg(feature = "std")]
-    #[must_use]
-    pub fn get_active_signals(&self, data: &[u8]) -> std::vec::Vec<&Signal> {
-        // Find multiplexer switch signal
-        let mux_switch = self.signals().iter().find(|s| s.is_multiplexer_switch());
-
-        if let Some(switch_signal) = mux_switch {
-            // Decode switch value
-            let switch_value = match switch_signal.decode(data) {
-                Ok(v) => v as u8,
-                Err(_) => {
-                    // If decoding fails, return all signals (fallback)
-                    return self.signals().iter().collect();
-                }
-            };
-
-            // Collect active signals:
-            // 1. Normal signals (not multiplexed)
-            // 2. The switch signal itself
-            // 3. Multiplexed signals matching the switch value
-            let mut active: std::vec::Vec<&Signal> = std::vec::Vec::new();
-
-            for signal in self.signals().iter() {
-                match signal.multiplexer() {
-                    crate::MultiplexerIndicator::Normal => {
-                        // Normal signals are always active
-                        active.push(signal);
-                    }
-                    crate::MultiplexerIndicator::Switch => {
-                        // Switch signal is always active
-                        active.push(signal);
-                    }
-                    crate::MultiplexerIndicator::Multiplexed(mux_value) => {
-                        // Only include if mux value matches switch value
-                        if mux_value == switch_value {
-                            active.push(signal);
-                        }
-                    }
-                }
-            }
-
-            active
-        } else {
-            // No multiplexing - return all signals
-            self.signals().iter().collect()
-        }
-    }
-
-    /// Get active signals with extended multiplexing support
-    ///
-    /// Similar to `get_active_signals()`, but also handles extended multiplexing
-    /// (`SG_MUL_VAL_`) which allows signals to be active for value ranges.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - CAN message data bytes
-    /// * `extended_multiplexing` - Extended multiplexing entries for this message
-    ///
-    /// # Returns
-    ///
-    /// Vector of references to active signals
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// # use dbc_rs::Dbc;
-    /// # let dbc = Dbc::parse(r#"
-    /// # VERSION "1.0"
-    /// # BU_: ECM
-    /// # BO_ 500 ComplexMux : 8 ECM
-    /// #  SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
-    /// #  SG_ Signal_A m0 : 16|16@1+ (0.1,0) [0|100] ""
-    /// # SG_MUL_VAL_ 500 Signal_A Mux1 0-5,10-15 ;
-    /// # "#)?;
-    /// let message = dbc.messages().find_by_id(500).unwrap();
-    /// let extended = dbc.extended_multiplexing_for_message(500);
-    /// let data = [5u8, 0, 0, 0, 0, 0, 0, 0]; // Switch value = 5
-    /// let active_signals = message.get_active_signals_with_extended(&data, &extended);
-    /// // Signal_A is active because 5 is in range 0-5
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[cfg(feature = "std")]
-    #[must_use]
-    pub fn get_active_signals_with_extended(
-        &self,
-        data: &[u8],
-        extended_multiplexing: &[crate::ExtendedMultiplexing],
-    ) -> std::vec::Vec<&Signal> {
-        // Start with basic multiplexing filtering
-        let mut active = self.get_active_signals(data);
-
-        // Find multiplexer switch signal
-        let mux_switch = self.signals().iter().find(|s| s.is_multiplexer_switch());
-
-        if let Some(switch_signal) = mux_switch {
-            // Decode switch value
-            let switch_value = match switch_signal.decode(data) {
-                Ok(v) => v as u8,
-                Err(_) => {
-                    // If decoding fails, return basic filtering result
-                    return active;
-                }
-            };
-
-            // Check extended multiplexing entries
-            // Extended multiplexing can override basic multiplexing behavior
-            for ext_mux in extended_multiplexing {
-                // Check if this extended mux entry applies to the current switch
-                if ext_mux.multiplexer_switch() != switch_signal.name() {
-                    continue;
-                }
-
-                // Find the signal referenced by this extended mux entry
-                let Some(signal) = self.signals().find(ext_mux.signal_name()) else {
-                    continue;
-                };
-
-                // Check if switch value is in any of the value ranges
-                let in_range = ext_mux.value_ranges().iter().any(|(min, max)| {
-                    switch_value >= *min && switch_value <= *max
-                });
-
-                if in_range {
-                    // Switch value is in range - ensure signal is active
-                    if !active.iter().any(|s| s.name() == signal.name()) {
-                        active.push(signal);
-                    }
-                } else {
-                    // Switch value not in range - remove signal
-                    // Extended mux overrides basic mux: if extended mux says signal is not active,
-                    // remove it even if basic mux would include it
-                    active.retain(|s| s.name() != signal.name());
-                }
-            }
-        }
-
-        active
     }
 
     #[cfg(feature = "std")]

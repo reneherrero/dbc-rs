@@ -128,7 +128,7 @@ Capacity limits prevent resource exhaustion (DoS protection). Defaults accommoda
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `DBC_MAX_MESSAGES` | `10000` | Maximum number of messages per DBC file |
+| `DBC_MAX_MESSAGES` | `8192` | Maximum number of messages per DBC file (must be power of 2 for heapless) |
 | `DBC_MAX_SIGNALS_PER_MESSAGE` | `64` | Maximum number of signals per message |
 | `DBC_MAX_NODES` | `256` | Maximum number of nodes in the bus |
 | `DBC_MAX_VALUE_DESCRIPTIONS` | `64` | Maximum number of value descriptions |
@@ -138,12 +138,12 @@ Capacity limits prevent resource exhaustion (DoS protection). Defaults accommoda
 **Example:**
 ```bash
 # Reduce capacity limits for embedded targets (recommended for heapless)
-DBC_MAX_MESSAGES=500 cargo build --release --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
+DBC_MAX_MESSAGES=512 cargo build --release --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
 ```
 
 **Performance Notes:**
 - **`alloc`/`std`**: Heap-allocated, dynamic sizing
-- **`heapless`**: Stack-allocated, fixed-size arrays (default 10000 messages may cause stack overflow on embedded; reduce to 100-500)
+- **`heapless`**: Stack-allocated, fixed-size arrays (default 8192 messages; reduce to 256-512 for embedded targets. All values must be powers of 2.)
 - **Parsing**: O(n) complexity, entire file parsed into memory
 
 ## Troubleshooting

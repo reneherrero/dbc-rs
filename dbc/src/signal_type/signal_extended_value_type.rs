@@ -11,7 +11,7 @@
 //! - `2` = 64-bit IEEE 754 double
 //! - `3` = Reserved
 
-use crate::error::{Error, Result, lang};
+use crate::error::{Error, Result};
 
 /// Signal extended value type (SIG_VALTYPE_)
 ///
@@ -37,16 +37,18 @@ pub enum SignalExtendedValueType {
 
 impl SignalExtendedValueType {
     /// Parse value type from integer (0, 1, or 2)
+    #[cfg_attr(not(feature = "std"), allow(dead_code))] // Only used in std parsing code
     pub(crate) fn from_u8(value: u8) -> Result<Self> {
         match value {
             0 => Ok(SignalExtendedValueType::Integer),
             1 => Ok(SignalExtendedValueType::Float32),
             2 => Ok(SignalExtendedValueType::Float64),
-            _ => Err(Error::Validation(lang::INVALID_SIGNAL_VALUE_TYPE)),
+            _ => Err(Error::Validation(Error::INVALID_SIGNAL_VALUE_TYPE)),
         }
     }
 
     /// Convert to integer representation
+    #[allow(dead_code)] // Used in tests
     pub(crate) fn to_u8(self) -> u8 {
         match self {
             SignalExtendedValueType::Integer => 0,
@@ -63,9 +65,18 @@ mod tests {
 
     #[test]
     fn test_from_u8() {
-        assert_eq!(SignalExtendedValueType::from_u8(0).unwrap(), SignalExtendedValueType::Integer);
-        assert_eq!(SignalExtendedValueType::from_u8(1).unwrap(), SignalExtendedValueType::Float32);
-        assert_eq!(SignalExtendedValueType::from_u8(2).unwrap(), SignalExtendedValueType::Float64);
+        assert_eq!(
+            SignalExtendedValueType::from_u8(0).unwrap(),
+            SignalExtendedValueType::Integer
+        );
+        assert_eq!(
+            SignalExtendedValueType::from_u8(1).unwrap(),
+            SignalExtendedValueType::Float32
+        );
+        assert_eq!(
+            SignalExtendedValueType::from_u8(2).unwrap(),
+            SignalExtendedValueType::Float64
+        );
         assert!(SignalExtendedValueType::from_u8(3).is_err());
     }
 
@@ -76,4 +87,3 @@ mod tests {
         assert_eq!(SignalExtendedValueType::Float64.to_u8(), 2);
     }
 }
-

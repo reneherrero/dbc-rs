@@ -33,7 +33,7 @@ impl<const N: usize> String<N> {
         #[cfg(feature = "alloc")]
         {
             let utf8_str = str::from_utf8(vec.as_slice())
-                .map_err(|_| Error::Expected(crate::error::lang::INVALID_UTF8))?;
+                .map_err(|_| Error::Expected(crate::error::Error::INVALID_UTF8))?;
             Ok(Self(alloc::string::String::from(utf8_str)))
         }
         #[cfg(not(feature = "alloc"))]
@@ -41,7 +41,7 @@ impl<const N: usize> String<N> {
             // heapless::String::from_utf8 takes ownership of Vec
             Inner::from_utf8(vec.into_inner())
                 .map(Self)
-                .map_err(|_| Error::Expected(crate::error::lang::INVALID_UTF8))
+                .map_err(|_| Error::Expected(crate::error::Error::INVALID_UTF8))
         }
     }
 
@@ -78,7 +78,7 @@ impl<'a, const N: usize> TryFrom<&'a str> for String<N> {
     fn try_from(s: &'a str) -> Result<Self> {
         if s.len() > N {
             return Err(Error::Validation(
-                crate::error::lang::MAX_NAME_SIZE_EXCEEDED,
+                crate::error::Error::MAX_NAME_SIZE_EXCEEDED,
             ));
         }
         #[cfg(feature = "alloc")]
@@ -89,7 +89,7 @@ impl<'a, const N: usize> TryFrom<&'a str> for String<N> {
         {
             Inner::try_from(s)
                 .map(Self)
-                .map_err(|_| Error::Validation(crate::error::lang::MAX_NAME_SIZE_EXCEEDED))
+                .map_err(|_| Error::Validation(crate::error::Error::MAX_NAME_SIZE_EXCEEDED))
         }
     }
 }

@@ -1,37 +1,18 @@
 use crate::compat::Vec;
-use crate::error::lang;
 use crate::{Error, MAX_MESSAGES, Message, Result};
-
-#[cfg(feature = "std")]
-use std::collections::HashMap;
-#[cfg(feature = "std")]
-use std::sync::OnceLock;
 
 /// Encapsulates the messages array and count for a DBC
 ///
 /// Uses `Vec<Message>` for dynamic sizing.
-/// With the `std` feature, provides O(1) lookup via lazy-initialized HashMap.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Optionally includes an index for O(1) or O(log n) message lookup by ID.
+#[derive(Debug, Clone, PartialEq)]
 pub struct MessageList {
     messages: Vec<Message, { MAX_MESSAGES }>,
-    #[cfg(feature = "std")]
-    id_index: OnceLock<HashMap<u32, usize>>,
-}
-
-#[cfg(feature = "std")]
-impl std::hash::Hash for MessageList {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // Hash only the messages, not the lazy-initialized index
-        self.messages.hash(state);
-    }
-}
-
-#[cfg(not(feature = "std"))]
-impl core::hash::Hash for MessageList {
-    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        // Hash only the messages
-        self.messages.hash(state);
-    }
+    // Optional index for fast ID lookup (feature-flagged)
+    #[cfg(feature = "heapless")]
+    id_index: Option<heapless::FnvIndexMap<u32, usize, { MAX_MESSAGES }>>,
+    #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+    sorted_indices: Option<alloc::vec::Vec<(u32, usize)>>, // (id, index) pairs sorted by id
 }
 
 impl MessageList {
@@ -40,28 +21,53 @@ impl MessageList {
         if let Some(err) = crate::check_max_limit(
             messages.len(),
             MAX_MESSAGES,
-            Error::Message(lang::NODES_TOO_MANY),
+            Error::Message(Error::NODES_TOO_MANY),
         ) {
             return Err(err);
         }
         let messages_vec: Vec<Message, { MAX_MESSAGES }> = messages.iter().cloned().collect();
+
+        // Build index for fast lookup (if features allow)
+        #[cfg(feature = "heapless")]
+        let id_index = Self::build_heapless_index(&messages_vec);
+        #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+        let sorted_indices = Self::build_sorted_index(&messages_vec);
+
         Ok(Self {
             messages: messages_vec,
-            #[cfg(feature = "std")]
-            id_index: OnceLock::new(),
+            #[cfg(feature = "heapless")]
+            id_index,
+            #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+            sorted_indices,
         })
     }
 
-    #[cfg(feature = "std")]
-    /// Build or retrieve the ID-to-index HashMap (lazy initialization)
-    fn id_index(&self) -> &HashMap<u32, usize> {
-        self.id_index.get_or_init(|| {
-            let mut map = HashMap::with_capacity(self.messages.len());
-            for (index, message) in self.messages.iter().enumerate() {
-                map.insert(message.id(), index);
+    /// Build heapless index for O(1) lookup (only with heapless feature)
+    #[cfg(feature = "heapless")]
+    fn build_heapless_index(
+        messages: &[Message],
+    ) -> Option<heapless::FnvIndexMap<u32, usize, { MAX_MESSAGES }>> {
+        let mut index = heapless::FnvIndexMap::new();
+        for (idx, msg) in messages.iter().enumerate() {
+            if index.insert(msg.id(), idx).is_err() {
+                // If we can't insert (capacity full or duplicate), return None
+                // This should not happen in practice if MAX_MESSAGES is correct
+                return None;
             }
-            map
-        })
+        }
+        Some(index)
+    }
+
+    /// Build sorted index for O(log n) lookup (only with alloc feature, no heapless)
+    #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+    fn build_sorted_index(messages: &[Message]) -> Option<alloc::vec::Vec<(u32, usize)>> {
+        let mut indices = alloc::vec::Vec::with_capacity(messages.len());
+        for (idx, msg) in messages.iter().enumerate() {
+            indices.push((msg.id(), idx));
+        }
+        // Sort by message ID for binary search
+        indices.sort_by_key(|&(id, _)| id);
+        Some(indices)
     }
 
     /// Get an iterator over the messages
@@ -159,9 +165,6 @@ impl MessageList {
 
     /// Find a message by CAN ID, or None if not found
     ///
-    /// **Performance:** With the `std` feature, this uses O(1) HashMap lookup.
-    /// Without `std`, falls back to O(n) linear search.
-    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -174,19 +177,38 @@ impl MessageList {
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    /// Find a message by CAN ID with optimized lookup based on available features.
+    ///
+    /// - With `heapless` feature: O(1) lookup using FnvIndexMap
+    /// - With `alloc` feature (no heapless): O(log n) lookup using binary search on sorted indices
+    /// - Otherwise: O(n) linear search
+    #[inline]
     #[must_use]
     pub fn find_by_id(&self, id: u32) -> Option<&Message> {
-        #[cfg(feature = "std")]
+        #[cfg(feature = "heapless")]
         {
-            // O(1) lookup using HashMap
-            self.id_index()
-                .get(&id)
-                .and_then(|&index| self.messages.get(index))
+            if let Some(ref index) = self.id_index {
+                if let Some(&idx) = index.get(&id) {
+                    return self.messages.get(idx);
+                }
+                return None;
+            }
         }
-        #[cfg(not(feature = "std"))]
+
+        #[cfg(all(feature = "alloc", not(feature = "heapless")))]
         {
-            // O(n) linear search fallback for no_std
-            self.iter().find(|m| m.id() == id)
+            if let Some(ref sorted) = self.sorted_indices {
+                // Binary search for O(log n) lookup
+                if let Ok(pos) = sorted.binary_search_by_key(&id, |&(msg_id, _)| msg_id) {
+                    let &(_, idx) = sorted.get(pos)?;
+                    return self.messages.get(idx);
+                }
+                return None;
+            }
         }
+
+        // Fallback: linear search O(n)
+        // This is used when no alloc/heapless features are enabled
+        self.messages.iter().find(|m| m.id() == id)
     }
 }

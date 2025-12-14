@@ -15,6 +15,7 @@ pub struct SignalType {
 
 impl SignalType {
     /// Create a new SignalType
+    #[cfg_attr(not(feature = "std"), allow(dead_code))] // Only used in std parsing code
     pub(crate) fn new(name: String<{ crate::MAX_NAME_SIZE }>, size: u8) -> Self {
         Self { name, size }
     }
@@ -54,4 +55,3 @@ mod tests {
         assert_eq!(st1, st2);
     }
 }
-

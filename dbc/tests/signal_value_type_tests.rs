@@ -1,5 +1,5 @@
 //! Tests for Signal Extended Value Types (SIG_VALTYPE_)
-//! 
+//!
 //! Tests parsing of SIG_VALTYPE_ entries and decoding of float32/float64 signals.
 
 #[cfg(feature = "std")]
@@ -379,4 +379,3 @@ SIG_VALTYPE_ 256 RPM : 0 ;
         assert_eq!(decoded, 8.0); // 32 * 0.25 = 8.0
     }
 }
-

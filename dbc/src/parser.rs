@@ -1,4 +1,3 @@
-use crate::error::lang;
 use crate::{DBC_KEYWORDS, Error, Result};
 
 #[derive(Debug)]
@@ -34,22 +33,26 @@ impl<'a> Parser<'a> {
     }
 
     pub fn skip_whitespace(&mut self) -> Result<&mut Self> {
-        if self.pos >= self.input.len() {
+        let input_len = self.input.len();
+        if self.pos >= input_len {
             return Err(Error::UnexpectedEof);
         }
 
         if self.input[self.pos] == b' ' {
-            while self.pos < self.input.len() && self.input[self.pos] == b' ' {
+            // Skip consecutive spaces (optimize: use cached input_len)
+            while self.pos + 1 < input_len && self.input[self.pos + 1] == b' ' {
                 self.pos += 1;
             }
+            self.pos += 1; // Skip the last space
             Ok(self)
         } else {
-            Err(Error::Expected(lang::EXPECTED_WHITESPACE))
+            Err(Error::Expected(Error::EXPECTED_WHITESPACE))
         }
     }
 
     pub fn skip_newlines_and_spaces(&mut self) {
-        while self.pos < self.input.len() {
+        let input_len = self.input.len();
+        while self.pos < input_len {
             match self.input[self.pos] {
                 b'\n' => {
                     self.pos += 1;
@@ -58,7 +61,7 @@ impl<'a> Parser<'a> {
                 b'\r' => {
                     self.pos += 1;
                     // Handle \r\n as a single newline
-                    if self.pos < self.input.len() && self.input[self.pos] == b'\n' {
+                    if self.pos < input_len && self.input[self.pos] == b'\n' {
                         self.pos += 1;
                     }
                     self.line += 1;
@@ -75,8 +78,10 @@ impl<'a> Parser<'a> {
         // Skip newlines and spaces to find the next keyword
         self.skip_newlines_and_spaces();
 
+        // Optimize: cache input_len to avoid repeated calls
+        let input_len = self.input.len();
         // Check if we're at EOF
-        if self.pos >= self.input.len() {
+        if self.pos >= input_len {
             return Err(Error::UnexpectedEof);
         }
 
@@ -88,7 +93,7 @@ impl<'a> Parser<'a> {
             if self.starts_with(keyword_bytes) {
                 // Check if the next character after the keyword is a valid delimiter
                 let next_pos = self.pos + keyword_bytes.len();
-                if next_pos >= self.input.len() {
+                if next_pos >= input_len {
                     // End of input, keyword is valid (but don't advance position)
                     return Ok(keyword);
                 }
@@ -104,7 +109,7 @@ impl<'a> Parser<'a> {
         }
 
         // No keyword matched
-        Err(Error::Expected(lang::EXPECTED_KEYWORD))
+        Err(Error::Expected(Error::EXPECTED_KEYWORD))
     }
 
     pub fn expect(&mut self, expected: &[u8]) -> Result<&mut Self> {
@@ -112,15 +117,18 @@ impl<'a> Parser<'a> {
             return Ok(self);
         }
 
+        // Optimize: cache input_len to avoid repeated calls
+        let input_len = self.input.len();
         // Check if we have enough remaining bytes
-        if self.input.len() - self.pos < expected.len() {
-            return Err(Error::Expected(lang::EXPECTED_PATTERN));
+        if input_len - self.pos < expected.len() {
+            return Err(Error::Expected(Error::EXPECTED_PATTERN));
         }
 
         if self.starts_with(expected) {
             // Count newlines in the bytes we're about to skip
+            // Optimize: cache scan_end and use single-pass algorithm
             let end_pos = self.pos + expected.len();
-            let scan_end = end_pos.min(self.input.len());
+            let scan_end = end_pos.min(input_len);
             let mut i = self.pos;
             while i < scan_end {
                 match self.input[i] {
@@ -131,7 +139,7 @@ impl<'a> Parser<'a> {
                     b'\r' => {
                         // Check if followed by \n within the range
                         if i + 1 < scan_end && self.input[i + 1] == b'\n' {
-                            // \r\n sequence - count as one newline when we see the \n
+                            // \r\n sequence - count as one newline, skip both
                             i += 2;
                             self.line += 1;
                         } else {
@@ -148,7 +156,7 @@ impl<'a> Parser<'a> {
             self.pos = end_pos;
             Ok(self)
         } else {
-            Err(Error::Expected(lang::EXPECTED_PATTERN))
+            Err(Error::Expected(Error::EXPECTED_PATTERN))
         }
     }
 
@@ -158,16 +166,17 @@ impl<'a> Parser<'a> {
         max_str_length: usize,
     ) -> Result<&'a [u8]> {
         let start_pos = self.pos;
+        let input_len = self.input.len();
+        let max_pos = start_pos.saturating_add(max_str_length + 1); // +1 to account for quote
         let mut is_first_char = true;
 
-        while self.pos < self.input.len() {
-            let byte = self.input[self.pos];
-
-            // Check if we've exceeded max length before processing the byte
-            let current_length = self.pos - start_pos;
-            if current_length > max_str_length {
+        while self.pos < input_len {
+            // Check length before processing byte (optimize: check max_pos instead of calculating length)
+            if self.pos >= max_pos {
                 return Err(Error::MaxStrLength(max_str_length));
             }
+
+            let byte = self.input[self.pos];
 
             match byte {
                 b'"' => {
@@ -245,71 +254,98 @@ impl<'a> Parser<'a> {
     }
 
     pub(crate) fn skip_to_end_of_line(&mut self) {
-        while self.pos < self.input.len() {
+        let input_len = self.input.len();
+        while self.pos < input_len {
             let byte = self.input[self.pos];
-            if byte == b'\n' {
-                self.pos += 1;
-                self.line += 1;
-                break;
-            } else if byte == b'\r' {
-                self.pos += 1;
-                // Handle \r\n
-                if self.pos < self.input.len() && self.input[self.pos] == b'\n' {
+            match byte {
+                b'\n' => {
+                    self.pos += 1;
+                    self.line += 1;
+                    break;
+                }
+                b'\r' => {
+                    self.pos += 1;
+                    // Handle \r\n
+                    if self.pos < input_len && self.input[self.pos] == b'\n' {
+                        self.pos += 1;
+                    }
+                    self.line += 1;
+                    break;
+                }
+                _ => {
                     self.pos += 1;
                 }
-                self.line += 1;
-                break;
             }
-            self.pos += 1;
         }
     }
 
     pub(crate) fn parse_u8(&mut self) -> Result<u8> {
         let start_pos = self.pos;
+        let input_len = self.input.len();
         // Read until whitespace, colon, or end of input
-        while self.pos < self.input.len() {
+        while self.pos < input_len {
             let byte = self.input[self.pos];
             if byte.is_ascii_digit() {
                 self.pos += 1;
             } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
                 break;
             } else {
-                return Err(Error::Expected(lang::EXPECTED_NUMBER));
+                return Err(
+                    self.restore_pos_err(start_pos, Error::Expected(Error::EXPECTED_NUMBER))
+                );
             }
         }
 
         if self.pos == start_pos {
-            return Err(Error::Expected(lang::EXPECTED_NUMBER));
+            return Err(Error::Expected(Error::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str =
-            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
-        num_str.parse::<u8>().map_err(|_| Error::Expected(lang::INVALID_NUMBER_FORMAT))
+        let num_str = core::str::from_utf8(num_bytes)
+            .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
+        num_str.parse::<u8>().map_err(|_| {
+            self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_NUMBER_FORMAT))
+        })
+    }
+
+    /// Helper to restore position and return an error.
+    /// Used to avoid duplicating the pattern of restoring position on error.
+    #[inline]
+    fn restore_pos_err(&mut self, pos: usize, err: Error) -> Error {
+        self.pos = pos;
+        err
     }
 
     pub(crate) fn parse_u32(&mut self) -> Result<u32> {
         let start_pos = self.pos;
-        // Read until whitespace, colon, pipe, @, or end of input
-        while self.pos < self.input.len() {
+        let input_len = self.input.len();
+        // Read until whitespace, colon, pipe, @, semicolon, or end of input
+        while self.pos < input_len {
             let byte = self.input[self.pos];
             if byte.is_ascii_digit() {
                 self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@') {
+            } else if matches!(
+                byte,
+                b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@' | b';'
+            ) {
                 break;
             } else {
-                return Err(Error::Expected(lang::EXPECTED_NUMBER));
+                return Err(
+                    self.restore_pos_err(start_pos, Error::Expected(Error::EXPECTED_NUMBER))
+                );
             }
         }
 
         if self.pos == start_pos {
-            return Err(Error::Expected(lang::EXPECTED_NUMBER));
+            return Err(Error::Expected(Error::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str =
-            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
-        num_str.parse::<u32>().map_err(|_| Error::Expected(lang::INVALID_NUMBER_FORMAT))
+        let num_str = core::str::from_utf8(num_bytes)
+            .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
+        num_str.parse::<u32>().map_err(|_| {
+            self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_NUMBER_FORMAT))
+        })
     }
 
     #[cfg(feature = "std")]
@@ -324,7 +360,8 @@ impl<'a> Parser<'a> {
         }
 
         // Read digits
-        while self.pos < self.input.len() {
+        let input_len = self.input.len();
+        while self.pos < input_len {
             let byte = self.input[self.pos];
             if byte.is_ascii_digit() {
                 self.pos += 1;
@@ -334,18 +371,23 @@ impl<'a> Parser<'a> {
             ) {
                 break;
             } else {
-                return Err(Error::Expected(lang::EXPECTED_NUMBER));
+                return Err(
+                    self.restore_pos_err(start_pos, Error::Expected(Error::EXPECTED_NUMBER))
+                );
             }
         }
 
+        // Check if we parsed anything (accounting for optional sign)
         if self.pos == start_pos || (has_sign && self.pos == start_pos + 1) {
-            return Err(Error::Expected(lang::EXPECTED_NUMBER));
+            return Err(self.restore_pos_err(start_pos, Error::Expected(Error::EXPECTED_NUMBER)));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str =
-            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
-        num_str.parse::<i64>().map_err(|_| Error::Expected(lang::INVALID_NUMBER_FORMAT))
+        let num_str = core::str::from_utf8(num_bytes)
+            .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
+        num_str.parse::<i64>().map_err(|_| {
+            self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_NUMBER_FORMAT))
+        })
     }
 
     pub(crate) fn parse_f64(&mut self) -> Result<f64> {
@@ -362,7 +404,8 @@ impl<'a> Parser<'a> {
         }
 
         // Read until whitespace, delimiter, or end of input
-        while self.pos < self.input.len() {
+        let input_len = self.input.len();
+        while self.pos < input_len {
             let byte = self.input[self.pos];
             if byte.is_ascii_digit() {
                 self.pos += 1;
@@ -373,10 +416,11 @@ impl<'a> Parser<'a> {
                 has_e = true;
                 self.pos += 1;
                 // Allow sign after e/E
-                if self.pos < self.input.len()
-                    && (self.input[self.pos] == b'+' || self.input[self.pos] == b'-')
-                {
-                    self.pos += 1;
+                if self.pos < input_len {
+                    let next_byte = self.input[self.pos];
+                    if next_byte == b'+' || next_byte == b'-' {
+                        self.pos += 1;
+                    }
                 }
             } else if matches!(
                 byte,
@@ -384,50 +428,139 @@ impl<'a> Parser<'a> {
             ) {
                 break;
             } else {
-                return Err(Error::Expected(lang::EXPECTED_NUMBER));
+                // Restore position before returning error to avoid corrupting parser state
+                // This is critical because consumers check if position changed to detect empty values
+                return Err(
+                    self.restore_pos_err(start_pos, Error::Expected(Error::EXPECTED_NUMBER))
+                );
             }
         }
 
         if self.pos == start_pos {
-            return Err(Error::Expected(lang::EXPECTED_NUMBER));
+            return Err(Error::Expected(Error::EXPECTED_NUMBER));
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str =
-            core::str::from_utf8(num_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))?;
-        num_str.parse::<f64>().map_err(|_| Error::Expected(lang::PARSE_NUMBER_FAILED))
+        let num_str = core::str::from_utf8(num_bytes)
+            .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
+        num_str.parse::<f64>().map_err(|_| {
+            self.restore_pos_err(start_pos, Error::Expected(Error::PARSE_NUMBER_FAILED))
+        })
     }
 
     pub(crate) fn parse_identifier(&mut self) -> Result<&'a str> {
         let start_pos = self.pos;
-        let mut is_first_char = true;
+        let input_len = self.input.len();
 
-        while self.pos < self.input.len() {
+        // First character must be alphabetic or underscore
+        if self.pos >= input_len {
+            return Err(Error::Expected(Error::EXPECTED_IDENTIFIER));
+        }
+        let first_byte = self.input[self.pos];
+        if !(first_byte.is_ascii_alphabetic() || first_byte == b'_') {
+            if matches!(first_byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b';') {
+                return Err(Error::Expected(Error::EXPECTED_IDENTIFIER));
+            }
+            return Err(Error::InvalidChar(first_byte as char));
+        }
+        self.pos += 1;
+
+        // Subsequent characters can be alphanumeric or underscore
+        while self.pos < input_len {
             let byte = self.input[self.pos];
-            if is_first_char {
-                if byte.is_ascii_alphabetic() || byte == b'_' {
-                    self.pos += 1;
-                    is_first_char = false;
-                } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
-                    break;
-                } else {
-                    return Err(Error::InvalidChar(byte as char));
-                }
-            } else if byte.is_ascii_alphanumeric() || byte == b'_' {
+            if byte.is_ascii_alphanumeric() || byte == b'_' {
                 self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
+            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b';') {
                 break;
             } else {
                 return Err(Error::InvalidChar(byte as char));
             }
         }
 
-        if self.pos == start_pos {
-            return Err(Error::Expected(lang::EXPECTED_IDENTIFIER));
-        }
-
         let id_bytes = &self.input[start_pos..self.pos];
-        core::str::from_utf8(id_bytes).map_err(|_| Error::Expected(lang::INVALID_UTF8))
+        core::str::from_utf8(id_bytes).map_err(|_| Error::Expected(Error::INVALID_UTF8))
+    }
+
+    /// Expect a pattern, skip whitespace/newlines, then parse a value.
+    /// This is a common pattern: `expect(b",")` followed by `skip_newlines_and_spaces()`.
+    pub(crate) fn expect_then_skip(&mut self, expected: &[u8]) -> Result<&mut Self> {
+        self.expect(expected)?;
+        self.skip_newlines_and_spaces();
+        Ok(self)
+    }
+
+    /// Parse a float value that may be empty (defaults to 0.0 if empty).
+    /// This consolidates the repeated pattern of checking position before/after parse_f64.
+    pub(crate) fn parse_f64_or_default(&mut self, default: f64) -> Result<f64> {
+        let pos_before = self.pos();
+        match self.parse_f64() {
+            Ok(val) => Ok(val),
+            Err(_) => {
+                // If position didn't change, we're at a delimiter (empty value)
+                if self.pos() == pos_before {
+                    Ok(default)
+                } else {
+                    // Position changed but parsing failed - invalid format
+                    Err(Error::Expected(Error::EXPECTED_NUMBER))
+                }
+            }
+        }
+    }
+
+    /// Expect a pattern with a custom error message.
+    /// Consolidates the common pattern: `expect(...).map_err(|_| Error::Expected(msg))`.
+    pub(crate) fn expect_with_msg(
+        &mut self,
+        expected: &[u8],
+        msg: &'static str,
+    ) -> Result<&mut Self> {
+        self.expect(expected).map_err(|_| Error::Expected(msg))
+    }
+
+    /// Expect a keyword, map to a custom error, then skip newlines and spaces.
+    /// Consolidates the common pattern: `expect(keyword).map_err(...)?; skip_newlines_and_spaces()`.
+    pub(crate) fn expect_keyword_then_skip(
+        &mut self,
+        keyword: &[u8],
+        error_msg: &'static str,
+    ) -> Result<&mut Self> {
+        self.expect(keyword).map_err(|_| Error::Expected(error_msg))?;
+        self.skip_newlines_and_spaces();
+        Ok(self)
+    }
+
+    /// Skip whitespace optionally (don't error if no whitespace).
+    /// Consolidates the pattern: `let _ = parser.skip_whitespace();` or `skip_whitespace().ok()`.
+    #[inline]
+    pub(crate) fn skip_whitespace_optional(&mut self) {
+        let _ = self.skip_whitespace();
+    }
+
+    /// Parse an identifier with a custom error mapping.
+    /// Consolidates the pattern: `parse_identifier().map_err(|_| Error::X(...))`.
+    pub(crate) fn parse_identifier_with_error<F>(&mut self, map_error: F) -> Result<&'a str>
+    where
+        F: FnOnce() -> Error,
+    {
+        self.parse_identifier().map_err(|_| map_error())
+    }
+
+    /// Parse a u32 with a custom error mapping.
+    /// Consolidates the pattern: `parse_u32().map_err(|_| Error::X(...))`.
+    pub(crate) fn parse_u32_with_error<F>(&mut self, map_error: F) -> Result<u32>
+    where
+        F: FnOnce() -> Error,
+    {
+        self.parse_u32().map_err(|_| map_error())
+    }
+
+    /// Parse a u8 with a custom error mapping.
+    /// Consolidates the pattern: `parse_u8().map_err(|_| Error::X(...))`.
+    pub(crate) fn parse_u8_with_error<F>(&mut self, map_error: F) -> Result<u8>
+    where
+        F: FnOnce() -> Error,
+    {
+        self.parse_u8().map_err(|_| map_error())
     }
 }
 
@@ -583,7 +716,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
                 _ => panic!("Expected Error"),
             }
         }
@@ -595,7 +728,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
                 _ => panic!("Expected Error"),
             }
         }
@@ -607,7 +740,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
                 _ => panic!("Expected Error"),
             }
         }
@@ -619,7 +752,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
                 _ => panic!("Expected Error"),
             }
         }
@@ -631,7 +764,7 @@ mod tests {
             let result = parser.skip_whitespace();
             assert!(result.is_err());
             match result.unwrap_err() {
-                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
                 _ => panic!("Expected Error"),
             }
             // Input should remain unchanged
@@ -670,7 +803,7 @@ mod tests {
             let result = parser.skip_whitespace().and_then(|p| p.skip_whitespace());
             assert!(result.is_err());
             match result.unwrap_err() {
-                Error::Expected(msg) => assert_eq!(msg, lang::EXPECTED_WHITESPACE),
+                Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
                 _ => panic!("Expected Error"),
             }
         }

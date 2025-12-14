@@ -82,7 +82,7 @@ pub(crate) fn parse_signal_type_values(
                     core::str::from_utf8(desc_bytes)
                         .ok()
                         .and_then(|s| crate::validate_name(s).ok())
-                        .unwrap_or_else(|| crate::compat::String::<{ crate::MAX_NAME_SIZE }>::new())
+                        .unwrap_or_default()
                 } else {
                     crate::compat::String::<{ crate::MAX_NAME_SIZE }>::new()
                 }

@@ -189,17 +189,19 @@ SGTYPE_VAL_ SignalType2 0 "Off" 1 "On" 2 "Error" ;
         let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SGTYPE_VAL_");
         let values = dbc.signal_type_values();
         assert_eq!(values.len(), 5);
-        
+
         // Check SignalType1 values
-        let type1_values: Vec<&SignalTypeValue> = values.iter().filter(|v| v.type_name() == "SignalType1").collect();
+        let type1_values: Vec<&SignalTypeValue> =
+            values.iter().filter(|v| v.type_name() == "SignalType1").collect();
         assert_eq!(type1_values.len(), 2);
         assert_eq!(type1_values[0].value(), 0);
         assert_eq!(type1_values[0].description(), "Zero");
         assert_eq!(type1_values[1].value(), 1);
         assert_eq!(type1_values[1].description(), "One");
-        
+
         // Check SignalType2 values
-        let type2_values: Vec<&SignalTypeValue> = values.iter().filter(|v| v.type_name() == "SignalType2").collect();
+        let type2_values: Vec<&SignalTypeValue> =
+            values.iter().filter(|v| v.type_name() == "SignalType2").collect();
         assert_eq!(type2_values.len(), 3);
         assert_eq!(type2_values[0].value(), 0);
         assert_eq!(type2_values[0].description(), "Off");
@@ -255,20 +257,19 @@ SGTYPE_VAL_ SignalType2 0 "Off" 1 "On" 2 "Error" ;
 "#;
 
         let dbc = Dbc::parse(dbc_content).expect("Should parse all signal types together");
-        
+
         // Check signal types
         assert_eq!(dbc.signal_types().len(), 2);
-        
+
         // Check signal type references
         assert_eq!(dbc.signal_type_references().len(), 2);
-        
+
         // Check signal type values
         assert_eq!(dbc.signal_type_values().len(), 5);
-        
+
         // Verify message exists
         let message = dbc.messages().find_by_id(256).unwrap();
         assert_eq!(message.name(), "EngineData");
         assert_eq!(message.signals().len(), 2);
     }
 }
-
