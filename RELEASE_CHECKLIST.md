@@ -315,6 +315,8 @@ rustup run 1.85.0 cargo test -p dbc-rs
 cargo publish --dry-run -p dbc-rs
 
 # 4. Push changes and wait for CI workflows to pass
+
+```bash
 git add .
 git commit -m "Release vX.Y.Z"
 git push origin main
@@ -331,51 +333,3 @@ cargo publish -p dbc-rs
 
 # 7. Create GitHub release (via web UI)
 ```
-
-## Troubleshooting
-
-### If publishing fails:
-- Check crates.io authentication: `cargo login`
-- Verify package name is available
-- Check for duplicate version numbers
-- Review error messages for specific issues
-
-### If documentation doesn't appear on docs.rs:
-- Wait 10-15 minutes (docs.rs builds are queued)
-- Check https://docs.rs/releases/queue for build status
-- Verify `[package.metadata.docs.rs]` in Cargo.toml is correct
-
-### If tests fail after version update:
-- Verify all version references are updated
-- Check that examples in documentation still compile
-- Ensure no hardcoded version strings remain
-
-## Notes
-
-- **Never skip steps**: Each step ensures quality and prevents issues
-- **Test thoroughly**: Especially test `no_std` builds before releasing
-- **Document breaking changes**: Users need clear migration paths
-- **Keep SECURITY.md updated**: Review and update for each release
-- **Verify CI passes**: Don't publish if CI is failing
-- **CI Workflows**: The project uses two separate workflows:
-  - `dbc-rs.yml`: Comprehensive testing with 12 jobs covering:
-    - `test-std`: Tests std feature on latest stable (includes workspace tests)
-    - `test-alloc`: Tests alloc feature (`cargo test --no-default-features --features alloc -p dbc-rs`) on x86_64 and embedded
-    - `test-heapless`: Tests heapless feature with reduced constants (`DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs`) on x86_64 and embedded
-    - `test-no-std`: Basic no_std checks and builds (embedded)
-    - `test-std-msrv`: MSRV tests for std feature
-    - `test-no-std-msrv`: MSRV tests for no_std mode
-    - `lint`: Clippy checks for all feature combinations (std, alloc, heapless x86_64, heapless embedded, alloc embedded)
-    - `fmt`: Formatting check
-    - `doc`: Documentation build checks
-    - `coverage`: Code coverage (≥80%)
-    - `benchmark`: Benchmark tests
-  - `dbc-cli.yml`: Tests the CLI application
-  - Both workflows run automatically on pushes and PRs to `main`
-  - Workflows use path-based triggers to only run when relevant files change
-- **Pre-commit Hook**: Runs checks before commits:
-  - Clippy: dbc-rs (all features/targets) and dbc-cli
-  - Formatting check (using pinned toolchain)
-  - **Tests**: `cargo test --no-default-features --features alloc -p dbc-rs`
-  - **Tests**: `DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs`
-
