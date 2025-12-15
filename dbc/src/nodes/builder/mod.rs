@@ -230,7 +230,7 @@ impl NodesBuilder {
                 .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))?;
             result.push(compat_str).map_err(|_| Error::Validation(Error::NODES_TOO_MANY))?;
         }
-        Ok(Nodes::new(result.as_slice()))
+        Ok(Nodes::new(result))
     }
 }
 

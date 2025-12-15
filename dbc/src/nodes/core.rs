@@ -1,7 +1,8 @@
 use super::Nodes;
-#[cfg(feature = "std")]
-use crate::compat::{String, Vec};
-use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Result};
+use crate::{
+    Error, MAX_NAME_SIZE, MAX_NODES, Result,
+    compat::{String, Vec},
+};
 
 impl Nodes {
     // Shared validation function
@@ -26,12 +27,9 @@ impl Nodes {
         Ok(())
     }
 
-    #[cfg(feature = "std")]
-    pub(crate) fn new(nodes: &[impl AsRef<str>]) -> Self {
+    pub(crate) fn new(nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }>) -> Self {
         // Validation should have been done prior (by builder)
-        let nodes_vec: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> =
-            nodes.iter().take(MAX_NODES).map(|n| n.as_ref().to_string().into()).collect();
-        Self { nodes: nodes_vec }
+        Self { nodes }
     }
 
     /// Returns an iterator over the node names.

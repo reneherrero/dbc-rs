@@ -19,7 +19,7 @@ impl Nodes {
         parser.skip_newlines_and_spaces();
 
         // Parse node names into Vec
-        let mut node_names: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
+        let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
 
         loop {
             // Skip whitespace before each node name
@@ -30,14 +30,14 @@ impl Nodes {
             match parser.parse_identifier() {
                 Ok(node) => {
                     if let Some(err) = crate::check_max_limit(
-                        node_names.len(),
+                        nodes.len(),
                         MAX_NODES - 1,
                         Error::Nodes(Error::NODES_TOO_MANY),
                     ) {
                         return Err(err);
                     }
                     let node_str = crate::validate_name(node)?;
-                    node_names.push(node_str).map_err(|_| Error::Nodes(Error::NODES_TOO_MANY))?;
+                    nodes.push(node_str).map_err(|_| Error::Nodes(Error::NODES_TOO_MANY))?;
                 }
                 Err(_) => {
                     // No more identifiers, break
@@ -46,16 +46,16 @@ impl Nodes {
             }
         }
 
-        if node_names.is_empty() {
+        if nodes.is_empty() {
             return Ok(Nodes { nodes: Vec::new() });
         }
 
         // Validate before construction
-        Self::validate(node_names.as_slice()).map_err(|e| {
+        Self::validate(nodes.as_slice()).map_err(|e| {
             crate::error::map_val_error(e, Error::Nodes, || Error::Nodes(Error::NODES_ERROR_PREFIX))
         })?;
         // Construct directly (validation already done)
-        Ok(Self { nodes: node_names })
+        Ok(Nodes::new(nodes))
     }
 }
 
