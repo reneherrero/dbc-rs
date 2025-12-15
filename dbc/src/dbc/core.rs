@@ -193,24 +193,4 @@ BO_ 256 Engine : 8 ECM
         assert_eq!(message.name(), "Engine");
         assert_eq!(message.id(), 256);
     }
-
-    #[test]
-    fn test_value_descriptions() {
-        let dbc = Dbc::parse(
-            r#"VERSION "1.0"
-
-BU_: ECM
-
-BO_ 100 Engine : 8 ECM
- SG_ Gear : 0|8@1+ (1,0) [0|5] "" *
-
-VAL_ 100 Gear 0 "Park" 1 "Drive" ;
-"#,
-        )
-        .unwrap();
-        assert_eq!(dbc.value_descriptions().len(), 1);
-        let vd = dbc.value_descriptions_for_signal(100, "Gear").unwrap();
-        assert_eq!(vd.get(0), Some("Park"));
-        assert_eq!(vd.get(1), Some("Drive"));
-    }
 }

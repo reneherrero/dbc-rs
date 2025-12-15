@@ -9,6 +9,10 @@ This checklist ensures all steps are completed before publishing a new release o
 - [ ] **All tests pass**
   ```bash
   cargo test --workspace
+  
+  cargo test --no-default-features --features alloc -p dbc-rs
+  
+  DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs
   ```
 
 - [ ] **Clippy checks pass (all targets)**
@@ -154,6 +158,8 @@ This checklist ensures all steps are completed before publishing a new release o
 - [ ] **All CI checks pass**
   - [ ] **dbc-rs Library Workflow** (`.github/workflows/dbc-rs.yml`) successful
     - [ ] `test-std` job passes (tests with std on latest stable)
+    - [ ] `test-alloc` job passes (tests alloc feature: `cargo test --no-default-features --features alloc -p dbc-rs`)
+    - [ ] `test-heapless` job passes (tests heapless feature with reduced constants: `DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs`)
     - [ ] `test-no-std` job passes (tests no_std on latest stable)
     - [ ] `test-std-msrv` job passes (tests with std on MSRV 1.85.0)
     - [ ] `test-no-std-msrv` job passes (tests no_std on MSRV 1.85.0)
@@ -171,6 +177,9 @@ This checklist ensures all steps are completed before publishing a new release o
   ```bash
   .githooks/pre-commit
   ```
+  The pre-commit hook runs:
+  - Clippy checks: dbc-rs (all features/targets) and dbc-cli
+  - Formatting check (using pinned toolchain)
 
 - [ ] **No uncommitted changes**
   ```bash
@@ -269,7 +278,7 @@ For pre-releases:
 # Tests - all configurations
 cargo test --workspace  # Tests entire workspace including dbc-cli
 cargo test --no-default-features --features alloc -p dbc-rs  # Explicit alloc feature test
-RUST_MIN_STACK=8388608 cargo test --no-default-features --features heapless -p dbc-rs --lib  # heapless tests
+DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs  # heapless tests (with reduced constants to avoid stack overflow)
 
 # Builds - all configurations (release builds)
 cargo build --release -p dbc-rs  # std (default)
@@ -351,8 +360,8 @@ cargo publish -p dbc-rs
 - **CI Workflows**: The project uses two separate workflows:
   - `dbc-rs.yml`: Comprehensive testing with 12 jobs covering:
     - `test-std`: Tests std feature on latest stable (includes workspace tests)
-    - `test-alloc`: Tests alloc feature (x86_64 and embedded)
-    - `test-heapless`: Tests heapless feature with RUST_MIN_STACK and DBC_MAX_MESSAGES (x86_64 and embedded)
+    - `test-alloc`: Tests alloc feature (`cargo test --no-default-features --features alloc -p dbc-rs`) on x86_64 and embedded
+    - `test-heapless`: Tests heapless feature with reduced constants (`DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs`) on x86_64 and embedded
     - `test-no-std`: Basic no_std checks and builds (embedded)
     - `test-std-msrv`: MSRV tests for std feature
     - `test-no-std-msrv`: MSRV tests for no_std mode
@@ -364,8 +373,9 @@ cargo publish -p dbc-rs
   - `dbc-cli.yml`: Tests the CLI application
   - Both workflows run automatically on pushes and PRs to `main`
   - Workflows use path-based triggers to only run when relevant files change
-- **Pre-commit Hook**: Runs fast checks before commits:
+- **Pre-commit Hook**: Runs checks before commits:
   - Clippy: dbc-rs (all features/targets) and dbc-cli
   - Formatting check (using pinned toolchain)
-  - Intentionally excludes tests and builds (too slow for pre-commit)
+  - **Tests**: `cargo test --no-default-features --features alloc -p dbc-rs`
+  - **Tests**: `DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs`
 

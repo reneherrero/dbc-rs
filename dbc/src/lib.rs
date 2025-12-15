@@ -52,7 +52,7 @@ mod version;
 pub use byte_order::ByteOrder;
 pub use dbc::Dbc;
 pub use error::{Error, Result};
-pub use message::{Message, SignalList};
+pub use message::{Message, Signals};
 pub use nodes::Nodes;
 pub use receivers::Receivers;
 pub use signal::Signal;

@@ -1,10 +1,58 @@
-#[path = "signal.rs"]
-mod signal_impl;
+mod core;
+mod decode;
+mod parse;
+#[cfg(feature = "std")]
+mod serialize;
 
 #[cfg(feature = "std")]
-pub mod signal_builder;
+mod builder;
+
+use crate::{ByteOrder, MAX_NAME_SIZE, Receivers, compat::String};
+
+/// Represents a CAN signal within a message.
+///
+/// A `Signal` contains:
+/// - A name
+/// - Start bit position and length
+/// - Byte order (big-endian or little-endian)
+/// - Signed/unsigned flag
+/// - Factor and offset for physical value conversion
+/// - Min/max range
+/// - Optional unit string
+/// - Receivers (nodes that receive this signal)
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc = Dbc::parse(r#"VERSION "1.0"
+///
+/// BU_: ECM
+///
+/// BO_ 256 Engine : 8 ECM
+///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+/// "#)?;
+///
+/// let message = dbc.messages().at(0).unwrap();
+/// let signal = message.signals().at(0).unwrap();
+/// println!("Signal: {} (bits: {}-{})", signal.name(), signal.start_bit(), signal.start_bit() + signal.length() - 1);
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct Signal {
+    name: String<{ MAX_NAME_SIZE }>,
+    start_bit: u16,
+    length: u16,
+    byte_order: ByteOrder,
+    unsigned: bool,
+    factor: f64,
+    offset: f64,
+    min: f64,
+    max: f64,
+    unit: Option<String<{ MAX_NAME_SIZE }>>,
+    receivers: Receivers,
+}
 
 #[cfg(feature = "std")]
-pub use signal_builder::SignalBuilder;
-
-pub use signal_impl::Signal;
+pub use builder::SignalBuilder;

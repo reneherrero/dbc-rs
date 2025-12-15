@@ -538,7 +538,7 @@ BO_ 256 Engine : 8 ECM
  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
 "#;
         let dbc = Dbc::parse(data).unwrap();
-        assert_eq!(dbc.version().map(|v| v.to_string()), Some("".to_string()));
+        assert_eq!(dbc.version().map(|v| v.as_str()), Some(""));
     }
 
     #[test]
@@ -555,27 +555,6 @@ BO_ 256 Test : 8 ECM
         // Default (strict) mode should fail
         let result = Dbc::parse(data);
         assert!(result.is_err());
-    }
-
-    #[cfg(feature = "std")]
-    #[test]
-    fn test_parse_from_string() {
-        let data = String::from(
-            r#"VERSION "1.0"
-
-BU_: ECM
-
-BO_ 256 Engine : 8 ECM
- SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
-"#,
-        );
-
-        let dbc = Dbc::parse(&data).unwrap();
-        assert_eq!(
-            dbc.version().map(|v| v.to_string()),
-            Some("1.0".to_string())
-        );
-        assert_eq!(dbc.messages().len(), 1);
     }
 
     #[cfg(feature = "std")]

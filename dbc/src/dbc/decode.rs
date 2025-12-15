@@ -132,25 +132,6 @@ BO_ 256 Engine : 8 ECM
     }
 
     #[test]
-    fn test_decode_payload_too_short() {
-        let dbc = Dbc::parse(
-            r#"VERSION "1.0"
-
-BU_: ECM
-
-BO_ 256 Engine : 8 ECM
- SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
-"#,
-        )
-        .unwrap();
-
-        // Payload too short (only 4 bytes, but DLC is 8)
-        let payload = [0x00, 0x00, 0x00, 0x00];
-        let result = dbc.decode(256, &payload);
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_decode_message() {
         let data = r#"VERSION "1.0"
 

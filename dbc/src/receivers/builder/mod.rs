@@ -1,8 +1,6 @@
-use std::{collections::HashSet, string::String};
-
-use crate::{Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Result};
-
 use super::Receivers;
+use crate::{Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Result};
+use std::{collections::HashSet, string::String};
 
 /// Builder for creating `Receivers` programmatically.
 ///

@@ -1,6 +1,5 @@
-use std::string::String;
-
 use crate::{Error, Message, Result, Signal, SignalBuilder};
+use std::string::String;
 
 #[derive(Debug)]
 pub struct MessageBuilder {
