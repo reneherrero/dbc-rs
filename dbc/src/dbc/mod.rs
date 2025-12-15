@@ -1,17 +1,60 @@
-#[path = "dbc.rs"]
-mod dbc_impl;
-mod message_list;
+use crate::{Nodes, Version};
+
+// Module declarations
+mod messages;
 #[cfg(feature = "std")]
-mod value_descriptions_list;
+mod value_descriptions_map;
+
+// Include modules for additional functionality
+#[cfg(feature = "std")]
+mod builder;
+mod core;
+mod decode;
+mod parse;
+#[cfg(feature = "std")]
+mod serialize;
+mod validate;
+
+// Re-exports
+use messages::Messages;
 
 #[cfg(feature = "std")]
-mod dbc_builder;
+use value_descriptions_map::ValueDescriptionsMap;
 
 #[cfg(feature = "std")]
-pub use dbc_builder::DbcBuilder;
+pub use builder::DbcBuilder;
 
-pub use dbc_impl::Dbc;
-pub use message_list::MessageList;
+use validate::Validate;
 
-#[cfg(feature = "std")]
-pub use value_descriptions_list::ValueDescriptionsList;
+/// Represents a complete DBC (CAN database) file.
+///
+/// A `Dbc` contains:
+/// - An optional version string
+/// - A list of nodes (ECUs)
+/// - A collection of messages with their signals
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use dbc_rs::Dbc;
+///
+/// let dbc_content = r#"VERSION "1.0"
+///
+/// BU_: ECM TCM
+///
+/// BO_ 256 EngineData : 8 ECM
+///  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM
+/// "#;
+///
+/// let dbc = Dbc::parse(dbc_content)?;
+/// println!("Parsed {} messages", dbc.messages().len());
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+#[derive(Debug)]
+pub struct Dbc {
+    version: Option<Version>,
+    nodes: Nodes,
+    messages: Messages,
+    #[cfg(feature = "std")]
+    value_descriptions: ValueDescriptionsMap,
+}

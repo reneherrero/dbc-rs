@@ -1,9 +1,8 @@
+use crate::ValueDescriptions;
 use std::{
     collections::{BTreeMap, btree_map::Iter},
     string::String,
 };
-
-use crate::ValueDescriptions;
 
 /// Encapsulates the value descriptions map for a DBC
 ///
@@ -11,12 +10,12 @@ use crate::ValueDescriptions;
 /// They can be message-specific (keyed by message_id and signal_name) or global
 /// (keyed by None and signal_name, applying to all signals with that name).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct ValueDescriptionsList {
+pub struct ValueDescriptionsMap {
     value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptions>,
 }
 
-impl ValueDescriptionsList {
-    /// Create ValueDescriptionsList from a BTreeMap
+impl ValueDescriptionsMap {
+    /// Create ValueDescriptionsMap from a BTreeMap
     pub(crate) fn from_map(
         value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptions>,
     ) -> Self {
@@ -46,7 +45,7 @@ impl ValueDescriptionsList {
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = ((Option<u32>, &str), &ValueDescriptions)> + '_ {
-        ValueDescriptionsListIter {
+        ValueDescriptionsIter {
             entries: self.value_descriptions.iter(),
         }
     }
@@ -148,12 +147,12 @@ impl ValueDescriptionsList {
     }
 }
 
-/// Iterator over value descriptions in a ValueDescriptionsList
-struct ValueDescriptionsListIter<'a> {
+/// Iterator over value descriptions in a ValueDescriptionsMap
+struct ValueDescriptionsIter<'a> {
     entries: Iter<'a, (Option<u32>, String), ValueDescriptions>,
 }
 
-impl<'a> Iterator for ValueDescriptionsListIter<'a> {
+impl<'a> Iterator for ValueDescriptionsIter<'a> {
     type Item = ((Option<u32>, &'a str), &'a ValueDescriptions);
 
     #[inline]

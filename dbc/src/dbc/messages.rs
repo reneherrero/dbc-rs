@@ -1,12 +1,11 @@
-use crate::compat::Vec;
-use crate::{Error, MAX_MESSAGES, Message, Result};
+use crate::{Error, MAX_MESSAGES, Message, Result, compat::Vec};
 
 /// Encapsulates the messages array and count for a DBC
 ///
 /// Uses `Vec<Message>` for dynamic sizing.
 /// Optionally includes an index for O(1) or O(log n) message lookup by ID.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MessageList {
+pub struct Messages {
     messages: Vec<Message, { MAX_MESSAGES }>,
     // Optional index for fast ID lookup (feature-flagged)
     #[cfg(feature = "heapless")]
@@ -15,8 +14,8 @@ pub struct MessageList {
     sorted_indices: Option<alloc::vec::Vec<(u32, usize)>>, // (id, index) pairs sorted by id
 }
 
-impl MessageList {
-    /// Create MessageList from a slice of messages by cloning them
+impl Messages {
+    /// Create Messages from a slice of messages by cloning them
     pub(crate) fn new(messages: &[Message]) -> Result<Self> {
         if let Some(err) = crate::check_max_limit(
             messages.len(),

@@ -50,9 +50,7 @@ mod value_descriptions;
 mod version;
 
 pub use byte_order::ByteOrder;
-#[cfg(feature = "std")]
-pub use dbc::ValueDescriptionsList;
-pub use dbc::{Dbc, MessageList};
+pub use dbc::Dbc;
 pub use error::{Error, Result};
 pub use message::{Message, SignalList};
 pub use nodes::Nodes;
