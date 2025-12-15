@@ -83,7 +83,7 @@ pub(crate) use parser::Parser;
 /// # Errors
 ///
 /// Returns `Error::Expected` with `MAX_NAME_SIZE_EXCEEDED` message if the name
-/// exceeds `MAX_NAME_SIZE` (64 characters by default).
+/// exceeds `MAX_NAME_SIZE` (32 characters by default, per DBC specification).
 #[inline]
 pub(crate) fn validate_name<S: AsRef<str>>(name: S) -> Result<compat::String<{ MAX_NAME_SIZE }>> {
     let name_str: &str = name.as_ref();
@@ -125,7 +125,7 @@ pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // - DBC_MAX_NODES (default: 256)
 // - DBC_MAX_VALUE_DESCRIPTIONS (default: 64)
 // - DBC_MAX_RECEIVER_NODES (default: 64)
-// - DBC_MAX_NAME_SIZE (default: 64)
+// - DBC_MAX_NAME_SIZE (default: 32, per DBC specification)
 include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 
 // DBC file format keywords

@@ -379,7 +379,7 @@ signal = 'SG_' signal_name multiplexer_indicator ':'
 | `minimum` | Minimum physical value | `0`, `-273.15` |
 | `maximum` | Maximum physical value | `8000`, `100` |
 | `unit` | Physical unit (string) | `"rpm"`, `"°C"` |
-| `receivers` | Receiving nodes | `Gateway`, `*` |
+| `receivers` | Receiving nodes | `Gateway`, `Vector__XXX` |
 
 ### 9.3 Complete Example
 

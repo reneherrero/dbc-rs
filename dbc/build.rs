@@ -89,7 +89,7 @@ fn main() {
     let max_name_size = env::var("DBC_MAX_NAME_SIZE")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(64); // Default to 64
+        .unwrap_or(32); // Default to 32 (per DBC specification)
 
     // Validate that all values are powers of 2 when heapless feature is enabled
     // heapless::Vec, heapless::String, and heapless::FnvIndexMap require power-of-2 capacities

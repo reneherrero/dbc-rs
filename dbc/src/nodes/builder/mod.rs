@@ -26,7 +26,9 @@ use std::{string::String, vec::Vec};
 ///
 /// The builder validates:
 /// - Maximum of 256 nodes (DoS protection)
-/// - No duplicate node names (case-sensitive)
+/// - All node names must be unique (case-sensitive)
+/// - Maximum 32 characters per node name
+/// - Maximum number of nodes (implementation limit for DoS protection)
 ///
 /// # Feature Requirements
 ///
@@ -152,8 +154,9 @@ impl NodesBuilder {
     /// # Returns
     ///
     /// Returns `Ok(Self)` if validation succeeds, or `Err(Error::Validation)` if:
-    /// - More than 256 nodes are specified (exceeds maximum limit)
+    /// - Too many nodes are specified (exceeds 256 nodes  limit by default)
     /// - Duplicate node names are found (case-sensitive)
+    /// - Node name exceeds maximum length (32 characters by default)
     ///
     /// # Examples
     ///
@@ -186,8 +189,9 @@ impl NodesBuilder {
     /// # Returns
     ///
     /// Returns `Ok(Nodes)` if successful, or `Err(Error::Validation)` if:
-    /// - More than 256 nodes are specified (exceeds maximum limit)
+    /// - Too many nodes are specified (exceeds 256 nodes limit by default)
     /// - Duplicate node names are found (case-sensitive)
+    /// - Node name exceeds maximum length (32 characters)
     ///
     /// # Examples
     ///

@@ -67,7 +67,9 @@ pub use builder::NodesBuilder;
 /// - Format: `BU_: Node1 Node2 Node3 ...`
 /// - Node names are space-separated
 /// - Maximum of 256 nodes (DoS protection)
-/// - Duplicate node names are not allowed (case-sensitive)
+/// - All node names must be unique (case-sensitive)
+/// - Empty node list is valid (`BU_:`)
+/// - Maximum 32 characters per node name by default
 #[derive(Debug, Default, PartialEq, Eq, Hash)]
 pub struct Nodes {
     nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }>,
