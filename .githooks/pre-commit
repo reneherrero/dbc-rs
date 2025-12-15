@@ -114,6 +114,15 @@ else
     FAILED=1
 fi
 
+# Run tests with default features (std)
+echo -e "\n${YELLOW}Running tests with default features (std)...${NC}"
+if cargo test 2>&1; then
+    echo -e "${GREEN}✓ Tests passed (std)${NC}"
+else
+    echo -e "${RED}✗ Tests failed (std)${NC}"
+    FAILED=1
+fi
+
 # Run tests with alloc feature
 echo -e "\n${YELLOW}Running tests with alloc feature...${NC}"
 if cargo test --no-default-features --features alloc -p dbc-rs 2>&1; then

@@ -2,7 +2,7 @@
 
 #![cfg(feature = "std")]
 
-use dbc_rs::{ByteOrder, Dbc};
+use dbc_rs::{ByteOrder, Dbc, MAX_NAME_SIZE};
 
 #[test]
 fn test_empty_dbc_file() {
@@ -165,7 +165,7 @@ BU_: ECM
 #[test]
 fn test_very_long_signal_name() {
     // Test signal name at reasonable length
-    let long_name = "A".repeat(63); // Max reasonable length
+    let long_name = "A".repeat(MAX_NAME_SIZE - 1); // Max reasonable length
     let dbc_str = format!(
         r#"VERSION "1.0"
 
@@ -179,7 +179,7 @@ BO_ 256 Test : 8 ECM
     let dbc = Dbc::parse(&dbc_str).expect("Should handle long signal names");
     assert_eq!(
         dbc.messages().at(0).unwrap().signals().at(0).unwrap().name().len(),
-        63
+        MAX_NAME_SIZE - 1
     );
 }
 
