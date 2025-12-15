@@ -412,4 +412,85 @@ mod tests {
             _ => panic!("Expected Error::Nodes"),
         }
     }
+
+    // Integration test using Dbc::parse
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_nodes_same_line() {
+        // Test that Nodes::parse() correctly handles nodes on same line
+        let dbc_content = r#"VERSION "1.0"
+
+BS_:
+
+BU_: NEO IMCU IGTW DI
+
+BS_:
+
+BO_ 262 DI_torque1: 8 DI
+ SG_ DI_torqueDriver : 0|13@1- (0.25,0) [-750|750] "Nm"  NEO
+"#;
+
+        let result = crate::Dbc::parse(dbc_content);
+        assert!(
+            result.is_ok(),
+            "Parse should succeed, got: {:?}",
+            result.err()
+        );
+    }
+
+    // Edge case tests using Dbc::parse
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_max_nodes() {
+        // Test maximum number of nodes (256)
+        let mut dbc_str: std::string::String = std::string::String::from(
+            r#"VERSION "1.0"
+
+BS_:
+
+BU_: "#,
+        );
+
+        for i in 0..256 {
+            if i > 0 {
+                dbc_str.push(' ');
+            }
+            dbc_str.push_str(&format!("Node{}", i));
+        }
+        dbc_str.push('\n');
+
+        let dbc = crate::Dbc::parse(&dbc_str).expect("Should accept max nodes");
+        assert_eq!(dbc.nodes().len(), 256);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_duplicate_node_name() {
+        // Test duplicate node name detection
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM ECM
+"#;
+        let result = crate::Dbc::parse(dbc_str);
+        assert!(result.is_err(), "Should detect duplicate node names");
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_whitespace_variations() {
+        // Test various whitespace patterns
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_:   ECM   TCM   
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
+"#;
+        let dbc = crate::Dbc::parse(dbc_str).expect("Should handle whitespace variations");
+        assert_eq!(dbc.nodes().len(), 2);
+    }
 }

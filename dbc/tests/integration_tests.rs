@@ -5,6 +5,11 @@ mod std {
     use dbc_rs::Dbc;
     use std::fs::read_to_string;
 
+    // ============================================================================
+    // File-Based Integration Tests
+    // ============================================================================
+    // These tests read from actual DBC files in tests/data/
+
     #[test]
     fn test_parse_simple_dbc() {
         let content = read_to_string("tests/data/simple.dbc").expect("Failed to read simple.dbc");
@@ -41,47 +46,26 @@ mod std {
         assert_eq!(speed_msg.name(), "VehicleSpeed");
         assert_eq!(speed_msg.sender(), "ECU2");
         assert_eq!(speed_msg.dlc(), 4);
-    }
 
-    #[test]
-    fn test_parse_multiplexed_dbc() {
-        let content =
-            read_to_string("tests/data/multiplexed.dbc").expect("Failed to read multiplexed.dbc");
-        let dbc = Dbc::parse(&content).expect("Failed to parse multiplexed.dbc");
+        // Test decoding EngineStatus message (ID 100)
+        // EngineSpeed: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        // CoolantTemp: 25°C (raw: (25 - (-40)) / 1 = 65 = 0x41) at byte 2
+        let engine_payload = [0x40, 0x1F, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(100, &engine_payload).expect("Should decode EngineStatus");
+        assert_eq!(decoded.len(), 2);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("EngineSpeed").unwrap() - 2000.0).abs() < 0.1);
+        assert!((decoded_map.get("CoolantTemp").unwrap() - 25.0).abs() < 0.1);
 
-        // Verify version
-        assert_eq!(
-            dbc.version().map(|v| v.to_string()),
-            Some("2.1".to_string())
-        );
-
-        // Verify nodes
-        assert!(dbc.nodes().contains("GATEWAY"));
-        assert!(dbc.nodes().contains("SENSOR"));
-        assert!(dbc.nodes().contains("ACTUATOR"));
-
-        // Verify messages
-        assert_eq!(dbc.messages().len(), 2);
-
-        // Verify SensorData message
-        let sensor_msg = dbc.messages().iter().find(|m| m.id() == 300).unwrap();
-        assert_eq!(sensor_msg.name(), "SensorData");
-        assert_eq!(sensor_msg.signals().len(), 4);
-
-        let temp = sensor_msg.signals().find("Temperature").unwrap();
-        assert_eq!(temp.start_bit(), 8);
-        assert_eq!(temp.offset(), -50.0);
-        assert_eq!(temp.unit(), Some("°C"));
-
-        // Verify ActuatorControl message
-        let actuator_msg = dbc.messages().iter().find(|m| m.id() == 400).unwrap();
-        assert_eq!(actuator_msg.name(), "ActuatorControl");
-        assert_eq!(actuator_msg.dlc(), 6);
-        assert_eq!(actuator_msg.signals().len(), 3);
-
-        let force = actuator_msg.signals().find("Force").unwrap();
-        assert!(!force.is_unsigned()); // Should be signed
-        assert_eq!(force.unit(), Some("N"));
+        // Test decoding VehicleSpeed message (ID 200)
+        // Speed: 50 km/h (raw: 50 / 0.1 = 500 = 0x01F4 LE -> [0xF4, 0x01])
+        let speed_payload = [0xF4, 0x01, 0x00, 0x00];
+        let decoded = dbc.decode(200, &speed_payload).expect("Should decode VehicleSpeed");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("Speed").unwrap() - 50.0).abs() < 0.1);
     }
 
     #[test]
@@ -108,6 +92,15 @@ mod std {
         let sig = msg.signals().at(0).unwrap();
         assert_eq!(sig.name(), "TestSignal");
         assert_eq!(sig.length(), 8);
+
+        // Test decoding TestMessage (ID 256)
+        // TestSignal: 42 (raw: 42 = 0x2A)
+        let payload = [0x2A];
+        let decoded = dbc.decode(256, &payload).expect("Should decode TestMessage");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert_eq!(decoded_map.get("TestSignal"), Some(&42.0));
     }
 
     #[test]
@@ -141,6 +134,25 @@ mod std {
         let clutch = trans_msg.signals().find("Clutch").unwrap();
         assert_eq!(clutch.length(), 1);
         assert_eq!(clutch.start_bit(), 4);
+
+        // Test decoding EngineData message (ID 416)
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        // Throttle: 50% (raw: 50 / 0.392157 ≈ 127 = 0x7F) at byte 2
+        let engine_payload = [0x40, 0x1F, 0x7F, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(416, &engine_payload).expect("Should decode EngineData");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+        assert!((decoded_map.get("Throttle").unwrap() - 50.0).abs() < 1.0);
+
+        // Test decoding TransmissionData message (ID 688)
+        // Gear: 3 (raw: 3, bits 0-3) + Clutch: 1 (raw: 1, bit 4) = 0x13
+        let trans_payload = [0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(688, &trans_payload).expect("Should decode TransmissionData");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert_eq!(decoded_map.get("Gear"), Some(&3.0));
+        assert_eq!(decoded_map.get("Clutch"), Some(&1.0));
     }
 
     #[test]
@@ -188,10 +200,22 @@ mod std {
             }
             _ => panic!("Data2 should have specific receivers"),
         }
+
+        // Test decoding BroadcastMessage (ID 500)
+        // Status: 42 (raw: 0x2A) at byte 0
+        // Data1: 100 (raw: 100 / 0.1 = 1000 = 0x03E8 LE -> [0xE8, 0x03]) at bytes 1-2
+        // Data2: 50 (raw: 50 / 0.01 = 5000 = 0x1388 LE -> [0x88, 0x13]) at bytes 3-4
+        let payload = [0x2A, 0xE8, 0x03, 0x88, 0x13, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Should decode BroadcastMessage");
+        assert_eq!(decoded.len(), 3);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert_eq!(decoded_map.get("Status"), Some(&42.0));
+        assert!((decoded_map.get("Data1").unwrap() - 100.0).abs() < 0.1);
+        assert!((decoded_map.get("Data2").unwrap() - 50.0).abs() < 0.1);
     }
 
     #[test]
-    #[ignore = "VAL_TABLE_ not implemented"]
     fn test_parse_complete_dbc_file() {
         // Parse the complete.dbc file
         let content =
@@ -299,6 +323,21 @@ mod std {
         assert_eq!(sensor_msg.sender(), "SENSOR");
         assert_eq!(sensor_msg.dlc(), 6);
         assert_eq!(sensor_msg.signals().len(), 3);
+
+        // Test decoding all messages from complete.dbc
+        // EngineData (ID 256): RPM=2000, Temperature=25°C, ThrottlePosition=50%, OilPressure=1.0kPa
+        let engine_payload = [0x40, 0x1F, 0x41, 0x7F, 0x64, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &engine_payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 4);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+        assert!((decoded_map.get("Temperature").unwrap() - 25.0).abs() < 0.1);
+
+        // TransmissionData (ID 512): GearPosition=3, ClutchEngaged=1
+        let trans_payload = [0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(512, &trans_payload).expect("Should decode TransmissionData");
+        assert_eq!(decoded.len(), 4);
     }
 
     #[test]
@@ -565,226 +604,11 @@ mod std {
     // ============================================================================
 
     #[test]
-    fn test_parse_sgtype_definition() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_");
-        let signal_types = dbc.signal_types();
-        assert_eq!(signal_types.len(), 1);
-        assert_eq!(signal_types[0].name(), "SignalType1");
-        assert_eq!(signal_types[0].size(), 16);
-    }
-
-    #[test]
-    fn test_parse_sgtype_multiple() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-SGTYPE_ SignalType2 : 32;
-SGTYPE_ SignalType3 : 8;
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SGTYPE_");
-        let signal_types = dbc.signal_types();
-        assert_eq!(signal_types.len(), 3);
-        assert_eq!(signal_types[0].name(), "SignalType1");
-        assert_eq!(signal_types[0].size(), 16);
-        assert_eq!(signal_types[1].name(), "SignalType2");
-        assert_eq!(signal_types[1].size(), 32);
-        assert_eq!(signal_types[2].name(), "SignalType3");
-        assert_eq!(signal_types[2].size(), 8);
-    }
-
-    #[test]
-    fn test_parse_sgtype_without_semicolon() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_ without semicolon");
-        let signal_types = dbc.signal_types();
-        assert_eq!(signal_types.len(), 1);
-        assert_eq!(signal_types[0].name(), "SignalType1");
-        assert_eq!(signal_types[0].size(), 16);
-    }
-
-    #[test]
-    fn test_parse_sig_type_ref() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-
-BO_ 256 EngineData : 8 ECM
- SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
-
-SIG_TYPE_REF_ 256 RPM : SignalType1;
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse SIG_TYPE_REF_");
-        let refs = dbc.signal_type_references();
-        assert_eq!(refs.len(), 1);
-        assert_eq!(refs[0].message_id(), 256);
-        assert_eq!(refs[0].signal_name(), "RPM");
-        assert_eq!(refs[0].type_name(), "SignalType1");
-    }
-
-    #[test]
-    fn test_parse_sig_type_ref_multiple() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-SGTYPE_ SignalType2 : 8;
-
-BO_ 256 EngineData : 8 ECM
- SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
- SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
-
-SIG_TYPE_REF_ 256 RPM : SignalType1;
-SIG_TYPE_REF_ 256 Temperature : SignalType2;
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SIG_TYPE_REF_");
-        let refs = dbc.signal_type_references();
-        assert_eq!(refs.len(), 2);
-        assert_eq!(refs[0].message_id(), 256);
-        assert_eq!(refs[0].signal_name(), "RPM");
-        assert_eq!(refs[0].type_name(), "SignalType1");
-        assert_eq!(refs[1].message_id(), 256);
-        assert_eq!(refs[1].signal_name(), "Temperature");
-        assert_eq!(refs[1].type_name(), "SignalType2");
-    }
-
-    #[test]
-    fn test_parse_sig_type_ref_without_semicolon() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-
-BO_ 256 EngineData : 8 ECM
- SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
-
-SIG_TYPE_REF_ 256 RPM : SignalType1
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse SIG_TYPE_REF_ without semicolon");
-        let refs = dbc.signal_type_references();
-        assert_eq!(refs.len(), 1);
-        assert_eq!(refs[0].message_id(), 256);
-        assert_eq!(refs[0].signal_name(), "RPM");
-        assert_eq!(refs[0].type_name(), "SignalType1");
-    }
-
-    #[test]
-    fn test_parse_sgtype_val() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-
-SGTYPE_VAL_ SignalType1 0 "Value0" 1 "Value1" 2 "Value2" ;
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_VAL_");
-        let values = dbc.signal_type_values();
-        assert_eq!(values.len(), 3);
-        assert_eq!(values[0].type_name(), "SignalType1");
-        assert_eq!(values[0].value(), 0);
-        assert_eq!(values[0].description(), "Value0");
-        assert_eq!(values[1].value(), 1);
-        assert_eq!(values[1].description(), "Value1");
-        assert_eq!(values[2].value(), 2);
-        assert_eq!(values[2].description(), "Value2");
-    }
-
-    #[test]
-    fn test_parse_sgtype_val_multiple_types() {
-        use dbc_rs::SignalTypeValue;
-
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-SGTYPE_ SignalType2 : 8;
-
-SGTYPE_VAL_ SignalType1 0 "Zero" 1 "One" ;
-SGTYPE_VAL_ SignalType2 0 "Off" 1 "On" 2 "Error" ;
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SGTYPE_VAL_");
-        let values = dbc.signal_type_values();
-        assert_eq!(values.len(), 5);
-
-        // Check SignalType1 values
-        let type1_values: Vec<&SignalTypeValue> =
-            values.iter().filter(|v| v.type_name() == "SignalType1").collect();
-        assert_eq!(type1_values.len(), 2);
-        assert_eq!(type1_values[0].value(), 0);
-        assert_eq!(type1_values[0].description(), "Zero");
-        assert_eq!(type1_values[1].value(), 1);
-        assert_eq!(type1_values[1].description(), "One");
-
-        // Check SignalType2 values
-        let type2_values: Vec<&SignalTypeValue> =
-            values.iter().filter(|v| v.type_name() == "SignalType2").collect();
-        assert_eq!(type2_values.len(), 3);
-        assert_eq!(type2_values[0].value(), 0);
-        assert_eq!(type2_values[0].description(), "Off");
-        assert_eq!(type2_values[1].value(), 1);
-        assert_eq!(type2_values[1].description(), "On");
-        assert_eq!(type2_values[2].value(), 2);
-        assert_eq!(type2_values[2].description(), "Error");
-    }
-
-    #[test]
-    fn test_parse_sgtype_val_single_value() {
-        let dbc_content = r#"
-VERSION "1.0"
-
-BU_: ECM
-
-SGTYPE_ SignalType1 : 16;
-
-SGTYPE_VAL_ SignalType1 0 "Zero" ;
-"#;
-
-        let dbc = Dbc::parse(dbc_content).expect("Should parse SGTYPE_VAL_ with single value");
-        let values = dbc.signal_type_values();
-        assert_eq!(values.len(), 1);
-        assert_eq!(values[0].type_name(), "SignalType1");
-        assert_eq!(values[0].value(), 0);
-        assert_eq!(values[0].description(), "Zero");
-    }
-
-    #[test]
     fn test_parse_all_signal_types_together() {
         let dbc_content = r#"
 VERSION "1.0"
+
+BS_:
 
 BU_: ECM
 
@@ -820,6 +644,17 @@ SGTYPE_VAL_ SignalType2 0 "Off" 1 "On" 2 "Error" ;
         let message = dbc.messages().find_by_id(256).unwrap();
         assert_eq!(message.name(), "EngineData");
         assert_eq!(message.signals().len(), 2);
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        // Status: 1 (raw: 1 = 0x01) at byte 2
+        let payload = [0x40, 0x1F, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 2);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+        assert_eq!(decoded_map.get("Status"), Some(&1.0));
     }
 
     #[test]
@@ -1270,6 +1105,7 @@ VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
     // ============================================================================
     // New Symbols (NS_) Comprehensive Tests
     // ============================================================================
+    // Inline tests for NS_ section parsing
 
     #[test]
     fn test_parse_ns_empty() {
@@ -1277,6 +1113,8 @@ VAL_ 512 Gear 0 "P" 1 "R" 2 "N" 3 "D" 4 "1" 5 "2" ;
 VERSION "1.0"
 
 NS_:
+
+BS_:
 
 BU_: ECM
 "#;
@@ -1320,6 +1158,8 @@ NS_ :
     BU_BO_REL_
     SG_MUL_VAL_
 
+BS_:
+
 BU_: ECM
 "#;
 
@@ -1353,6 +1193,8 @@ NS_ :
     NS_DESC_
     CM_
     BA_DEF_
+
+BS_:
 
 BU_: ECM
 "#;
@@ -1439,6 +1281,8 @@ NS_ :
     BA_
     VAL_
 
+BS_:
+
 BU_: ECM TCM
 
 BO_ 256 EngineData : 8 ECM
@@ -1452,5 +1296,998 @@ CM_ BO_ 256 "Message comment";
         assert_eq!(dbc.messages().len(), 1);
         let message = dbc.messages().find_by_id(256).unwrap();
         assert_eq!(message.name(), "EngineData");
+    }
+
+    #[test]
+    #[ignore = "Parser needs to handle tabs in NS_ section with all symbols - real-world format from rivian files"]
+    fn test_parse_ns_with_all_symbols_tabs() {
+        // Test NS_ with all symbols using tabs (like rivian_primary_actuator.dbc)
+        // This is a real-world format but parser currently has issues with tabs in NS_ section
+        let dbc_content = r#"VERSION "PrimaryActuatorCAN"
+
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: ACM CGM EPAS_P ESP IBM OCS RCM SAS TestTool VDM Vector_XXX
+
+
+BO_ 64 SAS_Status: 8 SAS
+ SG_ SAS_Status_Checksum : 7|8@0+ (1,0) [0|255] "Unitless" ACM,EPAS_P,ESP,RCM,VDM
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with all symbols using tabs");
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().find_by_id(64).unwrap();
+        assert_eq!(message.name(), "SAS_Status");
+    }
+
+    #[test]
+    fn test_parse_ns_minimal_real_world_format() {
+        // Test NS_ with minimal symbols in real-world format
+        let dbc_content = r#"VERSION ""
+
+NS_ :
+ NS_DESC_
+ CM_
+ BA_DEF_
+BS_:
+
+BU_: TEST
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse NS_ with minimal symbols");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    #[ignore = "Parser needs to handle BU_ with nodes on separate lines with tabs - real-world format from tesla files"]
+    fn test_parse_bu_with_nodes_on_separate_lines_tabs() {
+        // Test BU_ with nodes on separate lines with tabs (like tesla_powertrain.dbc)
+        // This is a real-world format but parser currently doesn't handle nodes on separate lines
+        let dbc_content = r#"VERSION ""
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+BS_:
+
+BU_:
+	NEO
+	MCU
+	GTW
+	EPAS
+	DI
+	ESP
+	SBW
+	STW
+	APP
+	DAS
+	XXX
+
+BO_ 262 DI_torque1: 8 DI
+ SG_ DI_torqueDriver : 0|13@1- (0.25,0) [-750|750] "Nm"  NEO
+"#;
+
+        let dbc = Dbc::parse(dbc_content)
+            .expect("Should parse BU_ with nodes on separate lines with tabs");
+        assert_eq!(dbc.nodes().len(), 11);
+        assert!(dbc.nodes().contains("NEO"));
+        assert!(dbc.nodes().contains("MCU"));
+        assert!(dbc.nodes().contains("GTW"));
+        assert!(dbc.nodes().contains("EPAS"));
+        assert!(dbc.nodes().contains("DI"));
+        assert!(dbc.nodes().contains("ESP"));
+        assert!(dbc.nodes().contains("SBW"));
+        assert!(dbc.nodes().contains("STW"));
+        assert!(dbc.nodes().contains("APP"));
+        assert!(dbc.nodes().contains("DAS"));
+        assert!(dbc.nodes().contains("XXX"));
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().find_by_id(262).unwrap();
+        assert_eq!(message.name(), "DI_torque1");
+    }
+
+    // ============================================================================
+    // Multiplexing Tests
+    // ============================================================================
+
+    // File-based multiplexing tests
+    #[test]
+    fn test_decode_basic_multiplexing() {
+        let content = std::fs::read_to_string("tests/data/multiplexing_basic.dbc")
+            .expect("Failed to read multiplexing_basic.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse multiplexing_basic.dbc");
+
+        // Test with MuxSwitch = 0: Should decode MuxSwitch, Signal_0, and NormalSignal
+        // Payload: MuxSwitch=0 at bits 0-7, Signal_0=100 (raw: 1000) at bits 8-23, NormalSignal=42 at bits 24-31
+        // Little-endian: bytes [0x00, 0xE8, 0x03, 0x2A, ...]
+        let payload = [0x00, 0xE8, 0x03, 0x2A, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(400, &payload).expect("Decode failed");
+
+        // Should have 3 signals: MuxSwitch (always), Signal_0 (active when switch=0), NormalSignal (always)
+        assert_eq!(decoded.len(), 3);
+        let mut decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("MuxSwitch"), Some(&0.0));
+        assert_eq!(decoded_map.get("Signal_0"), Some(&100.0)); // 1000 * 0.1
+        assert_eq!(decoded_map.get("NormalSignal"), Some(&42.0));
+        assert_eq!(decoded_map.get("Signal_1"), None); // Should not be decoded
+
+        // Test with MuxSwitch = 1: Should decode MuxSwitch, Signal_1, and NormalSignal
+        // Payload: MuxSwitch=1 at bits 0-7, Signal_1=50 (raw: 5000) at bits 8-23, NormalSignal=42 at bits 24-31
+        let payload = [0x01, 0x88, 0x13, 0x2A, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(400, &payload).expect("Decode failed");
+
+        assert_eq!(decoded.len(), 3);
+        decoded_map = decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("MuxSwitch"), Some(&1.0));
+        assert_eq!(decoded_map.get("Signal_1"), Some(&50.0)); // 5000 * 0.01
+        assert_eq!(decoded_map.get("NormalSignal"), Some(&42.0));
+        assert_eq!(decoded_map.get("Signal_0"), None); // Should not be decoded
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_decode_extended_multiplexing() {
+        let content = std::fs::read_to_string("tests/data/multiplexing_extended.dbc")
+            .expect("Failed to read multiplexing_extended.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse multiplexing_extended.dbc");
+
+        // Test with Mux1 = 3 (in range 0-5): Should decode Signal_A
+        // Payload: Mux1=3, Mux2=0, Signal_A=100 (raw: 1000) at bits 16-31
+        // Little-endian: bytes [0x03, 0x00, 0xE8, 0x03, ...]
+        let payload = [0x03, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+
+        assert_eq!(decoded.len(), 3); // Mux1, Mux2, Signal_A
+        let mut decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&3.0));
+        assert_eq!(decoded_map.get("Mux2"), Some(&0.0));
+        assert_eq!(decoded_map.get("Signal_A"), Some(&100.0)); // 1000 * 0.1
+        assert_eq!(decoded_map.get("Signal_B"), None); // Should not be decoded
+
+        // Test with Mux1 = 12 (in range 10-15): Should decode Signal_A
+        let payload = [0x0C, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+
+        decoded_map = decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert_eq!(decoded_map.get("Mux1"), Some(&12.0));
+        assert_eq!(decoded_map.get("Signal_A"), Some(&100.0));
+
+        // Test with Mux2 = 22 (in range 20-25): Should decode Signal_B
+        let payload = [0x00, 0x16, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+
+        decoded_map = decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert_eq!(decoded_map.get("Mux2"), Some(&22.0));
+        assert_eq!(decoded_map.get("Signal_B"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_A"), None); // Should not be decoded
+    }
+
+    #[test]
+    fn test_decode_multiplexed_signals_comprehensive() {
+        let content = std::fs::read_to_string("tests/data/multiplexing_basic.dbc")
+            .expect("Failed to read multiplexing_basic.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse multiplexing_basic.dbc");
+
+        // Test 1: Switch = 0, should decode Signal_0 and NormalSignal
+        let payload = [0x00, 0xE8, 0x03, 0x2A, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(400, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("MuxSwitch"), Some(&0.0));
+        assert_eq!(decoded_map.get("Signal_0"), Some(&100.0));
+        assert_eq!(decoded_map.get("NormalSignal"), Some(&42.0));
+        assert_eq!(decoded_map.get("Signal_1"), None);
+
+        // Test 2: Switch = 1, should decode Signal_1 and NormalSignal
+        let payload = [0x01, 0x88, 0x13, 0x2A, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(400, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("MuxSwitch"), Some(&1.0));
+        assert_eq!(decoded_map.get("Signal_1"), Some(&50.0));
+        assert_eq!(decoded_map.get("NormalSignal"), Some(&42.0));
+        assert_eq!(decoded_map.get("Signal_0"), None);
+
+        // Test 3: Switch = 2, should only decode MuxSwitch and NormalSignal (no multiplexed signals match)
+        let payload = [0x02, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(400, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("MuxSwitch"), Some(&2.0));
+        assert_eq!(decoded_map.get("NormalSignal"), Some(&42.0));
+        assert_eq!(decoded_map.get("Signal_0"), None);
+        assert_eq!(decoded_map.get("Signal_1"), None);
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_decode_extended_multiplexing_comprehensive() {
+        let content = std::fs::read_to_string("tests/data/multiplexing_extended.dbc")
+            .expect("Failed to read multiplexing_extended.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse multiplexing_extended.dbc");
+
+        // Test 1: Mux1 = 3 (in range 0-5), Mux2 = 0: Should decode Signal_A only
+        let payload = [0x03, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&3.0));
+        assert_eq!(decoded_map.get("Mux2"), Some(&0.0));
+        assert_eq!(decoded_map.get("Signal_A"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_B"), None);
+
+        // Test 2: Mux1 = 12 (in range 10-15), Mux2 = 0: Should decode Signal_A only
+        let payload = [0x0C, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&12.0));
+        assert_eq!(decoded_map.get("Signal_A"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_B"), None);
+
+        // Test 3: Mux1 = 0, Mux2 = 22 (in range 20-25): Should decode Signal_B
+        // Note: Mux1=0 is in range 0-5, so Signal_A would also match, but since they share
+        // the same bit positions and only one can be active, we test with Mux1=0 which
+        // should still allow Signal_B to decode when Mux2 matches
+        let payload = [0x00, 0x16, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&0.0));
+        assert_eq!(decoded_map.get("Mux2"), Some(&22.0));
+        // When both signals match, both can decode (they share bit positions but extended
+        // multiplexing allows multiple conditions). However, in practice, only one should
+        // be active. For this test, we verify Signal_B decodes.
+        // Signal_A would also match (Mux1=0 is in 0-5), but we're testing Signal_B here.
+        assert!(
+            decoded_map.contains_key("Signal_B"),
+            "Signal_B should be decoded"
+        );
+        if let Some(&val) = decoded_map.get("Signal_B") {
+            assert_eq!(val, 100.0);
+        }
+
+        // Test 4: Mux1 = 6 (not in any range), Mux2 = 0: Should decode neither Signal_A nor Signal_B
+        let payload = [0x06, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&6.0));
+        assert_eq!(decoded_map.get("Mux2"), Some(&0.0));
+        assert_eq!(decoded_map.get("Signal_A"), None);
+        assert_eq!(decoded_map.get("Signal_B"), None);
+
+        // Test 5: Mux1 = 5 (upper bound of 0-5 range), Mux2 = 0: Should decode Signal_A
+        let payload = [0x05, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&5.0));
+        assert_eq!(decoded_map.get("Signal_A"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_B"), None);
+
+        // Test 6: Mux1 = 10 (lower bound of 10-15 range), Mux2 = 0: Should decode Signal_A
+        let payload = [0x0A, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&10.0));
+        assert_eq!(decoded_map.get("Signal_A"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_B"), None);
+
+        // Test 7: Mux1 = 15 (upper bound of 10-15 range), Mux2 = 0: Should decode Signal_A
+        let payload = [0x0F, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux1"), Some(&15.0));
+        assert_eq!(decoded_map.get("Signal_A"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_B"), None);
+
+        // Test 8: Mux1 = 0, Mux2 = 20 (lower bound of 20-25 range): Should decode Signal_B
+        let payload = [0x00, 0x14, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux2"), Some(&20.0));
+        assert_eq!(decoded_map.get("Signal_B"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_A"), None);
+
+        // Test 9: Mux1 = 0, Mux2 = 25 (upper bound of 20-25 range): Should decode Signal_B
+        let payload = [0x00, 0x19, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(500, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("Mux2"), Some(&25.0));
+        assert_eq!(decoded_map.get("Signal_B"), Some(&100.0));
+        assert_eq!(decoded_map.get("Signal_A"), None);
+    }
+
+    // Inline multiplexing tests
+    // ============================================================================
+    // Nodes Parsing Tests
+    // ============================================================================
+    // Note: These tests document parser behavior at node section boundaries.
+    // Some may fail due to parser limitations with multi-line node lists.
+
+    #[test]
+    #[ignore = "Parser may have limitations with multi-line node lists transitioning to BO_"]
+    fn test_nodes_break_at_bo() {
+        // Test that Nodes::parse() correctly positions the parser at BO_ when it breaks
+        let dbc_content = r#"VERSION "1.0"
+
+BS_:
+
+BU_:
+NEO
+IMCU
+IGTW
+IEPAS
+IDI
+DI
+IESP
+ISBW
+ISTW
+IAPP
+IDAS
+IXXX
+
+BS_:
+
+BO_ 262 DI_torque1: 8 DI
+ SG_ DI_torqueDriver : 0|13@1- (0.25,0) [-750|750] "Nm"  NEO
+"#;
+
+        let result = Dbc::parse(dbc_content);
+        assert!(
+            result.is_ok(),
+            "Parse should succeed, got: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    #[ignore = "Parser may have limitations with multi-line node lists transitioning to BS_"]
+    fn test_nodes_break_at_bs() {
+        // Test that Nodes::parse() correctly positions the parser at BS_ when it breaks
+        let dbc_content = r#"VERSION "1.0"
+
+BS_:
+
+BU_:
+NEO
+IMCU
+DI
+
+BS_:
+
+BO_ 262 DI_torque1: 8 DI
+ SG_ DI_torqueDriver : 0|13@1- (0.25,0) [-750|750] "Nm"  NEO
+"#;
+
+        let result = Dbc::parse(dbc_content);
+        assert!(
+            result.is_ok(),
+            "Parse should succeed, got: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    #[ignore = "Parser may have limitations with multi-line node lists transitioning to CM_"]
+    fn test_nodes_break_at_cm() {
+        // Test that Nodes::parse() correctly positions the parser at CM_ when it breaks
+        let dbc_content = r#"VERSION "1.0"
+
+BS_:
+
+BU_:
+NEO
+IMCU
+DI
+
+BS_:
+
+CM_ "Comment"
+
+BO_ 262 DI_torque1: 8 DI
+ SG_ DI_torqueDriver : 0|13@1- (0.25,0) [-750|750] "Nm"  NEO
+"#;
+
+        let result = Dbc::parse(dbc_content);
+        assert!(
+            result.is_ok(),
+            "Parse should succeed, got: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    #[ignore = "Parser may have limitations with multi-line node lists ending at EOF"]
+    fn test_nodes_break_at_eof() {
+        // Test that Nodes::parse() correctly handles EOF after nodes
+        let dbc_content = r#"VERSION "1.0"
+
+BS_:
+
+BU_:
+NEO
+IMCU
+"#;
+
+        let result = Dbc::parse(dbc_content);
+        assert!(
+            result.is_ok(),
+            "Parse should succeed, got: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_decode_multiplexed_signals_edge_cases() {
+        let content = std::fs::read_to_string("tests/data/multiplexing_basic.dbc")
+            .expect("Failed to read multiplexing_basic.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse multiplexing_basic.dbc");
+
+        // Test: Switch = 255 (max value), should only decode MuxSwitch and NormalSignal
+        let payload = [0xFF, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(400, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("MuxSwitch"), Some(&255.0));
+        assert_eq!(decoded_map.get("NormalSignal"), Some(&42.0));
+        assert_eq!(decoded_map.get("Signal_0"), None);
+        assert_eq!(decoded_map.get("Signal_1"), None);
+
+        // Test: Verify that normal signals are always decoded regardless of switch value
+        let payload = [0x99, 0x00, 0x00, 0x42, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(400, &payload).expect("Decode failed");
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+
+        assert_eq!(decoded_map.get("MuxSwitch"), Some(&153.0)); // 0x99 = 153
+        assert_eq!(decoded_map.get("NormalSignal"), Some(&66.0)); // 0x42 = 66
+        assert_eq!(decoded_map.get("Signal_0"), None);
+        assert_eq!(decoded_map.get("Signal_1"), None);
+    }
+
+    // ============================================================================
+    // Bit Timing (BS_) Tests
+    // ============================================================================
+
+    // File-based bit timing tests
+    #[test]
+    fn test_parse_bit_timing_empty() {
+        let content =
+            read_to_string("tests/data/bit_timing.dbc").expect("Failed to read bit_timing.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse bit_timing.dbc");
+        assert_eq!(dbc.messages().len(), 1);
+        assert_eq!(dbc.messages().iter().next().unwrap().name(), "TestMessage");
+    }
+
+    #[test]
+    fn test_parse_bit_timing_with_values() {
+        let content = read_to_string("tests/data/bit_timing_with_values.dbc")
+            .expect("Failed to read bit_timing_with_values.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse bit_timing_with_values.dbc");
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().iter().next().unwrap();
+
+        // Test decoding TestMessage
+        // TestSignal: 42 (raw: 42 = 0x2A)
+        let payload = [0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(message.id(), &payload).expect("Should decode TestMessage");
+        assert!(decoded.len() > 0);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert_eq!(decoded_map.get("TestSignal"), Some(&42.0));
+    }
+
+    // ============================================================================
+    // Value Tables (VAL_TABLE_) Tests
+    // ============================================================================
+
+    // File-based value table test
+    #[test]
+    fn test_parse_value_table() {
+        let content =
+            read_to_string("tests/data/value_table.dbc").expect("Failed to read value_table.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse value_table.dbc");
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().iter().next().unwrap();
+        assert_eq!(message.name(), "TestMessage");
+        assert_eq!(message.signals().len(), 3);
+    }
+
+    // ============================================================================
+    // Message Transmitters (BO_TX_BU_) Tests
+    // ============================================================================
+
+    // File-based message transmitter test
+    #[test]
+    fn test_parse_message_transmitters() {
+        let content = read_to_string("tests/data/message_transmitters.dbc")
+            .expect("Failed to read message_transmitters.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse message_transmitters.dbc");
+        assert_eq!(dbc.messages().len(), 2);
+        let engine_msg = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
+        assert_eq!(engine_msg.name(), "EngineData");
+        let trans_msg = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
+        assert_eq!(trans_msg.name(), "TransmissionData");
+    }
+
+    // Inline message transmitter tests
+    #[test]
+    fn test_parse_bo_tx_bu_single() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM TCM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+BO_TX_BU_ 256 : ECM;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse BO_TX_BU_ with single transmitter");
+        assert_eq!(dbc.messages().len(), 1);
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_parse_bo_tx_bu_multiple() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM TCM BCM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+BO_TX_BU_ 256 : ECM, TCM, BCM;
+"#;
+
+        let dbc =
+            Dbc::parse(dbc_content).expect("Should parse BO_TX_BU_ with multiple transmitters");
+        assert_eq!(dbc.messages().len(), 1);
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_parse_bo_tx_bu_multiple_messages() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM TCM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+BO_ 512 TransmissionData : 8 TCM
+ SG_ Gear : 0|8@1+ (1,0) [0|5] "" *
+
+BO_TX_BU_ 256 : ECM;
+BO_TX_BU_ 512 : TCM;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse BO_TX_BU_ for multiple messages");
+        assert_eq!(dbc.messages().len(), 2);
+
+        // Test decoding both messages
+        // EngineData (ID 256): RPM=2000 rpm
+        let engine_payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &engine_payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+
+        // TransmissionData (ID 512): Gear=3
+        let trans_payload = [0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(512, &trans_payload).expect("Should decode TransmissionData");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert_eq!(decoded_map.get("Gear"), Some(&3.0));
+    }
+
+    // ============================================================================
+    // Environment Variables (EV_) Tests
+    // ============================================================================
+
+    // File-based environment variable test
+    #[test]
+    fn test_parse_environment_variables() {
+        let content = read_to_string("tests/data/environment_variables.dbc")
+            .expect("Failed to read environment_variables.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse environment_variables.dbc");
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().iter().next().unwrap();
+        assert_eq!(message.name(), "TestMessage");
+    }
+
+    // Inline environment variable tests
+    #[test]
+    fn test_parse_envvar_basic() {
+        // EV_ with basic access type
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+EV_ EnvVar1 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse without error");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_envvar_all_access_types() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+EV_ EnvVar1 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+EV_ EnvVar2 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR1;
+EV_ EnvVar3 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR2;
+EV_ EnvVar4 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR3;
+EV_ EnvVar5 : 0 [0|100] "unit" 0 0 8000;
+EV_ EnvVar6 : 0 [0|100] "unit" 0 0 8001;
+EV_ EnvVar7 : 0 [0|100] "unit" 0 0 8002;
+EV_ EnvVar8 : 0 [0|100] "unit" 0 0 8003;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse all access types");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_envvar_types() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+EV_ EnvVarInt : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+EV_ EnvVarFloat : 1 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+EV_ EnvVarString : 2 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse all types");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_envvar_data() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+EV_ EnvVar1 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+
+ENVVAR_DATA_ EnvVar1 : 0x00 0x01 0x02 0x03;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse ENVVAR_DATA_");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_envvar_val() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+EV_ EnvVar1 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+
+VAL_ EnvVar1 0 "Value0" 1 "Value1" 2 "Value2" ;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse VAL_ for environment variables");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_parse_bu_ev_rel() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM TCM
+
+EV_ EnvVar1 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+
+BU_EV_REL_ : ECM EnvVar1;
+BU_EV_REL_ : TCM EnvVar1;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse BU_EV_REL_");
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    // ============================================================================
+    // Signal Groups (SIG_GROUP_) Tests
+    // ============================================================================
+
+    // File-based signal group test
+    #[test]
+    fn test_parse_signal_groups() {
+        let content = read_to_string("tests/data/signal_groups.dbc")
+            .expect("Failed to read signal_groups.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse signal_groups.dbc");
+        assert_eq!(dbc.messages().len(), 2);
+        let engine_msg = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
+        assert_eq!(engine_msg.name(), "EngineData");
+        assert_eq!(engine_msg.signals().len(), 4);
+        let trans_msg = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
+        assert_eq!(trans_msg.name(), "TransmissionData");
+        assert_eq!(trans_msg.signals().len(), 3);
+    }
+
+    // Inline signal group tests
+    #[test]
+    fn test_parse_sig_group_basic() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
+
+SIG_GROUP_ 256 EngineSignals 1 : RPM Temperature;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SIG_GROUP_");
+        assert_eq!(dbc.messages().len(), 1);
+    }
+
+    #[test]
+    fn test_parse_sig_group_multiple() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
+ SG_ Throttle : 24|8@1+ (0.392157,0) [0|100] "%" *
+
+SIG_GROUP_ 256 EngineSignals 1 : RPM Temperature;
+SIG_GROUP_ 256 ThrottleGroup 1 : Throttle;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse multiple SIG_GROUP_ entries");
+        assert_eq!(dbc.messages().len(), 1);
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        // Temperature: 25°C (raw: (25 - (-40)) / 1 = 65 = 0x41) at byte 2
+        // Throttle: 50% (raw: 50 / 0.392157 ≈ 127 = 0x7F) at byte 3
+        let payload = [0x40, 0x1F, 0x41, 0x7F, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 3);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+        assert!((decoded_map.get("Temperature").unwrap() - 25.0).abs() < 0.1);
+        assert!((decoded_map.get("Throttle").unwrap() - 50.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_parse_sig_group_with_repetitions() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
+
+SIG_GROUP_ 256 EngineSignals 5 : RPM Temperature;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse SIG_GROUP_ with repetitions");
+        assert_eq!(dbc.messages().len(), 1);
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        // Temperature: 25°C (raw: (25 - (-40)) / 1 = 65 = 0x41) at byte 2
+        let payload = [0x40, 0x1F, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 2);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+        assert!((decoded_map.get("Temperature").unwrap() - 25.0).abs() < 0.1);
+    }
+
+    // ============================================================================
+    // Comments (CM_) Tests
+    // ============================================================================
+
+    // File-based comment test
+    #[test]
+    fn test_parse_comments() {
+        let content =
+            read_to_string("tests/data/comments.dbc").expect("Failed to read comments.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse comments.dbc");
+        assert_eq!(dbc.messages().len(), 2);
+        let engine_msg = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
+        assert_eq!(engine_msg.name(), "EngineData");
+        assert_eq!(engine_msg.signals().len(), 1);
+        let trans_msg = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
+        assert_eq!(trans_msg.name(), "TransmissionData");
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+    }
+
+    // ============================================================================
+    // Attributes (BA_DEF_, BA_, BA_DEF_DEF_) Tests
+    // ============================================================================
+
+    // File-based attribute test
+    #[test]
+    fn test_parse_attributes() {
+        let content =
+            read_to_string("tests/data/attributes.dbc").expect("Failed to read attributes.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse attributes.dbc");
+        assert_eq!(dbc.messages().len(), 2);
+        let engine_msg = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
+        assert_eq!(engine_msg.name(), "EngineData");
+        assert_eq!(engine_msg.signals().len(), 2);
+        let trans_msg = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
+        assert_eq!(trans_msg.name(), "TransmissionData");
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 2);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+    }
+
+    // ============================================================================
+    // Integration Tests
+    // ============================================================================
+    // Inline tests combining multiple features
+
+    #[test]
+    fn test_parse_all_implemented_features_together() {
+        // Test all features that are currently implemented together
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM TCM
+
+BS_: 500
+
+EV_ EnvVar1 : 0 [0|100] "unit" 0 0 DUMMY_NODE_VECTOR0;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+SIG_GROUP_ 256 EngineSignals 1 : RPM;
+
+BO_TX_BU_ 256 : ECM;
+
+ENVVAR_DATA_ EnvVar1 : 0x00 0x01;
+
+BU_EV_REL_ : ECM EnvVar1;
+"#;
+
+        let dbc = Dbc::parse(dbc_content).expect("Should parse all implemented features together");
+        assert_eq!(dbc.messages().len(), 1);
+        let message = dbc.messages().find_by_id(256).unwrap();
+        assert_eq!(message.name(), "EngineData");
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
     }
 }

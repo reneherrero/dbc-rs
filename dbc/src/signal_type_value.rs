@@ -47,12 +47,6 @@ impl SignalTypeValue {
     }
 }
 
-impl crate::signal_type::SignalTypeName for SignalTypeValue {
-    fn signal_type_name(&self) -> &str {
-        SignalTypeValue::type_name(self)
-    }
-}
-
 #[cfg(feature = "std")]
 impl SignalTypeValue {
     /// Parse Signal Type Value Descriptions (SGTYPE_VAL_)
@@ -153,5 +147,96 @@ mod tests {
         assert_eq!(values[1].description(), "One");
         assert_eq!(values[2].value(), 2);
         assert_eq!(values[2].description(), "Two");
+    }
+
+    // Integration tests using Dbc::parse
+    #[test]
+    fn test_parse_sgtype_val() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+SGTYPE_VAL_ SignalType1 0 "Value0" 1 "Value1" 2 "Value2" ;
+"#;
+
+        let dbc = crate::Dbc::parse(dbc_content).expect("Should parse SGTYPE_VAL_");
+        let values = dbc.signal_type_values();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[0].type_name(), "SignalType1");
+        assert_eq!(values[0].value(), 0);
+        assert_eq!(values[0].description(), "Value0");
+        assert_eq!(values[1].value(), 1);
+        assert_eq!(values[1].description(), "Value1");
+        assert_eq!(values[2].value(), 2);
+        assert_eq!(values[2].description(), "Value2");
+    }
+
+    #[test]
+    fn test_parse_sgtype_val_multiple_types() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+SGTYPE_ SignalType2 : 8;
+
+SGTYPE_VAL_ SignalType1 0 "Zero" 1 "One" ;
+SGTYPE_VAL_ SignalType2 0 "Off" 1 "On" 2 "Error" ;
+"#;
+
+        let dbc = crate::Dbc::parse(dbc_content).expect("Should parse multiple SGTYPE_VAL_");
+        let values = dbc.signal_type_values();
+        assert_eq!(values.len(), 5);
+
+        // Check SignalType1 values
+        let type1_values: Vec<&SignalTypeValue> =
+            values.iter().filter(|v| v.type_name() == "SignalType1").collect();
+        assert_eq!(type1_values.len(), 2);
+        assert_eq!(type1_values[0].value(), 0);
+        assert_eq!(type1_values[0].description(), "Zero");
+        assert_eq!(type1_values[1].value(), 1);
+        assert_eq!(type1_values[1].description(), "One");
+
+        // Check SignalType2 values
+        let type2_values: Vec<&SignalTypeValue> =
+            values.iter().filter(|v| v.type_name() == "SignalType2").collect();
+        assert_eq!(type2_values.len(), 3);
+        assert_eq!(type2_values[0].value(), 0);
+        assert_eq!(type2_values[0].description(), "Off");
+        assert_eq!(type2_values[1].value(), 1);
+        assert_eq!(type2_values[1].description(), "On");
+        assert_eq!(type2_values[2].value(), 2);
+        assert_eq!(type2_values[2].description(), "Error");
+    }
+
+    #[test]
+    fn test_parse_sgtype_val_single_value() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+SGTYPE_VAL_ SignalType1 0 "Zero" ;
+"#;
+
+        let dbc =
+            crate::Dbc::parse(dbc_content).expect("Should parse SGTYPE_VAL_ with single value");
+        let values = dbc.signal_type_values();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].type_name(), "SignalType1");
+        assert_eq!(values[0].value(), 0);
+        assert_eq!(values[0].description(), "Zero");
     }
 }

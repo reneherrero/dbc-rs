@@ -393,5 +393,19 @@ mod tests {
             let version = Version::parse(&mut parser).unwrap();
             assert_eq!(version.to_dbc_string(), "VERSION \"\"");
         }
+
+        // Edge case test using Dbc::parse
+        #[test]
+        fn test_special_characters_in_version() {
+            // Test special characters in version string
+            let dbc_str = r#"VERSION "v1.2.3-beta"
+
+BS_:
+
+BU_: ECM
+"#;
+            let dbc = crate::Dbc::parse(dbc_str).expect("Should handle special chars in version");
+            assert_eq!(dbc.version().unwrap().as_str(), "v1.2.3-beta");
+        }
     }
 }

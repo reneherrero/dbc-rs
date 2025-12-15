@@ -140,11 +140,11 @@ DBC_file =
 - **signal_type_refs** - Signal type references
 - **signal_groups** - Signal groupings
 
-### Obsolete Sections (Ignore)
+### Rarely Used Sections
 
-- **category_definitions**
-- **categories**
-- **filter**
+- **category_definitions** - Defined for completeness but rarely used in practice
+- **categories** - Defined for completeness but rarely used in practice
+- **filter** - Defined for completeness but rarely used in practice
 
 ---
 
@@ -215,7 +215,7 @@ BS_: 500 : 12,34
 **Important Notes:**
 - **REQUIRED KEYWORD** but section is typically empty
 - **OBSOLETE** - No longer used in modern CAN systems
-- Baudrate and BTR values are ignored by most parsers
+- Baudrate and BTR values are not processed by modern parsers (legacy feature)
 - Always include `BS_:` in your DBC files
 
 ---
@@ -343,13 +343,8 @@ BO_ 300 UnknownMsg : 4 Vector__XXX
 Special message for signals not associated with any CAN message:
 
 ```
-BO_ 3221225472 VECTOR__INDEPENDENT_SIG_MSG : 0 Vector__XXX
+BO_ <message_id> VECTOR__INDEPENDENT_SIG_MSG : 0 Vector__XXX
 ```
-
-**Notes:**
-- Message ID: `3221225472` (0xC0000000)
-- Used internally by tools
-- Contains "orphan" signals
 
 ---
 
@@ -411,7 +406,7 @@ multiplexer_switch_value = unsigned_integer ;
 - **Multiplexer switch:** `M`
 - **Multiplexed signal:** `m0`, `m1`, `m2`, etc.
 
-**Example:**
+**Example (Basic Multiplexing):**
 ```
 BO_ 400 MultiplexedMsg : 8 ECM
  SG_ MuxSwitch M : 0|8@1+ (1,0) [0|255] "" Gateway
@@ -423,11 +418,12 @@ BO_ 400 MultiplexedMsg : 8 ECM
 - When `MuxSwitch` = 0, `Signal_0` is valid
 - When `MuxSwitch` = 1, `Signal_1` is valid
 - Multiplexed signals share the same bit positions
+- For extended multiplexing (multiple multiplexer switches), see Section 16
 
 ### 9.5 Receivers
 
 ```bnf
-receiver = node_name | 'Vector__XXX' | '*' ;
+receiver = node_name | 'Vector__XXX' ;
 receivers = receiver {',' receiver} ;
 ```
 
@@ -435,12 +431,10 @@ receivers = receiver {',' receiver} ;
 ```
 Gateway                    (Single receiver)
 Gateway,Dashboard          (Multiple receivers - comma-separated)
-Gateway Dashboard          (Multiple receivers - space-separated)
-*                          (Broadcast to all nodes)
 Vector__XXX                (No specific receiver)
 ```
 
-**Note:** Both comma and space separation are valid; comma is more common.
+**Note:** The specification BNF defines only comma-separated receivers. Some tools may accept space-separated receivers as an extension, but this is not part of the specification.
 
 ---
 
@@ -542,14 +536,19 @@ raw_value = (physical_value - offset) / factor
 
 **Example with Offset:**
 ```
-Signal: SG_ Temperature : 16|8@1- (1,-40) [-40|215] "°C"
+Signal: SG_ Temperature : 16|8@1- (1,-40) [-40|87] "°C"
 
-Raw value = 130 (0x82)
-Physical = 130 × 1 + (-40) = 90°C
+Raw value = 127 (0x7F)
+Physical = 127 × 1 + (-40) = 87°C
+
+Raw value = 0 (0x00)
+Physical = 0 × 1 + (-40) = -40°C
 
 Physical = 20°C
 Raw = (20 - (-40)) / 1 = 60
 ```
+
+**Note:** For a signed 8-bit signal, the raw value range is -128 to 127. With factor=1 and offset=-40, the physical range is -168 to 87. The example uses a valid range of [-40|87] for clarity.
 
 ### 10.6 Signal Extended Value Types
 
@@ -558,14 +557,13 @@ For floating-point signals:
 ```bnf
 signal_extended_value_type_list = {signal_extended_value_type_entry} ;
 signal_extended_value_type_entry = 'SIG_VALTYPE_' message_id signal_name signal_extended_value_type ';' ;
-signal_extended_value_type = '0' | '1' | '2' | '3' ;
+signal_extended_value_type = '0' | '1' | '2' ;
 ```
 
 **Value Types:**
 - `0` = Signed or unsigned integer (default)
 - `1` = 32-bit IEEE float
 - `2` = 64-bit IEEE double
-- `3` = Reserved for future use
 
 **Example:**
 ```
@@ -650,7 +648,39 @@ signal_type_ref = 'SIG_TYPE_REF_' message_id signal_name ':' signal_type_name ';
 
 **Purpose:** Define reusable signal properties
 
-### 13.2 Signal Groups
+### 13.2 Signal Type Attributes
+
+Signal type attributes allow defining custom attributes for signal types, similar to regular attributes but specific to signal types.
+
+```bnf
+sigtype_attr_list = {sigtype_attribute_definition} {sigtype_attribute_value} ;
+sigtype_attribute_definition = 'BA_DEF_SGTYPE_' attribute_name attribute_value_type ';' ;
+sigtype_attribute_value = 'BA_SGTYPE_' attribute_name signal_type_name attribute_value ';' ;
+attribute_name = '"' DBC_identifier '"' ;
+attribute_value_type = 
+    'INT' signed_integer signed_integer |
+    'HEX' signed_integer signed_integer |
+    'FLOAT' double double |
+    'STRING' |
+    'ENUM' char_string {',' char_string} ;
+attribute_value = unsigned_integer | signed_integer | double | char_string ;
+signal_type_name = DBC_identifier ;
+```
+
+**Purpose:** Extend signal type objects with custom attributes
+
+**Examples:**
+```
+BA_DEF_SGTYPE_ "SignalTypeCategory" ENUM "Temperature","Pressure","Speed" ;
+BA_SGTYPE_ "SignalTypeCategory" TempType "Temperature" ;
+```
+
+**Notes:**
+- Similar to `BA_DEF_` and `BA_` but for signal types
+- Rarely used in practice
+- Signal types must be defined with `SGTYPE_` before attributes can be assigned
+
+### 13.3 Signal Groups
 
 ```bnf
 signal_groups = 'SIG_GROUP_' message_id signal_group_name repetitions { signal_name } ';' ;
@@ -804,7 +834,11 @@ SG_MUL_VAL_ 500 Signal_B Mux2 20-25 ;
 
 ## 17. Common Attributes
 
-### 17.1 Standard Message Attributes
+**Note:** The DBC specification does not define any standard attributes. All attributes must be defined using `BA_DEF_` before use. The attributes listed below are commonly used **tool-specific extensions** (primarily from Vector CANdb++) and are not part of the specification itself.
+
+### 17.1 Common Tool-Specific Message Attributes
+
+These attributes are commonly used in practice but are tool-specific:
 
 | Attribute | Type | Description | Example |
 |-----------|------|-------------|---------|
@@ -813,7 +847,7 @@ SG_MUL_VAL_ 500 Signal_B Mux2 20-25 ;
 | `GenMsgStartDelayTime` | INT | Startup delay (ms) | `0`, `100` |
 | `VFrameFormat` | ENUM | Frame format | `"StandardCAN"`, `"ExtendedCAN"`, `"J1939PG"` |
 
-### 17.2 Standard Signal Attributes
+### 17.2 Common Tool-Specific Signal Attributes
 
 | Attribute | Type | Description | Example |
 |-----------|------|-------------|---------|
@@ -822,7 +856,7 @@ SG_MUL_VAL_ 500 Signal_B Mux2 20-25 ;
 
 ### 17.3 J1939-Specific Attributes
 
-For J1939 networks:
+For J1939 networks, tools commonly define:
 
 ```
 BA_DEF_ BO_ "VFrameFormat" ENUM "StandardCAN","ExtendedCAN","J1939PG" ;
@@ -849,7 +883,7 @@ BU_: Engine Gateway Dashboard
 
 BO_ 100 EngineData : 8 Engine
  SG_ EngineSpeed : 0|16@1+ (1,0) [0|8000] "rpm" Gateway,Dashboard
- SG_ EngineTemp : 16|8@1- (1,-40) [-40|215] "°C" Gateway
+ SG_ EngineTemp : 16|8@1- (1,-40) [-40|87] "°C" Gateway
  SG_ ThrottlePos : 24|8@1+ (0.4,0) [0|100] "%" Gateway
 
 ```
@@ -969,11 +1003,10 @@ SG_MUL_VAL_ 400 Data_C SubMode 10-15 ;
 - ✅ All node names must be unique
 - ✅ All message IDs must be unique
 - ✅ Signal names within a message must be unique
-- ✅ Message names should be unique (recommended)
 
 **References:**
 - ✅ Message transmitter must exist in `BU_:` or be `Vector__XXX`
-- ✅ Signal receivers must exist in `BU_:` or be `*` or `Vector__XXX`
+- ✅ Signal receivers must exist in `BU_:` or be `Vector__XXX`
 - ✅ Multiplexer switch must exist in same message
 - ✅ Attribute names must be defined before use
 
@@ -1105,12 +1138,12 @@ Starts at bit 7 (MSB) and extends backward through bytes
 
 **Formats seen in practice:**
 ```
-SG_ Signal : ... "unit" Node1,Node2      (comma-separated)
-SG_ Signal : ... "unit" Node1 Node2      (space-separated)
-SG_ Signal : ... "unit" Node1, Node2     (comma+space)
+SG_ Signal : ... "unit" Node1,Node2      (comma-separated - per spec)
+SG_ Signal : ... "unit" Node1 Node2      (space-separated - tool extension)
+SG_ Signal : ... "unit" Node1, Node2     (comma+space - tool extension)
 ```
 
-**Solution:** Be consistent; comma-separated is most common
+**Solution:** The specification defines only comma-separated receivers. Some tools accept space-separated as an extension, but for maximum compatibility, use comma-separated format as defined in the specification.
 
 ---
 

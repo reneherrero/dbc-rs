@@ -1,5 +1,10 @@
 use crate::compat::String;
-use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result};
+use crate::{ByteOrder, Error, MAX_NAME_SIZE, Receivers, Result};
+
+mod decode;
+mod parse;
+#[cfg(feature = "std")]
+mod serialize;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
@@ -14,6 +19,11 @@ pub struct Signal {
     max: f64,
     unit: Option<String<{ MAX_NAME_SIZE }>>,
     receivers: Receivers,
+    /// True if this is a multiplexer switch signal (marked with 'M')
+    is_multiplexer_switch: bool,
+    /// If this is a multiplexed signal (marked with 'm0', 'm1', etc.), this contains the switch value
+    /// None means this is a normal signal (not multiplexed)
+    multiplexer_switch_value: Option<u64>,
 }
 
 impl Signal {
@@ -76,249 +86,9 @@ impl Signal {
             max,
             unit,
             receivers,
+            is_multiplexer_switch: false,
+            multiplexer_switch_value: None,
         }
-    }
-
-    fn parse_position<'b>(parser: &mut Parser<'b>) -> Result<(u16, u16, ByteOrder, bool)> {
-        // Parse start_bit
-        let start_bit = match parser.parse_u32() {
-            Ok(v) => v as u16,
-            Err(_) => {
-                return Err(Error::Signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
-            }
-        };
-
-        // Validate start_bit range
-        if start_bit > 511 {
-            return Err(Error::Signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
-        }
-
-        // Expect pipe
-        parser.expect_with_msg(b"|", "Expected pipe")?;
-
-        // Parse length
-        let length = parser
-            .parse_u32()
-            .map_err(|_| Error::Signal(Error::SIGNAL_PARSE_INVALID_LENGTH))?
-            as u16;
-
-        // Expect @
-        parser.expect_with_msg(b"@", "Expected @")?;
-
-        // Parse byte order (0 or 1)
-        // Try to expect '0' or '1' directly
-        let bo_byte = if parser.expect(b"0").is_ok() {
-            b'0'
-        } else if parser.expect(b"1").is_ok() {
-            b'1'
-        } else {
-            return Err(Error::Expected("Expected byte order"));
-        };
-
-        let byte_order = match bo_byte {
-            b'0' => ByteOrder::BigEndian,    // 0 = Motorola (big-endian)
-            b'1' => ByteOrder::LittleEndian, // 1 = Intel (little-endian)
-            _ => return Err(Error::InvalidChar(bo_byte as char)),
-        };
-
-        // Parse sign (+ or -)
-        let sign_byte = if parser.expect(b"+").is_ok() {
-            b'+'
-        } else if parser.expect(b"-").is_ok() {
-            b'-'
-        } else {
-            return Err(Error::Expected("Expected sign (+ or -)"));
-        };
-
-        let unsigned = match sign_byte {
-            b'+' => true,
-            b'-' => false,
-            _ => return Err(Error::InvalidChar(sign_byte as char)),
-        };
-
-        Ok((start_bit, length, byte_order, unsigned))
-    }
-
-    fn parse_factor_offset<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
-        // Expect opening parenthesis
-        parser.expect_with_msg(b"(", "Expected opening parenthesis")?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
-
-        // Parse factor (may be empty, default to 0.0)
-        let factor = parser
-            .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(Error::SIGNAL_PARSE_INVALID_FACTOR))?;
-
-        // Expect comma, then skip whitespace
-        parser.expect_then_skip(b",")?;
-
-        // Parse offset (may be empty, default to 0.0)
-        let offset = parser
-            .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_OFFSET))?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
-
-        // Expect closing parenthesis
-        parser.expect_with_msg(b")", "Expected closing parenthesis")?;
-
-        Ok((factor, offset))
-    }
-
-    fn parse_range<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
-        // Expect opening bracket
-        parser.expect_with_msg(b"[", "Expected opening bracket")?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
-
-        // Parse min (may be empty, default to 0.0)
-        let min = parser
-            .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_MIN))?;
-
-        // Expect pipe, then skip whitespace
-        parser.expect_then_skip(b"|")?;
-
-        // Parse max (may be empty, default to 0.0)
-        let max = parser
-            .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_MAX))?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
-
-        // Expect closing bracket
-        parser.expect_with_msg(b"]", "Expected closing bracket")?;
-
-        Ok((min, max))
-    }
-
-    fn parse_unit(parser: &mut Parser) -> Result<Option<String<{ MAX_NAME_SIZE }>>> {
-        // Expect opening quote
-        parser.expect_with_msg(b"\"", "Expected opening quote")?;
-
-        // Use take_until_quote to read the unit (allow any printable characters)
-        let unit_bytes = parser.take_until_quote(false, MAX_NAME_SIZE).map_err(|e| match e {
-            Error::MaxStrLength(_) => {
-                Error::Signal(crate::error::Error::SIGNAL_PARSE_UNIT_TOO_LONG)
-            }
-            _ => Error::Expected("Expected closing quote"),
-        })?;
-
-        // Convert bytes to string slice
-        let unit =
-            core::str::from_utf8(unit_bytes).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
-
-        let unit: String<{ MAX_NAME_SIZE }> =
-            String::try_from(unit).map_err(|_| Error::Version(Error::MAX_NAME_SIZE_EXCEEDED))?;
-
-        let unit = if unit.is_empty() { None } else { Some(unit) };
-        Ok(unit)
-    }
-
-    pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
-        // Signal parsing must always start with "SG_" keyword
-        parser.expect_keyword_then_skip(crate::SG_.as_bytes(), "Expected SG_ keyword")?;
-
-        // Parse signal name (identifier)
-        let name = parser.parse_identifier_with_error(|| {
-            Error::Signal(crate::error::Error::SIGNAL_NAME_EMPTY)
-        })?;
-
-        // Skip whitespace (optional before colon) - handle multiplexer indicator
-        // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
-        // For now, we just skip whitespace and any potential multiplexer indicator
-        parser.skip_newlines_and_spaces();
-
-        // Skip potential multiplexer indicator (m followed by number, or M)
-        // For simplicity, skip any 'm' or 'M' followed by digits
-        if parser.expect(b"m").is_ok() || parser.expect(b"M").is_ok() {
-            // Skip any digits that follow
-            loop {
-                let _pos_before = parser.pos();
-                // Try to consume a digit
-                if parser.expect(b"0").is_ok()
-                    || parser.expect(b"1").is_ok()
-                    || parser.expect(b"2").is_ok()
-                    || parser.expect(b"3").is_ok()
-                    || parser.expect(b"4").is_ok()
-                    || parser.expect(b"5").is_ok()
-                    || parser.expect(b"6").is_ok()
-                    || parser.expect(b"7").is_ok()
-                    || parser.expect(b"8").is_ok()
-                    || parser.expect(b"9").is_ok()
-                {
-                    // Consumed a digit, continue
-                } else {
-                    // Not a digit, stop
-                    break;
-                }
-            }
-            // Skip whitespace after multiplexer indicator
-            parser.skip_newlines_and_spaces();
-        }
-
-        // Expect colon
-        parser.expect_with_msg(b":", "Expected colon")?;
-
-        // Skip whitespace after colon
-        parser.skip_newlines_and_spaces();
-
-        // Parse position: start_bit|length@byteOrderSign
-        let (start_bit, length, byte_order, unsigned) = Self::parse_position(parser)?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
-
-        // Parse factor and offset: (factor,offset)
-        let (factor, offset) = Self::parse_factor_offset(parser)?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
-
-        // Parse range: [min|max]
-        let (min, max) = Self::parse_range(parser)?;
-
-        // Skip whitespace
-        parser.skip_newlines_and_spaces();
-
-        // Parse unit: "unit" or ""
-        let unit = Self::parse_unit(parser)?;
-
-        // Skip whitespace (but not newlines) before parsing receivers
-        // Newlines indicate end of signal line, so we need to preserve them for Receivers::parse
-        parser.skip_whitespace_optional();
-
-        // Parse receivers (may be empty/None if at end of line)
-        let receivers = Receivers::parse(parser)?;
-
-        // Validate before construction
-        Self::validate(name, length, min, max).map_err(|e| {
-            crate::error::map_val_error(e, Error::Signal, || {
-                Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX)
-            })
-        })?;
-
-        let name = crate::validate_name(name)?;
-
-        // Construct directly (validation already done)
-        Ok(Self {
-            name,
-            start_bit,
-            length,
-            byte_order,
-            unsigned,
-            factor,
-            offset,
-            min,
-            max,
-            unit,
-            receivers,
-        })
     }
 
     #[inline]
@@ -387,210 +157,19 @@ impl Signal {
         &self.receivers
     }
 
-    /// Decode the signal value from CAN message data bytes.
-    ///
-    /// Extracts the raw value from bits based on the signal's start bit, length, and byte order,
-    /// then applies factor and offset to return the physical/engineering value.
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - The CAN message data bytes (up to 8 bytes for classic CAN, 64 for CAN FD)
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(f64)` - The physical value (raw * factor + offset)
-    /// * `Err(Error)` - If the signal extends beyond the data length
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc = Dbc::parse(r#"VERSION "1.0"
-    ///
-    /// BU_: ECM
-    ///
-    /// BO_ 256 Engine : 8 ECM
-    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
-    /// "#)?;
-    ///
-    /// let message = dbc.messages().at(0).unwrap();
-    /// let signal = message.signals().at(0).unwrap();
-    ///
-    /// // Decode a CAN message with RPM value of 2000 (raw: 8000)
-    /// let data = [0x20, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    /// let rpm = signal.decode(&data)?;
-    /// assert_eq!(rpm, 2000.0);
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    /// Decode signal value from CAN payload - optimized for high-throughput decoding.
+    /// Check if this signal is a multiplexer switch (marked with 'M')
     #[inline]
-    pub fn decode(&self, data: &[u8]) -> Result<f64> {
-        // Cache conversions to usize (common in hot path)
-        let start_bit = self.start_bit as usize;
-        let length = self.length as usize;
-        let end_byte = (start_bit + length - 1) / 8;
-
-        // Bounds check - early return for invalid signals
-        if end_byte >= data.len() {
-            return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
-        }
-
-        // Extract bits based on byte order
-        let raw_value = match self.byte_order {
-            ByteOrder::LittleEndian => Self::extract_bits_little_endian(data, start_bit, length),
-            ByteOrder::BigEndian => Self::extract_bits_big_endian(data, start_bit, length),
-        };
-
-        // Convert to signed/unsigned with optimized sign extension
-        let value = if self.unsigned {
-            raw_value as i64
-        } else {
-            // Sign extend for signed values
-            // Optimized: compute sign bit mask only once
-            let sign_bit_mask = 1u64 << (length - 1);
-            if (raw_value & sign_bit_mask) != 0 {
-                // Negative value - sign extend using bitwise mask
-                let mask = !((1u64 << length) - 1);
-                (raw_value | mask) as i64
-            } else {
-                raw_value as i64
-            }
-        };
-
-        // Apply factor and offset to get physical value (single mul-add operation)
-        Ok((value as f64) * self.factor + self.offset)
-    }
-
-    /// Extract bits from data using little-endian byte order.
-    /// Inlined for hot path optimization.
-    #[inline]
-    fn extract_bits_little_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
-        let mut value: u64 = 0;
-        let mut bits_remaining = length;
-        let mut current_bit = start_bit;
-
-        while bits_remaining > 0 {
-            let byte_idx = current_bit / 8;
-            let bit_in_byte = current_bit % 8;
-            let bits_to_take = bits_remaining.min(8 - bit_in_byte);
-
-            let byte = data[byte_idx] as u64;
-            let mask = ((1u64 << bits_to_take) - 1) << bit_in_byte;
-            let extracted = (byte & mask) >> bit_in_byte;
-
-            value |= extracted << (length - bits_remaining);
-
-            bits_remaining -= bits_to_take;
-            current_bit += bits_to_take;
-        }
-
-        value
-    }
-
-    /// Extract bits from data using big-endian byte order.
-    /// Inlined for hot path optimization.
-    #[inline]
-    fn extract_bits_big_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
-        let mut value: u64 = 0;
-        let mut bits_remaining = length;
-        let mut current_bit = start_bit;
-
-        while bits_remaining > 0 {
-            let byte_idx = current_bit / 8;
-            let bit_in_byte = current_bit % 8;
-            let bits_to_take = bits_remaining.min(8 - bit_in_byte);
-
-            let byte = data[byte_idx] as u64;
-            let mask = ((1u64 << bits_to_take) - 1) << bit_in_byte;
-            let extracted = (byte & mask) >> bit_in_byte;
-
-            // For big-endian, we need to reverse the bit order within bytes
-            // and place bits in the correct position
-            value |= extracted << (length - bits_remaining);
-
-            bits_remaining -= bits_to_take;
-            current_bit += bits_to_take;
-        }
-
-        value
-    }
-
-    #[cfg(feature = "std")]
     #[must_use]
-    pub fn to_dbc_string(&self) -> std::string::String {
-        let mut result = std::string::String::with_capacity(100); // Pre-allocate reasonable capacity
+    pub fn is_multiplexer_switch(&self) -> bool {
+        self.is_multiplexer_switch
+    }
 
-        result.push_str(" SG_ ");
-        result.push_str(self.name());
-        result.push_str(" : ");
-        result.push_str(&self.start_bit().to_string());
-        result.push('|');
-        result.push_str(&self.length().to_string());
-        result.push('@');
-
-        // Byte order: 0 for BigEndian (Motorola), 1 for LittleEndian (Intel)
-        // Per Vector DBC spec v1.0.1: "Big endian is stored as '0', little endian is stored as '1'"
-        match self.byte_order() {
-            ByteOrder::BigEndian => result.push('0'), // @0 = Big Endian (Motorola)
-            ByteOrder::LittleEndian => result.push('1'), // @1 = Little Endian (Intel)
-        }
-
-        // Sign: + for unsigned, - for signed
-        if self.is_unsigned() {
-            result.push('+');
-        } else {
-            result.push('-');
-        }
-
-        // Factor and offset: (factor,offset)
-        result.push_str(" (");
-        use core::fmt::Write;
-        write!(result, "{}", self.factor()).unwrap();
-        result.push(',');
-        write!(result, "{}", self.offset()).unwrap();
-        result.push(')');
-
-        // Min and max: [min|max]
-        result.push_str(" [");
-        write!(result, "{}", self.min()).unwrap();
-        result.push('|');
-        write!(result, "{}", self.max()).unwrap();
-        result.push(']');
-
-        // Unit: "unit" or ""
-        result.push(' ');
-        if let Some(unit) = self.unit() {
-            result.push('"');
-            result.push_str(unit);
-            result.push('"');
-        } else {
-            result.push_str("\"\"");
-        }
-
-        // Receivers: * for Broadcast, space-separated list for Nodes, or empty
-        match self.receivers() {
-            Receivers::Broadcast => {
-                result.push(' ');
-                result.push('*');
-            }
-            Receivers::Nodes(nodes) => {
-                if !nodes.is_empty() {
-                    result.push(' ');
-                    for (i, node) in self.receivers().iter().enumerate() {
-                        if i > 0 {
-                            result.push(' ');
-                        }
-                        result.push_str(node.as_str());
-                    }
-                }
-            }
-            Receivers::None => {
-                // No receivers specified - nothing to add
-            }
-        }
-
-        result
+    /// Get the multiplexer switch value if this is a multiplexed signal (marked with 'm0', 'm1', etc.)
+    /// Returns None if this is a normal signal (not multiplexed)
+    #[inline]
+    #[must_use]
+    pub fn multiplexer_switch_value(&self) -> Option<u64> {
+        self.multiplexer_switch_value
     }
 }
 
@@ -625,8 +204,8 @@ impl core::fmt::Display for Signal {
 #[cfg(test)]
 mod tests {
     #![allow(clippy::float_cmp)]
-    use super::*;
-    use crate::Parser;
+    use super::Signal;
+    use crate::{ByteOrder, Error, Parser, Receivers};
 
     #[test]
     fn test_parse_valid_signal() {
@@ -873,5 +452,173 @@ mod tests {
                 assert_eq!(signal.unit(), signal2.unit());
             }
         }
+    }
+
+    // Edge case tests using Dbc::parse
+    #[test]
+    fn test_signal_at_boundary() {
+        // Signal exactly at message boundary should be valid
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|64@1+ (1,0) [0|65535] ""
+"#;
+        let dbc = crate::Dbc::parse(dbc_str).expect("Signal at boundary should be valid");
+        let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
+        assert_eq!(signal.start_bit(), 0);
+        assert_eq!(signal.length(), 64);
+    }
+
+    #[test]
+    fn test_signal_exceeds_boundary() {
+        // Signal exceeding boundary should be rejected
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|65@1+ (1,0) [0|65535] ""
+"#;
+        let result = crate::Dbc::parse(dbc_str);
+        assert!(result.is_err(), "Should reject signal exceeding boundary");
+    }
+
+    #[test]
+    fn test_very_long_signal_name() {
+        // Test signal name at reasonable length
+        let long_name = "A".repeat(63); // Max reasonable length
+        let dbc_str = format!(
+            r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ {} : 0|8@1+ (1,0) [0|255] ""
+"#,
+            long_name
+        );
+        let dbc = crate::Dbc::parse(&dbc_str).expect("Should handle long signal names");
+        assert_eq!(
+            dbc.messages().at(0).unwrap().signals().at(0).unwrap().name().len(),
+            63
+        );
+    }
+
+    #[test]
+    fn test_big_endian_signal_boundary() {
+        // Test big-endian signal at boundary
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 56|8@0+ (1,0) [0|255] ""
+"#;
+        let dbc =
+            crate::Dbc::parse(dbc_str).expect("Big-endian signal at boundary should be valid");
+        let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
+        assert_eq!(signal.start_bit(), 56);
+        assert_eq!(signal.length(), 8);
+        assert_eq!(signal.byte_order(), crate::ByteOrder::BigEndian);
+    }
+
+    #[test]
+    fn test_negative_min_max() {
+        // Test negative min/max values
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Temperature : 0|8@1- (1,-40) [-40|215] "°C"
+"#;
+        let dbc = crate::Dbc::parse(dbc_str).expect("Should handle negative min/max");
+        let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
+        assert_eq!(signal.min(), -40.0);
+        assert_eq!(signal.max(), 215.0);
+    }
+
+    #[test]
+    fn test_float_factor_offset() {
+        // Test floating point factor and offset
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|16@1+ (0.25,0.5) [0|65535] ""
+"#;
+        let dbc = crate::Dbc::parse(dbc_str).expect("Should handle float factor/offset");
+        let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
+        assert_eq!(signal.factor(), 0.25);
+        assert_eq!(signal.offset(), 0.5);
+    }
+
+    #[test]
+    fn test_empty_unit_string() {
+        // Test empty unit string
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
+"#;
+        let dbc = crate::Dbc::parse(dbc_str).expect("Should handle empty unit");
+        let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
+        assert_eq!(signal.unit(), None);
+    }
+
+    #[test]
+    fn test_broadcast_receivers() {
+        // Test broadcast receivers
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
+"#;
+        let dbc = crate::Dbc::parse(dbc_str).expect("Should handle broadcast receivers");
+        let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
+        // Default is broadcast (empty receivers list)
+        assert!(signal.receivers().is_empty());
+    }
+
+    #[test]
+    fn test_multiple_receiver_nodes() {
+        // Test multiple receiver nodes
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM TCM BCM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|8@1+ (1,0) [0|255] "" ECM TCM
+"#;
+        let dbc = crate::Dbc::parse(dbc_str).expect("Should handle multiple receivers");
+        let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
+        assert_eq!(signal.receivers().len(), 2);
+        assert!(signal.receivers().contains("ECM"));
+        assert!(signal.receivers().contains("TCM"));
     }
 }

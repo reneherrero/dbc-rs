@@ -47,12 +47,6 @@ impl SignalTypeReference {
     }
 }
 
-impl crate::signal_type::SignalTypeName for SignalTypeReference {
-    fn signal_type_name(&self) -> &str {
-        SignalTypeReference::type_name(self)
-    }
-}
-
 #[cfg(feature = "std")]
 impl SignalTypeReference {
     /// Parse a Signal Type Reference (SIG_TYPE_REF_)
@@ -114,5 +108,108 @@ mod tests {
         assert_eq!(ref_.message_id(), 256);
         assert_eq!(ref_.signal_name(), "RPM");
         assert_eq!(ref_.type_name(), "SignalType1");
+    }
+
+    // Integration tests using Dbc::parse
+    #[test]
+    fn test_parse_sig_type_ref() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+SIG_TYPE_REF_ 256 RPM : SignalType1;
+"#;
+
+        let dbc = crate::Dbc::parse(dbc_content).expect("Should parse SIG_TYPE_REF_");
+        let refs = dbc.signal_type_references();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].message_id(), 256);
+        assert_eq!(refs[0].signal_name(), "RPM");
+        assert_eq!(refs[0].type_name(), "SignalType1");
+    }
+
+    #[test]
+    fn test_parse_sig_type_ref_multiple() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+SGTYPE_ SignalType2 : 8;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
+
+SIG_TYPE_REF_ 256 RPM : SignalType1;
+SIG_TYPE_REF_ 256 Temperature : SignalType2;
+"#;
+
+        let dbc = crate::Dbc::parse(dbc_content).expect("Should parse multiple SIG_TYPE_REF_");
+        let refs = dbc.signal_type_references();
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].message_id(), 256);
+        assert_eq!(refs[0].signal_name(), "RPM");
+        assert_eq!(refs[0].type_name(), "SignalType1");
+        assert_eq!(refs[1].message_id(), 256);
+        assert_eq!(refs[1].signal_name(), "Temperature");
+        assert_eq!(refs[1].type_name(), "SignalType2");
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        // Temperature: 25°C (raw: (25 - (-40)) / 1 = 65 = 0x41) at byte 2
+        let payload = [0x40, 0x1F, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 2);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
+        assert!((decoded_map.get("Temperature").unwrap() - 25.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_parse_sig_type_ref_without_semicolon() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+
+SIG_TYPE_REF_ 256 RPM : SignalType1
+"#;
+
+        let dbc =
+            crate::Dbc::parse(dbc_content).expect("Should parse SIG_TYPE_REF_ without semicolon");
+        let refs = dbc.signal_type_references();
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].message_id(), 256);
+        assert_eq!(refs[0].signal_name(), "RPM");
+        assert_eq!(refs[0].type_name(), "SignalType1");
+
+        // Test decoding EngineData message
+        // RPM: 2000 rpm (raw: 2000 / 0.25 = 8000 = 0x1F40 LE -> [0x40, 0x1F])
+        let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload).expect("Should decode EngineData");
+        assert_eq!(decoded.len(), 1);
+        let decoded_map: std::collections::HashMap<&str, f64> =
+            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        assert!((decoded_map.get("RPM").unwrap() - 2000.0).abs() < 0.1);
     }
 }

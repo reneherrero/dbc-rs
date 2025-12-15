@@ -124,12 +124,6 @@ impl SignalType {
     }
 }
 
-impl crate::signal_type::SignalTypeName for SignalType {
-    fn signal_type_name(&self) -> &str {
-        SignalType::name(self)
-    }
-}
-
 #[cfg(feature = "std")]
 impl SignalType {
     /// Parse a Signal Type definition (SGTYPE_)
@@ -431,5 +425,67 @@ mod tests {
         assert_eq!(signal_type.min(), -40.0);
         assert_eq!(signal_type.max(), 215.0);
         assert_eq!(signal_type.unit(), Some("degC"));
+    }
+
+    // Integration tests using Dbc::parse
+    #[test]
+    fn test_parse_sgtype_definition() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+"#;
+
+        let dbc = crate::Dbc::parse(dbc_content).expect("Should parse SGTYPE_");
+        let signal_types = dbc.signal_types();
+        assert_eq!(signal_types.len(), 1);
+        assert_eq!(signal_types[0].name(), "SignalType1");
+        assert_eq!(signal_types[0].size(), 16);
+    }
+
+    #[test]
+    fn test_parse_sgtype_multiple() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16;
+SGTYPE_ SignalType2 : 32;
+SGTYPE_ SignalType3 : 8;
+"#;
+
+        let dbc = crate::Dbc::parse(dbc_content).expect("Should parse multiple SGTYPE_");
+        let signal_types = dbc.signal_types();
+        assert_eq!(signal_types.len(), 3);
+        assert_eq!(signal_types[0].name(), "SignalType1");
+        assert_eq!(signal_types[0].size(), 16);
+        assert_eq!(signal_types[1].name(), "SignalType2");
+        assert_eq!(signal_types[1].size(), 32);
+        assert_eq!(signal_types[2].name(), "SignalType3");
+        assert_eq!(signal_types[2].size(), 8);
+    }
+
+    #[test]
+    fn test_parse_sgtype_without_semicolon() {
+        let dbc_content = r#"
+VERSION "1.0"
+
+BU_: ECM
+
+SGTYPE_ SignalType1 : 16
+"#;
+
+        let dbc = crate::Dbc::parse(dbc_content).expect("Should parse SGTYPE_ without semicolon");
+        let signal_types = dbc.signal_types();
+        assert_eq!(signal_types.len(), 1);
+        assert_eq!(signal_types[0].name(), "SignalType1");
+        assert_eq!(signal_types[0].size(), 16);
     }
 }

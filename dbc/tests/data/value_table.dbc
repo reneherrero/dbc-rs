@@ -1,0 +1,18 @@
+VERSION "1.0"
+
+NS_ :
+    VAL_TABLE_
+
+BS_:
+
+BU_: ECM
+
+VAL_TABLE_ GearPosition 0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive" 4 "Sport" ;
+VAL_TABLE_ OnOff 0 "Off" 1 "On" ;
+VAL_TABLE_ Status 0 "Inactive" 1 "Active" 2 "Error" 3 "Warning" ;
+
+BO_ 256 TestMessage : 8 ECM
+ SG_ Gear : 0|8@1+ (1,0) [0|4] "" *
+ SG_ Power : 8|1@1+ (1,0) [0|1] "" *
+ SG_ State : 16|8@1+ (1,0) [0|3] "" *
+

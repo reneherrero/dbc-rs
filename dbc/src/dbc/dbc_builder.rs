@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use crate::dbc::validation::Validation;
 use crate::error::Result;
 use crate::{
     Dbc, Message, MessageBuilder, MessageList, Nodes, NodesBuilder, Receivers, ReceiversBuilder,
@@ -495,7 +496,7 @@ impl DbcBuilder {
         };
 
         // Validate messages
-        Dbc::validate(&nodes, &messages, Some(&value_descriptions))?;
+        Validation::validate(&nodes, &messages, Some(&value_descriptions))?;
 
         Ok(())
     }
@@ -586,13 +587,13 @@ impl DbcBuilder {
         // Validate before construction
         // Get slice from MessageList for validation
         let messages_slice: std::vec::Vec<Message> = messages.iter().cloned().collect();
-        Dbc::validate(&nodes, &messages_slice, Some(&value_descriptions))?;
+        Validation::validate(&nodes, &messages_slice, Some(&value_descriptions))?;
 
         // Convert ExtendedMultiplexingBuilder to ExtendedMultiplexing
         // ExtendedMultiplexing is defined in dbc.rs (as dbc_impl module) but not exported
         // Since we're in the same module, we can access it via super::dbc_impl
-        use super::dbc_impl::ExtendedMultiplexing;
-        use crate::compat::{String, Vec};
+        use crate::ExtendedMultiplexing;
+        use crate::compat::String;
         let extended_multiplexing: std::vec::Vec<ExtendedMultiplexing> =
             extended_multiplexing_builders
                 .into_iter()
@@ -601,9 +602,9 @@ impl DbcBuilder {
                         String::try_from(em.signal_name.as_str()).unwrap_or_else(|_| String::new());
                     let multiplexer_switch = String::try_from(em.multiplexer_switch.as_str())
                         .unwrap_or_else(|_| String::new());
-                    let mut value_ranges = Vec::<(u8, u8), 64>::new();
+                    let mut value_ranges = crate::compat::Vec::<(u64, u64), 64>::new();
                     for (min, max) in em.value_ranges {
-                        let _ = value_ranges.push((min, max));
+                        let _ = value_ranges.push((min as u64, max as u64));
                     }
                     ExtendedMultiplexing::new(
                         em.message_id,
@@ -631,6 +632,11 @@ impl DbcBuilder {
             std::vec::Vec::new(), // signal_type_values - not yet supported in builder
             None,                 // bit_timing - not yet supported in builder
             std::vec::Vec::new(), // signal_groups - not yet supported in builder
+            std::vec::Vec::new(), // message_transmitters - not yet supported in builder
+            std::vec::Vec::new(), // signal_type_attribute_definitions - not yet supported in builder
+            std::vec::Vec::new(), // signal_type_attributes - not yet supported in builder
+            std::vec::Vec::new(), // environment_variables - not yet supported in builder
+            std::vec::Vec::new(), // environment_variable_data - not yet supported in builder
         ))
     }
 }

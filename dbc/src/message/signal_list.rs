@@ -223,4 +223,67 @@ mod tests {
         assert!(found.is_some());
         assert_eq!(found.unwrap().start_bit(), 0); // First signal
     }
+
+    // Edge case tests using Dbc::parse
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_multiple_signals_no_overlap() {
+        // Test multiple signals that don't overlap
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
+ SG_ Signal2 : 8|8@1+ (1,0) [0|255] ""
+ SG_ Signal3 : 16|8@1+ (1,0) [0|255] ""
+ SG_ Signal4 : 24|8@1+ (1,0) [0|255] ""
+"#;
+        let dbc =
+            crate::Dbc::parse(dbc_str).expect("Should handle multiple non-overlapping signals");
+        assert_eq!(dbc.messages().at(0).unwrap().signals().len(), 4);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_signal_overlap_detection() {
+        // Test that overlapping signals are detected
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+ SG_ Signal1 : 0|8@1+ (1,0) [0|255] ""
+ SG_ Signal2 : 4|8@1+ (1,0) [0|255] ""
+"#;
+        let result = crate::Dbc::parse(dbc_str);
+        assert!(result.is_err(), "Should detect overlapping signals");
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn test_max_signals_per_message() {
+        // Test maximum signals per message (64)
+        let mut dbc_str = String::from(
+            r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Test : 8 ECM
+"#,
+        );
+
+        for i in 0..64 {
+            dbc_str.push_str(&format!(" SG_ Signal{} : {}|1@1+ (1,0) [0|1] \"\"\n", i, i));
+        }
+
+        let dbc = crate::Dbc::parse(&dbc_str).expect("Should accept max signals per message");
+        assert_eq!(dbc.messages().at(0).unwrap().signals().len(), 64);
+    }
 }

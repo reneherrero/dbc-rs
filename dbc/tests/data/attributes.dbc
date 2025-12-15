@@ -1,0 +1,42 @@
+VERSION "1.0"
+
+NS_ :
+    BA_DEF_
+    BA_DEF_DEF_
+    BA_
+
+BS_:
+
+BU_: ECM TCM
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
+BA_DEF_DEF_ "GenMsgCycleTime" 100;
+BA_DEF_ BO_ "GenMsgSendType" ENUM "Cyclic","Event","CyclicIfActive","EventIfActive","NoMsgSendType";
+BA_DEF_DEF_ "GenMsgSendType" "Cyclic";
+BA_DEF_ SG_ "GenSigStartValue" FLOAT 0 1000000;
+BA_DEF_DEF_ "GenSigStartValue" 0.0;
+BA_DEF_ SG_ "DisplayName" STRING;
+BA_DEF_DEF_ "DisplayName" "";
+BA_DEF_ BU_ "NetworkNode" STRING;
+BA_DEF_DEF_ "NetworkNode" "";
+BA_DEF_ "BusType" STRING;
+BA_DEF_DEF_ "BusType" "";
+
+BA_ "GenMsgCycleTime" BO_ 256 50;
+BA_ "GenMsgCycleTime" BO_ 512 100;
+BA_ "GenMsgSendType" BO_ 256 "Cyclic";
+BA_ "GenMsgSendType" BO_ 512 "Event";
+BA_ "GenSigStartValue" SG_ 256 RPM 0.0;
+BA_ "GenSigStartValue" SG_ 256 Temperature 85.0;
+BA_ "DisplayName" SG_ 256 RPM "Engine RPM";
+BA_ "DisplayName" SG_ 512 Gear "Gear Position";
+BA_ "NetworkNode" BU_ ECM "Engine Control";
+BA_ "BusType" "CAN";
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
+
+BO_ 512 TransmissionData : 8 TCM
+ SG_ Gear : 0|8@1+ (1,0) [0|5] "" *
+

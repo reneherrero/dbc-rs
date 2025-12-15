@@ -1,15 +1,23 @@
-#[cfg(feature = "std")]
-use std::collections::BTreeMap;
-
+use crate::bit_timing::BitTiming;
 #[cfg(feature = "std")]
 use crate::comment::Comment;
-use crate::compat::Vec;
+#[cfg(feature = "std")]
+use crate::environment_variable::EnvironmentVariable;
+#[cfg(feature = "std")]
+use crate::environment_variable_data::EnvironmentVariableData;
+#[cfg(feature = "std")]
+use crate::extended_multiplexing::ExtendedMultiplexing;
+#[cfg(feature = "std")]
+use crate::message_transmitter::MessageTransmitter;
+#[cfg(feature = "std")]
+use crate::signal_group::SignalGroup;
+#[cfg(feature = "std")]
+use crate::signal_type_attribute::SignalTypeAttribute;
+#[cfg(feature = "std")]
+use crate::signal_type_attribute_definition::SignalTypeAttributeDefinition;
 #[cfg(feature = "std")]
 use crate::value_table::ValueTable;
-use crate::{
-    Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, MessageList, Nodes, Parser, Result,
-    Signal, Version,
-};
+use crate::{MessageList, Nodes, Version};
 #[cfg(feature = "std")]
 use crate::{ValueDescriptions, ValueDescriptionsList};
 
@@ -63,246 +71,40 @@ pub struct Dbc {
     #[allow(dead_code)] // Fields are stored but not yet exposed via public API
     extended_multiplexing: std::vec::Vec<ExtendedMultiplexing>,
     #[cfg(feature = "std")]
-    signal_value_types: std::collections::BTreeMap<
-        (u32, std::string::String),
-        crate::signal_type::SignalExtendedValueType,
-    >,
+    signal_value_types:
+        std::collections::BTreeMap<(u32, std::string::String), crate::SignalExtendedValueType>,
     #[cfg(feature = "std")]
     #[allow(dead_code)] // Fields are stored but not yet exposed via public API
-    signal_types: std::vec::Vec<crate::signal_type::SignalType>,
+    signal_types: std::vec::Vec<crate::SignalType>,
     #[cfg(feature = "std")]
     #[allow(dead_code)] // Fields are stored but not yet exposed via public API
-    signal_type_references: std::vec::Vec<crate::signal_type::SignalTypeReference>,
+    signal_type_references: std::vec::Vec<crate::SignalTypeReference>,
     #[cfg(feature = "std")]
     #[allow(dead_code)] // Fields are stored but not yet exposed via public API
-    signal_type_values: std::vec::Vec<crate::signal_type::SignalTypeValue>,
+    signal_type_values: std::vec::Vec<crate::SignalTypeValue>,
     #[allow(dead_code)] // Field is stored but not yet exposed via public API
     bit_timing: Option<BitTiming>,
     #[cfg(feature = "std")]
     #[allow(dead_code)] // Fields are stored but not yet exposed via public API
     signal_groups: std::vec::Vec<SignalGroup>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExtendedMultiplexing {
-    message_id: u32,
-    signal_name: crate::compat::String<{ crate::MAX_NAME_SIZE }>,
-    multiplexer_switch: crate::compat::String<{ crate::MAX_NAME_SIZE }>,
-    value_ranges: crate::compat::Vec<(u8, u8), 64>, // Max 64 ranges per extended multiplexing entry
-}
-
-impl ExtendedMultiplexing {
-    #[allow(dead_code)] // Used by builder
-    pub(crate) fn new(
-        message_id: u32,
-        signal_name: crate::compat::String<{ crate::MAX_NAME_SIZE }>,
-        multiplexer_switch: crate::compat::String<{ crate::MAX_NAME_SIZE }>,
-        value_ranges: crate::compat::Vec<(u8, u8), 64>,
-    ) -> Self {
-        Self {
-            message_id,
-            signal_name,
-            multiplexer_switch,
-            value_ranges,
-        }
-    }
-
-    #[must_use]
-    pub fn message_id(&self) -> u32 {
-        self.message_id
-    }
-
-    #[must_use]
-    pub fn signal_name(&self) -> &str {
-        self.signal_name.as_str()
-    }
-
-    #[must_use]
-    pub fn multiplexer_switch(&self) -> &str {
-        self.multiplexer_switch.as_str()
-    }
-
-    #[must_use]
-    pub fn value_ranges(&self) -> &[(u8, u8)] {
-        self.value_ranges.as_slice()
-    }
-}
-
-/// Bit Timing definition (BS_)
-///
-/// Represents the bit timing configuration for the CAN bus.
-/// Typically empty or obsolete in modern CAN systems.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BitTiming {
-    baudrate: Option<u32>,
-    btr1: Option<u32>,
-    btr2: Option<u32>,
-}
-
-impl BitTiming {
-    /// Create a new BitTiming with optional values
-    pub(crate) fn new(baudrate: Option<u32>, btr1: Option<u32>, btr2: Option<u32>) -> Self {
-        Self {
-            baudrate,
-            btr1,
-            btr2,
-        }
-    }
-
-    /// Get the baudrate (if set)
-    #[must_use]
-    #[allow(dead_code)] // Method is part of public API but not yet used
-    pub fn baudrate(&self) -> Option<u32> {
-        self.baudrate
-    }
-
-    /// Get BTR1 (if set)
-    #[must_use]
-    #[allow(dead_code)] // Method is part of public API but not yet used
-    pub fn btr1(&self) -> Option<u32> {
-        self.btr1
-    }
-
-    /// Get BTR2 (if set)
-    #[must_use]
-    #[allow(dead_code)] // Method is part of public API but not yet used
-    pub fn btr2(&self) -> Option<u32> {
-        self.btr2
-    }
-}
-
-/// Signal Group definition (SIG_GROUP_)
-///
-/// Represents a group of related signals within a message.
-#[derive(Debug, Clone, PartialEq)]
-#[cfg(feature = "std")]
-pub struct SignalGroup {
-    message_id: u32,
-    signal_group_name: std::string::String,
-    repetitions: u32,
-    signal_names: std::vec::Vec<std::string::String>,
-}
-
-#[cfg(feature = "std")]
-impl SignalGroup {
-    /// Create a new SignalGroup
-    pub(crate) fn new(
-        message_id: u32,
-        signal_group_name: std::string::String,
-        repetitions: u32,
-        signal_names: std::vec::Vec<std::string::String>,
-    ) -> Self {
-        Self {
-            message_id,
-            signal_group_name,
-            repetitions,
-            signal_names,
-        }
-    }
-
-    /// Get the message ID
-    #[must_use]
-    #[allow(dead_code)] // Method is part of public API but not yet used
-    pub fn message_id(&self) -> u32 {
-        self.message_id
-    }
-
-    /// Get the signal group name
-    #[must_use]
-    #[allow(dead_code)] // Method is part of public API but not yet used
-    pub fn signal_group_name(&self) -> &str {
-        &self.signal_group_name
-    }
-
-    /// Get the repetitions value
-    #[must_use]
-    #[allow(dead_code)] // Method is part of public API but not yet used
-    pub fn repetitions(&self) -> u32 {
-        self.repetitions
-    }
-
-    /// Get the list of signal names
-    #[must_use]
-    #[allow(dead_code)] // Method is part of public API but not yet used
-    pub fn signal_names(&self) -> &[std::string::String] {
-        &self.signal_names
-    }
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    message_transmitters: std::vec::Vec<MessageTransmitter>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    signal_type_attribute_definitions: std::vec::Vec<SignalTypeAttributeDefinition>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    signal_type_attributes: std::vec::Vec<SignalTypeAttribute>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    environment_variables: std::vec::Vec<EnvironmentVariable>,
+    #[cfg(feature = "std")]
+    #[allow(dead_code)] // Fields are stored but not yet exposed via public API
+    environment_variable_data: std::vec::Vec<EnvironmentVariableData>,
 }
 
 impl Dbc {
-    // Validate function for std feature (with value_descriptions)
-    #[cfg(feature = "std")]
-    pub(crate) fn validate(
-        nodes: &Nodes,
-        messages: &[Message],
-        value_descriptions: Option<&ValueDescriptionsList>,
-    ) -> Result<()> {
-        Self::validate_common(nodes, messages)?;
-
-        // Validate value descriptions if provided
-        if let Some(value_descriptions) = value_descriptions {
-            // Validate that all value descriptions reference existing messages and signals
-            for ((message_id_opt, signal_name), _) in value_descriptions.iter() {
-                // Check if message exists (for message-specific value descriptions)
-                if let Some(message_id) = message_id_opt {
-                    let message_exists = messages.iter().any(|msg| msg.id() == message_id);
-                    if !message_exists {
-                        return Err(Error::Validation(
-                            Error::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND,
-                        ));
-                    }
-
-                    // Check if signal exists in the message
-                    let signal_exists = messages.iter().any(|msg| {
-                        msg.id() == message_id && msg.signals().find(signal_name).is_some()
-                    });
-                    if !signal_exists {
-                        return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
-                    }
-                } else {
-                    // For global value descriptions (message_id is None), check if signal exists in any message
-                    let signal_exists =
-                        messages.iter().any(|msg| msg.signals().find(signal_name).is_some());
-                    if !signal_exists {
-                        return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    // Validate function for no_std mode (without value_descriptions)
-    #[cfg(not(feature = "std"))]
-    pub(crate) fn validate(nodes: &Nodes, messages: &[Message]) -> Result<()> {
-        Self::validate_common(nodes, messages)
-    }
-
-    // Common validation logic shared by both versions
-    fn validate_common(nodes: &Nodes, messages: &[Message]) -> Result<()> {
-        // Check for duplicate message IDs
-        for (i, msg1) in messages.iter().enumerate() {
-            for msg2 in messages.iter().skip(i + 1) {
-                if msg1.id() == msg2.id() {
-                    return Err(Error::Validation(Error::DUPLICATE_MESSAGE_ID));
-                }
-            }
-        }
-
-        // Validate that all message senders are in the nodes list
-        // Skip validation if nodes list is empty (empty nodes allowed per DBC spec)
-        if !nodes.is_empty() {
-            for msg in messages {
-                if !nodes.contains(msg.sender()) {
-                    return Err(Error::Validation(Error::SENDER_NOT_IN_NODES));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     #[cfg(feature = "std")]
     #[allow(dead_code)] // Used by builder
     pub(crate) fn new(
@@ -329,6 +131,16 @@ impl Dbc {
             None,                              // bit_timing
             #[cfg(feature = "std")]
             std::vec::Vec::new(), // signal_groups
+            #[cfg(feature = "std")]
+            std::vec::Vec::new(), // message_transmitters
+            #[cfg(feature = "std")]
+            std::vec::Vec::new(), // signal_type_attribute_definitions
+            #[cfg(feature = "std")]
+            std::vec::Vec::new(), // signal_type_attributes
+            #[cfg(feature = "std")]
+            std::vec::Vec::new(), // environment_variables
+            #[cfg(feature = "std")]
+            std::vec::Vec::new(), // environment_variable_data
         )
     }
 
@@ -347,13 +159,18 @@ impl Dbc {
         extended_multiplexing: std::vec::Vec<ExtendedMultiplexing>,
         signal_value_types: std::collections::BTreeMap<
             (u32, std::string::String),
-            crate::signal_type::SignalExtendedValueType,
+            crate::SignalExtendedValueType,
         >,
-        signal_types: std::vec::Vec<crate::signal_type::SignalType>,
-        signal_type_references: std::vec::Vec<crate::signal_type::SignalTypeReference>,
-        signal_type_values: std::vec::Vec<crate::signal_type::SignalTypeValue>,
+        signal_types: std::vec::Vec<crate::SignalType>,
+        signal_type_references: std::vec::Vec<crate::SignalTypeReference>,
+        signal_type_values: std::vec::Vec<crate::SignalTypeValue>,
         bit_timing: Option<BitTiming>,
         signal_groups: std::vec::Vec<SignalGroup>,
+        message_transmitters: std::vec::Vec<MessageTransmitter>,
+        signal_type_attribute_definitions: std::vec::Vec<SignalTypeAttributeDefinition>,
+        signal_type_attributes: std::vec::Vec<SignalTypeAttribute>,
+        environment_variables: std::vec::Vec<EnvironmentVariable>,
+        environment_variable_data: std::vec::Vec<EnvironmentVariableData>,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
@@ -374,6 +191,32 @@ impl Dbc {
             bit_timing,
             #[cfg(feature = "std")]
             signal_groups,
+            #[cfg(feature = "std")]
+            message_transmitters,
+            #[cfg(feature = "std")]
+            signal_type_attribute_definitions,
+            #[cfg(feature = "std")]
+            signal_type_attributes,
+            #[cfg(feature = "std")]
+            environment_variables,
+            #[cfg(feature = "std")]
+            environment_variable_data,
+        }
+    }
+
+    #[cfg(not(feature = "std"))]
+    #[allow(dead_code)] // Used by parse_state
+    pub(crate) fn new_no_std(
+        version: Option<Version>,
+        nodes: Nodes,
+        messages: MessageList,
+        bit_timing: Option<BitTiming>,
+    ) -> Self {
+        Self {
+            version,
+            nodes,
+            messages,
+            bit_timing,
         }
     }
 
@@ -441,89 +284,6 @@ impl Dbc {
         &self.messages
     }
 
-    /// Decode a CAN message payload using the message ID to find the corresponding message definition.
-    ///
-    /// This is a high-performance method for decoding CAN messages in `no_std` environments.
-    /// It finds the message by ID, then decodes all signals in the message from the payload bytes.
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - The CAN message ID to look up
-    /// * `payload` - The CAN message payload bytes (up to 64 bytes for CAN FD)
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Vec<...>)` - A vector of (signal_name, physical_value) pairs
-    /// * `Err(Error)` - If the message ID is not found, payload length doesn't match DLC, or signal decoding fails
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc = Dbc::parse(r#"VERSION "1.0"
-    ///
-    /// BU_: ECM
-    ///
-    /// BO_ 256 Engine : 8 ECM
-    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
-    /// "#)?;
-    ///
-    /// // Decode a CAN message with RPM value of 2000 (raw: 8000 = 0x1F40)
-    /// let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    /// let decoded = dbc.decode(256, &payload)?;
-    /// assert_eq!(decoded.len(), 1);
-    /// assert_eq!(decoded[0].0, "RPM");
-    /// assert_eq!(decoded[0].1, 2000.0);
-    /// assert_eq!(decoded[0].2, Some("rpm"));
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    /// High-performance CAN message decoding optimized for throughput.
-    ///
-    /// Performance optimizations:
-    /// - O(1) or O(log n) message lookup via feature-flagged index (heapless/alloc)
-    /// - Inlined hot paths
-    /// - Direct error construction (no closure allocation)
-    /// - Early validation to avoid unnecessary work
-    /// - Optimized signal decoding loop
-    #[inline]
-    pub fn decode(
-        &self,
-        id: u32,
-        payload: &[u8],
-    ) -> Result<Vec<(&str, f64, Option<&str>), { MAX_SIGNALS_PER_MESSAGE }>> {
-        // Find message by ID (performance-critical lookup)
-        // Uses optimized index when available (O(1) with heapless, O(log n) with alloc)
-        let message =
-            self.messages.find_by_id(id).ok_or(Error::Decoding(Error::MESSAGE_NOT_FOUND))?;
-
-        // Cache DLC conversion to avoid repeated casts
-        let dlc = message.dlc() as usize;
-
-        // Validate payload length matches message DLC (early return before any decoding)
-        if payload.len() < dlc {
-            return Err(Error::Decoding(Error::PAYLOAD_LENGTH_MISMATCH));
-        }
-
-        // Allocate Vec for decoded signals (name, value, unit)
-        // Note: heapless Vec grows as needed; alloc Vec allocates dynamically
-        let mut decoded_signals: Vec<(&str, f64, Option<&str>), { MAX_SIGNALS_PER_MESSAGE }> =
-            Vec::new();
-
-        // Decode all signals in the message
-        // Iterate directly - compiler optimizes this hot path
-        let signals = message.signals();
-        for signal in signals.iter() {
-            let value = signal.decode(payload)?;
-            // Push with error handling - capacity is checked by Vec
-            decoded_signals
-                .push((signal.name(), value, signal.unit()))
-                .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
-        }
-
-        Ok(decoded_signals)
-    }
-
     /// Get value descriptions for a specific signal
     ///
     /// Value descriptions map numeric signal values to human-readable text.
@@ -553,7 +313,7 @@ impl Dbc {
         &self,
         message_id: u32,
         signal_name: &str,
-    ) -> Option<crate::signal_type::SignalExtendedValueType> {
+    ) -> Option<crate::SignalExtendedValueType> {
         self.signal_value_types.get(&(message_id, signal_name.to_string())).copied()
     }
 
@@ -579,7 +339,7 @@ impl Dbc {
     /// ```
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn signal_types(&self) -> &[crate::signal_type::SignalType] {
+    pub fn signal_types(&self) -> &[crate::SignalType] {
         &self.signal_types
     }
 
@@ -607,7 +367,7 @@ impl Dbc {
     /// ```
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn signal_type_references(&self) -> &[crate::signal_type::SignalTypeReference] {
+    pub fn signal_type_references(&self) -> &[crate::SignalTypeReference] {
         &self.signal_type_references
     }
 
@@ -632,7 +392,7 @@ impl Dbc {
     /// ```
     #[cfg(feature = "std")]
     #[must_use]
-    pub fn signal_type_values(&self) -> &[crate::signal_type::SignalTypeValue] {
+    pub fn signal_type_values(&self) -> &[crate::SignalTypeValue] {
         &self.signal_type_values
     }
 
@@ -672,7 +432,7 @@ impl Dbc {
     pub fn signal_type_values_for(
         &self,
         type_name: &str,
-    ) -> std::vec::Vec<&crate::signal_type::SignalTypeValue> {
+    ) -> std::vec::Vec<&crate::SignalTypeValue> {
         self.signal_type_values
             .iter()
             .filter(|val| val.type_name() == type_name)
@@ -715,7 +475,7 @@ impl Dbc {
     ) -> std::vec::Vec<&ExtendedMultiplexing> {
         self.extended_multiplexing
             .iter()
-            .filter(|ext_mux| ext_mux.message_id == message_id)
+            .filter(|ext_mux| ext_mux.message_id() == message_id)
             .collect()
     }
 
@@ -753,1397 +513,6 @@ impl Dbc {
         signal_name: &str,
     ) -> Option<&ValueDescriptions> {
         self.value_descriptions.for_signal(message_id, signal_name)
-    }
-
-    /// Parse a DBC file from a string slice
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc_content = r#"VERSION "1.0"
-    ///
-    /// BU_: ECM
-    ///
-    /// BO_ 256 EngineData : 8 ECM
-    ///  SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm""#;
-    ///
-    /// let dbc = Dbc::parse(dbc_content)?;
-    /// assert_eq!(dbc.messages().len(), 1);
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    pub fn parse(data: &str) -> Result<Self> {
-        let mut parser = Parser::new(data.as_bytes())?;
-
-        let mut messages_buffer: Vec<Message, { MAX_MESSAGES }> = Vec::new();
-
-        let mut message_count_actual = 0;
-
-        // Parse version, nodes, and messages
-        use crate::{
-            BA_, BA_DEF_, BA_DEF_DEF_, BA_DEF_SGTYPE_, BA_SGTYPE_, BO_, BO_TX_BU_, BS_, BU_, CM_,
-            EV_, NS_, SG_, SG_MUL_VAL_, SGTYPE_, SGTYPE_VAL_, SIG_GROUP_, SIG_TYPE_REF_,
-            SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
-        };
-
-        let mut version: Option<Version> = None;
-        let mut nodes: Option<Nodes> = None;
-        let mut bit_timing: Option<BitTiming> = None;
-
-        // Store value descriptions during parsing: (message_id, signal_name, value, description)
-        #[cfg(feature = "std")]
-        type ValueDescriptionsBufferEntry = (
-            Option<u32>,
-            std::string::String,
-            std::vec::Vec<(u64, std::string::String)>,
-        );
-        #[cfg(feature = "std")]
-        let mut value_descriptions_buffer: std::vec::Vec<ValueDescriptionsBufferEntry> =
-            std::vec::Vec::new();
-
-        // Store attributes, comments, value tables, and extended multiplexing during parsing
-        #[cfg(feature = "std")]
-        let mut attributes_buffer: std::vec::Vec<crate::attributes::AttributeDefinition> =
-            std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut attribute_defaults_buffer: std::vec::Vec<
-            crate::attributes::AttributeDefault,
-        > = std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut attribute_values_buffer: std::vec::Vec<crate::attributes::Attribute> =
-            std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut comments_buffer: std::vec::Vec<Comment> = std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut value_tables_buffer: std::vec::Vec<ValueTable> = std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut extended_multiplexing_buffer: std::vec::Vec<ExtendedMultiplexing> =
-            std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut signal_value_types_buffer: std::collections::BTreeMap<
-            (u32, std::string::String),
-            crate::signal_type::SignalExtendedValueType,
-        > = std::collections::BTreeMap::new();
-        #[cfg(feature = "std")]
-        let mut signal_types_buffer: std::vec::Vec<crate::signal_type::SignalType> =
-            std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut signal_type_references_buffer: std::vec::Vec<
-            crate::signal_type::SignalTypeReference,
-        > = std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut signal_type_values_buffer: std::vec::Vec<
-            crate::signal_type::SignalTypeValue,
-        > = std::vec::Vec::new();
-        #[cfg(feature = "std")]
-        let mut signal_groups_buffer: std::vec::Vec<SignalGroup> = std::vec::Vec::new();
-
-        loop {
-            // Skip comments (lines starting with //)
-            parser.skip_newlines_and_spaces();
-            if parser.starts_with(b"//") {
-                parser.skip_to_end_of_line();
-                continue;
-            }
-
-            let keyword_result = parser.peek_next_keyword();
-            let keyword = match keyword_result {
-                Ok(kw) => kw,
-                Err(Error::UnexpectedEof) => break,
-                Err(Error::Expected(_)) => {
-                    if parser.starts_with(b"//") {
-                        parser.skip_to_end_of_line();
-                        continue;
-                    }
-                    return Err(keyword_result.unwrap_err());
-                }
-                Err(e) => return Err(e),
-            };
-
-            // Save position after peek_next_keyword (which skips whitespace, so we're at the keyword)
-            let pos_at_keyword = parser.pos();
-
-            match keyword {
-                NS_ => {
-                    // Consume NS_ keyword
-                    parser
-                        .expect(crate::NS_.as_bytes())
-                        .map_err(|_| Error::Expected("Failed to consume NS_ keyword"))?;
-                    parser.skip_newlines_and_spaces();
-                    let _ = parser.expect(b":").ok();
-                    loop {
-                        parser.skip_newlines_and_spaces();
-                        if parser.is_empty() {
-                            break;
-                        }
-                        if parser.starts_with(b" ") || parser.starts_with(b"\t") {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        if parser.starts_with(b"//") {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        if parser.starts_with(BS_.as_bytes())
-                            || parser.starts_with(BU_.as_bytes())
-                            || parser.starts_with(BO_.as_bytes())
-                            || parser.starts_with(SG_.as_bytes())
-                            || parser.starts_with(VERSION.as_bytes())
-                        {
-                            break;
-                        }
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                CM_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume CM_ keyword
-                        if parser.expect(crate::CM_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse comment: CM_ [object_type object] "text" ;
-                        // object_type can be: BU_, BO_, SG_, EV_, or empty (general comment)
-                        if let Ok(comment) = (|| -> Result<Comment> {
-                            let comment = if parser.starts_with(b"BU_") {
-                                // Node comment: CM_ BU_ node_name "text" ;
-                                parser.expect(b"BU_")?;
-                                parser.skip_newlines_and_spaces();
-                                let node_name = parser
-                                    .parse_identifier()
-                                    .ok()
-                                    .and_then(|n| crate::validate_name(n).ok())
-                                    .map(|s| s.as_str().to_string());
-                                parser.skip_newlines_and_spaces();
-                                let text = if parser.expect(b"\"").is_ok() {
-                                    let text_bytes = parser.take_until_quote(false, 1024)?;
-                                    core::str::from_utf8(text_bytes)
-                                        .map_err(|_| {
-                                            Error::Expected(crate::error::Error::INVALID_UTF8)
-                                        })?
-                                        .to_string()
-                                } else {
-                                    String::new()
-                                };
-                                Comment::new(
-                                    crate::comment::CommentObjectType::Node,
-                                    node_name,
-                                    None,
-                                    text,
-                                )
-                            } else if parser.starts_with(b"BO_") {
-                                // Message comment: CM_ BO_ message_id "text" ;
-                                parser.expect(b"BO_")?;
-                                parser.skip_newlines_and_spaces();
-                                let message_id = parser.parse_u32().ok();
-                                parser.skip_newlines_and_spaces();
-                                let text = if parser.expect(b"\"").is_ok() {
-                                    let text_bytes = parser.take_until_quote(false, 1024)?;
-                                    core::str::from_utf8(text_bytes)
-                                        .map_err(|_| {
-                                            Error::Expected(crate::error::Error::INVALID_UTF8)
-                                        })?
-                                        .to_string()
-                                } else {
-                                    String::new()
-                                };
-                                Comment::new(
-                                    crate::comment::CommentObjectType::Message,
-                                    None,
-                                    message_id,
-                                    text,
-                                )
-                            } else if parser.starts_with(b"SG_") {
-                                // Signal comment: CM_ SG_ message_id signal_name "text" ;
-                                parser.expect(b"SG_")?;
-                                parser.skip_newlines_and_spaces();
-                                let message_id = parser.parse_u32().ok();
-                                parser.skip_newlines_and_spaces();
-                                let signal_name = parser
-                                    .parse_identifier()
-                                    .ok()
-                                    .and_then(|n| crate::validate_name(n).ok())
-                                    .map(|s| s.as_str().to_string());
-                                parser.skip_newlines_and_spaces();
-                                let text = if parser.expect(b"\"").is_ok() {
-                                    let text_bytes = parser.take_until_quote(false, 1024)?;
-                                    core::str::from_utf8(text_bytes)
-                                        .map_err(|_| {
-                                            Error::Expected(crate::error::Error::INVALID_UTF8)
-                                        })?
-                                        .to_string()
-                                } else {
-                                    String::new()
-                                };
-                                Comment::new(
-                                    crate::comment::CommentObjectType::Signal,
-                                    signal_name,
-                                    message_id,
-                                    text,
-                                )
-                            } else if parser.starts_with(b"EV_") {
-                                // Environment variable comment: CM_ EV_ env_var_name "text" ;
-                                parser.expect(b"EV_")?;
-                                parser.skip_newlines_and_spaces();
-                                let env_var_name = parser
-                                    .parse_identifier()
-                                    .ok()
-                                    .and_then(|n| crate::validate_name(n).ok())
-                                    .map(|s| s.as_str().to_string());
-                                parser.skip_newlines_and_spaces();
-                                let text = if parser.expect(b"\"").is_ok() {
-                                    let text_bytes = parser.take_until_quote(false, 1024)?;
-                                    core::str::from_utf8(text_bytes)
-                                        .map_err(|_| {
-                                            Error::Expected(crate::error::Error::INVALID_UTF8)
-                                        })?
-                                        .to_string()
-                                } else {
-                                    String::new()
-                                };
-                                Comment::new(
-                                    crate::comment::CommentObjectType::EnvironmentVariable,
-                                    env_var_name,
-                                    None,
-                                    text,
-                                )
-                            } else {
-                                // General comment: CM_ "text" ;
-                                let text = if parser.expect(b"\"").is_ok() {
-                                    let text_bytes = parser.take_until_quote(false, 1024)?;
-                                    core::str::from_utf8(text_bytes)
-                                        .map_err(|_| {
-                                            Error::Expected(crate::error::Error::INVALID_UTF8)
-                                        })?
-                                        .to_string()
-                                } else {
-                                    String::new()
-                                };
-                                Comment::new(
-                                    crate::comment::CommentObjectType::General,
-                                    None,
-                                    None,
-                                    text,
-                                )
-                            };
-                            parser.skip_newlines_and_spaces();
-                            parser.expect(b";").ok(); // Semicolon is optional but common
-                            Ok(comment)
-                        })() {
-                            comments_buffer.push(comment);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume CM_ keyword and skip the rest
-                        let _ = parser.expect(crate::CM_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                BS_ => {
-                    // Parse BS_: [baudrate ':' BTR1 ',' BTR2]
-                    if parser.expect(crate::BS_.as_bytes()).is_err() {
-                        parser.skip_to_end_of_line();
-                        continue;
-                    }
-                    parser.skip_newlines_and_spaces();
-
-                    // Expect colon after BS_
-                    if parser.expect(b":").is_err() {
-                        parser.skip_to_end_of_line();
-                        continue;
-                    }
-                    parser.skip_newlines_and_spaces();
-
-                    // Parse optional baudrate
-                    let baudrate = parser.parse_u32().ok();
-                    parser.skip_newlines_and_spaces();
-
-                    let (btr1, btr2) = if parser.expect(b":").is_ok() {
-                        // Parse BTR1 and BTR2
-                        parser.skip_newlines_and_spaces();
-                        let btr1_val = parser.parse_u32().ok();
-                        parser.skip_newlines_and_spaces();
-                        if parser.expect(b",").is_ok() {
-                            parser.skip_newlines_and_spaces();
-                            let btr2_val = parser.parse_u32().ok();
-                            (btr1_val, btr2_val)
-                        } else {
-                            (btr1_val, None)
-                        }
-                    } else {
-                        (None, None)
-                    };
-
-                    // Store bit timing (only first one if multiple)
-                    if bit_timing.is_none() {
-                        bit_timing = Some(BitTiming::new(baudrate, btr1, btr2));
-                    }
-
-                    // Skip to end of line in case of trailing content
-                    parser.skip_to_end_of_line();
-                    continue;
-                }
-                SIG_GROUP_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Parse SIG_GROUP_ message_id signal_group_name repetitions signal_name1 signal_name2 ... ;
-                        if parser.expect(crate::SIG_GROUP_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse message_id
-                        let message_id = match parser.parse_u32() {
-                            Ok(id) => id,
-                            Err(_) => {
-                                parser.skip_to_end_of_line();
-                                continue;
-                            }
-                        };
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse signal_group_name
-                        let signal_group_name = match parser.parse_identifier() {
-                            Ok(name) => match crate::validate_name(name) {
-                                Ok(valid_name) => valid_name.as_str().to_string(),
-                                Err(_) => {
-                                    parser.skip_to_end_of_line();
-                                    continue;
-                                }
-                            },
-                            Err(_) => {
-                                parser.skip_to_end_of_line();
-                                continue;
-                            }
-                        };
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse repetitions
-                        let repetitions = match parser.parse_u32() {
-                            Ok(rep) => rep,
-                            Err(_) => {
-                                parser.skip_to_end_of_line();
-                                continue;
-                            }
-                        };
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse signal names (space-separated list)
-                        let mut signal_names = std::vec::Vec::new();
-                        loop {
-                            // Check if we've reached semicolon or end of input
-                            if parser.starts_with(b";") {
-                                break;
-                            }
-                            // Check if we've reached end of input
-                            if parser.peek_byte_at(0).is_none() {
-                                break;
-                            }
-                            match parser.parse_identifier() {
-                                Ok(name) => match crate::validate_name(name) {
-                                    Ok(valid_name) => {
-                                        signal_names.push(valid_name.as_str().to_string());
-                                        parser.skip_newlines_and_spaces();
-                                    }
-                                    Err(_) => break,
-                                },
-                                Err(_) => break,
-                            }
-                        }
-
-                        // Optional semicolon
-                        if parser.starts_with(b";") {
-                            parser.expect(b";").ok();
-                        }
-
-                        signal_groups_buffer.push(SignalGroup::new(
-                            message_id,
-                            signal_group_name,
-                            repetitions,
-                            signal_names,
-                        ));
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume SIG_GROUP_ keyword and skip the rest
-                        let _ = parser.expect(crate::SIG_GROUP_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                EV_ | BO_TX_BU_ => {
-                    // Consume keyword then skip to end of line (not yet implemented)
-                    let _ = parser.expect(keyword.as_bytes()).ok();
-                    parser.skip_to_end_of_line();
-                    continue;
-                }
-                SIG_VALTYPE_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Parse SIG_VALTYPE_ message_id signal_name : value_type ;
-                        if parser.expect(crate::SIG_VALTYPE_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        if let Ok((message_id, signal_name, value_type)) = (|| -> Result<(u32, std::string::String, crate::signal_type::SignalExtendedValueType)> {
-                            let message_id = parser.parse_u32()?;
-                            parser.skip_newlines_and_spaces();
-                            let signal_name = parser.parse_identifier()?;
-                            let signal_name = signal_name.to_string();
-                            parser.skip_newlines_and_spaces();
-
-                            // Expect colon
-                            parser.expect(b":").map_err(|_| Error::Expected("Expected ':' after signal name"))?;
-                            parser.skip_newlines_and_spaces();
-
-                            // Parse value type (0, 1, or 2)
-                            let value_type_num = parser.parse_u32()?;
-                            if value_type_num > 2 {
-                                return Err(Error::Validation(Error::INVALID_SIGNAL_VALUE_TYPE));
-                            }
-                            let value_type = crate::signal_type::SignalExtendedValueType::from_u8(value_type_num as u8)?;
-
-                            parser.skip_newlines_and_spaces();
-                            parser.expect(b";").ok(); // Semicolon is optional
-
-                            Ok((message_id, signal_name, value_type))
-                        })() {
-                            signal_value_types_buffer.insert((message_id, signal_name), value_type);
-                        } else {
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        let _ = parser.expect(crate::SIG_VALTYPE_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                VAL_TABLE_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume VAL_TABLE_ keyword
-                        if parser.expect(crate::VAL_TABLE_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: VAL_TABLE_ table_name value1 "desc1" value2 "desc2" ... ;
-                        if let Ok(value_table) = (|| -> Result<ValueTable> {
-                            let table_name = parser.parse_identifier()?;
-                            let table_name_validated = crate::validate_name(table_name)?;
-                            let table_name = table_name_validated.as_str().to_string();
-                            parser.skip_newlines_and_spaces();
-
-                            let mut entries = std::vec::Vec::<(u64, std::string::String)>::new();
-
-                            loop {
-                                parser.skip_newlines_and_spaces();
-                                // Check for semicolon (end of VAL_TABLE_ statement)
-                                if parser.starts_with(b";") {
-                                    parser.expect(b";").ok();
-                                    break;
-                                }
-
-                                // Parse value
-                                let value = parser.parse_i64().map_err(|_| {
-                                    Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                })? as u64;
-                                parser.skip_newlines_and_spaces();
-
-                                // Parse description string
-                                parser
-                                    .expect(b"\"")
-                                    .map_err(|_| Error::Expected("Expected opening quote"))?;
-                                let desc_bytes = parser
-                                    .take_until_quote(false, crate::MAX_NAME_SIZE)
-                                    .map_err(|_| Error::Expected("Expected closing quote"))?;
-                                let desc_str = core::str::from_utf8(desc_bytes).map_err(|_| {
-                                    Error::Expected(crate::error::Error::INVALID_UTF8)
-                                })?;
-                                let desc = desc_str.to_string();
-
-                                entries.push((value, desc));
-                            }
-
-                            Ok(ValueTable::new(table_name, entries))
-                        })() {
-                            value_tables_buffer.push(value_table);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume VAL_TABLE_ keyword and skip the rest
-                        let _ = parser.expect(crate::VAL_TABLE_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                BA_DEF_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume BA_DEF_ keyword
-                        if parser.expect(crate::BA_DEF_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: BA_DEF_ [object_type] "attribute_name" value_type [min max] ;
-                        if let Ok(attr_def) =
-                            (|| -> Result<crate::attributes::AttributeDefinition> {
-                                // Parse optional object type (BU_, BO_, SG_, EV_, or empty for network)
-                                let object_type = if parser.starts_with(b"BU_") {
-                                    parser.expect(b"BU_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    crate::attributes::AttributeObjectType::Node
-                                } else if parser.starts_with(b"BO_") {
-                                    parser.expect(b"BO_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    crate::attributes::AttributeObjectType::Message
-                                } else if parser.starts_with(b"SG_") {
-                                    parser.expect(b"SG_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    crate::attributes::AttributeObjectType::Signal
-                                } else if parser.starts_with(b"EV_") {
-                                    parser.expect(b"EV_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    crate::attributes::AttributeObjectType::EnvironmentVariable
-                                } else {
-                                    crate::attributes::AttributeObjectType::Network
-                                };
-
-                                // Parse attribute name (quoted string)
-                                parser
-                                    .expect(b"\"")
-                                    .map_err(|_| Error::Expected("Expected opening quote"))?;
-                                let name_bytes = parser
-                                    .take_until_quote(false, crate::MAX_NAME_SIZE)
-                                    .map_err(|_| Error::Expected("Expected closing quote"))?;
-                                let name_str = core::str::from_utf8(name_bytes).map_err(|_| {
-                                    Error::Expected(crate::error::Error::INVALID_UTF8)
-                                })?;
-                                let name = name_str.to_string();
-                                parser.skip_newlines_and_spaces();
-
-                                // Parse value type
-                                let value_type = if parser.starts_with(b"INT") {
-                                    parser.expect(b"INT")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let min = parser.parse_i64().map_err(|_| {
-                                        Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                    })?;
-                                    parser.skip_newlines_and_spaces();
-                                    let max = parser.parse_i64().map_err(|_| {
-                                        Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                    })?;
-                                    crate::attributes::AttributeValueType::Int(min, max)
-                                } else if parser.starts_with(b"HEX") {
-                                    parser.expect(b"HEX")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let min = parser.parse_i64().map_err(|_| {
-                                        Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                    })?;
-                                    parser.skip_newlines_and_spaces();
-                                    let max = parser.parse_i64().map_err(|_| {
-                                        Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                    })?;
-                                    crate::attributes::AttributeValueType::Hex(min, max)
-                                } else if parser.starts_with(b"FLOAT") {
-                                    parser.expect(b"FLOAT")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let min = parser.parse_f64().map_err(|_| {
-                                        Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                    })?;
-                                    parser.skip_newlines_and_spaces();
-                                    let max = parser.parse_f64().map_err(|_| {
-                                        Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                    })?;
-                                    crate::attributes::AttributeValueType::Float(min, max)
-                                } else if parser.starts_with(b"STRING") {
-                                    parser.expect(b"STRING")?;
-                                    crate::attributes::AttributeValueType::String
-                                } else if parser.starts_with(b"ENUM") {
-                                    parser.expect(b"ENUM")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let mut enum_values =
-                                        std::vec::Vec::<std::string::String>::new();
-                                    loop {
-                                        parser.skip_newlines_and_spaces();
-                                        if parser.starts_with(b";") {
-                                            break;
-                                        }
-                                        parser.expect(b"\"").map_err(|_| {
-                                            Error::Expected("Expected opening quote")
-                                        })?;
-                                        let enum_bytes = parser
-                                            .take_until_quote(false, crate::MAX_NAME_SIZE)
-                                            .map_err(|_| {
-                                                Error::Expected("Expected closing quote")
-                                            })?;
-                                        let enum_str =
-                                            core::str::from_utf8(enum_bytes).map_err(|_| {
-                                                Error::Expected(crate::error::Error::INVALID_UTF8)
-                                            })?;
-                                        enum_values.push(enum_str.to_string());
-                                        parser.skip_newlines_and_spaces();
-                                        if parser.starts_with(b",") {
-                                            parser.expect(b",").ok();
-                                            // Continue to next enum value
-                                        } else {
-                                            // End of enum values (semicolon or end of input)
-                                            break;
-                                        }
-                                    }
-                                    crate::attributes::AttributeValueType::Enum(enum_values)
-                                } else {
-                                    return Err(Error::Expected(
-                                        "Expected attribute value type (INT, HEX, FLOAT, STRING, or ENUM)",
-                                    ));
-                                };
-
-                                parser.skip_newlines_and_spaces();
-                                parser.expect(b";").ok(); // Semicolon is optional but common
-
-                                Ok(crate::attributes::AttributeDefinition::new(
-                                    object_type,
-                                    name,
-                                    value_type,
-                                ))
-                            })()
-                        {
-                            attributes_buffer.push(attr_def);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume BA_DEF_ keyword and skip the rest
-                        let _ = parser.expect(crate::BA_DEF_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                BA_DEF_DEF_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume BA_DEF_DEF_ keyword
-                        if parser.expect(crate::BA_DEF_DEF_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: BA_DEF_DEF_ "attribute_name" value ;
-                        if let Ok(attr_default) =
-                            (|| -> Result<crate::attributes::AttributeDefault> {
-                                // Parse attribute name (quoted string)
-                                parser
-                                    .expect(b"\"")
-                                    .map_err(|_| Error::Expected("Expected opening quote"))?;
-                                let name_bytes = parser
-                                    .take_until_quote(false, crate::MAX_NAME_SIZE)
-                                    .map_err(|_| Error::Expected("Expected closing quote"))?;
-                                let name_str = core::str::from_utf8(name_bytes).map_err(|_| {
-                                    Error::Expected(crate::error::Error::INVALID_UTF8)
-                                })?;
-                                let name = name_str.to_string();
-                                parser.skip_newlines_and_spaces();
-
-                                // Parse value (can be integer, float, or string)
-                                let value = if parser.starts_with(b"\"") {
-                                    // String value
-                                    parser.expect(b"\"")?;
-                                    let value_bytes = parser
-                                        .take_until_quote(false, crate::MAX_NAME_SIZE)
-                                        .map_err(|_| Error::Expected("Expected closing quote"))?;
-                                    let value_str =
-                                        core::str::from_utf8(value_bytes).map_err(|_| {
-                                            Error::Expected(crate::error::Error::INVALID_UTF8)
-                                        })?;
-                                    crate::attributes::AttributeValue::String(value_str.to_string())
-                                } else {
-                                    // Try to parse as integer first
-                                    match parser.parse_i64() {
-                                        Ok(int_val) => {
-                                            crate::attributes::AttributeValue::Int(int_val)
-                                        }
-                                        Err(_) => {
-                                            // If int fails, try float
-                                            // Note: parse_i64 may have advanced position, but parse_f64 should handle it
-                                            let float_val = parser.parse_f64()
-                                            .map_err(|_| Error::Expected("Expected attribute value (integer, float, or string)"))?;
-                                            crate::attributes::AttributeValue::Float(float_val)
-                                        }
-                                    }
-                                };
-
-                                parser.skip_newlines_and_spaces();
-                                parser.expect(b";").ok(); // Semicolon is optional but common
-
-                                Ok(crate::attributes::AttributeDefault::new(name, value))
-                            })()
-                        {
-                            attribute_defaults_buffer.push(attr_default);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume BA_DEF_DEF_ keyword and skip the rest
-                        let _ = parser.expect(crate::BA_DEF_DEF_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                BA_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume BA_ keyword
-                        if parser.expect(crate::BA_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: BA_ "attribute_name" [object_type object] value ;
-                        if let Ok(attr) = (|| -> Result<crate::attributes::Attribute> {
-                            // Parse attribute name (quoted string)
-                            parser
-                                .expect(b"\"")
-                                .map_err(|_| Error::Expected("Expected opening quote"))?;
-                            let name_bytes =
-                                parser
-                                    .take_until_quote(false, crate::MAX_NAME_SIZE)
-                                    .map_err(|_| Error::Expected("Expected closing quote"))?;
-                            let name_str = core::str::from_utf8(name_bytes)
-                                .map_err(|_| Error::Expected(crate::error::Error::INVALID_UTF8))?;
-                            let name = name_str.to_string();
-                            parser.skip_newlines_and_spaces();
-
-                            // Parse optional object type and identifier
-                            let (object_type, object_name, object_id) =
-                                if parser.starts_with(b"BU_") {
-                                    parser.expect(b"BU_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let obj_name =
-                                        parser.parse_identifier().ok().map(|n| n.to_string());
-                                    (crate::attributes::AttributeObjectType::Node, obj_name, None)
-                                } else if parser.starts_with(b"BO_") {
-                                    parser.expect(b"BO_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let msg_id = parser.parse_u32().ok();
-                                    (
-                                        crate::attributes::AttributeObjectType::Message,
-                                        None,
-                                        msg_id,
-                                    )
-                                } else if parser.starts_with(b"SG_") {
-                                    parser.expect(b"SG_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let msg_id = parser.parse_u32().ok();
-                                    parser.skip_newlines_and_spaces();
-                                    let sig_name =
-                                        parser.parse_identifier().ok().map(|n| n.to_string());
-                                    (
-                                        crate::attributes::AttributeObjectType::Signal,
-                                        sig_name,
-                                        msg_id,
-                                    )
-                                } else if parser.starts_with(b"EV_") {
-                                    parser.expect(b"EV_")?;
-                                    parser.skip_newlines_and_spaces();
-                                    let env_name =
-                                        parser.parse_identifier().ok().map(|n| n.to_string());
-                                    (
-                                        crate::attributes::AttributeObjectType::EnvironmentVariable,
-                                        env_name,
-                                        None,
-                                    )
-                                } else {
-                                    // Network/global attribute
-                                    (crate::attributes::AttributeObjectType::Network, None, None)
-                                };
-
-                            parser.skip_newlines_and_spaces();
-
-                            // Parse value (can be integer, hex, float, or string)
-                            let value = if parser.starts_with(b"\"") {
-                                // String value
-                                parser.expect(b"\"")?;
-                                let value_bytes = parser
-                                    .take_until_quote(false, crate::MAX_NAME_SIZE)
-                                    .map_err(|_| Error::Expected("Expected closing quote"))?;
-                                let value_str =
-                                    core::str::from_utf8(value_bytes).map_err(|_| {
-                                        Error::Expected(crate::error::Error::INVALID_UTF8)
-                                    })?;
-                                crate::attributes::AttributeValue::String(value_str.to_string())
-                            } else {
-                                // Try to parse as integer first
-                                match parser.parse_i64() {
-                                    Ok(int_val) => crate::attributes::AttributeValue::Int(int_val),
-                                    Err(_) => {
-                                        // If int fails, try float
-                                        // Note: parse_i64 may have advanced position, but parse_f64 should handle it
-                                        let float_val = parser.parse_f64()
-                                            .map_err(|_| Error::Expected("Expected attribute value (integer, float, or string)"))?;
-                                        crate::attributes::AttributeValue::Float(float_val)
-                                    }
-                                }
-                            };
-
-                            parser.skip_newlines_and_spaces();
-                            parser.expect(b";").ok(); // Semicolon is optional but common
-
-                            Ok(crate::attributes::Attribute::new(
-                                name,
-                                object_type,
-                                object_name,
-                                object_id,
-                                value,
-                            ))
-                        })() {
-                            attribute_values_buffer.push(attr);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume BA_ keyword and skip the rest
-                        let _ = parser.expect(crate::BA_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                VAL_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume VAL_ keyword
-                        let _ = parser.expect(crate::VAL_.as_bytes()).ok();
-                        // Parse VAL_ statement: VAL_ message_id signal_name value1 "desc1" value2 "desc2" ... ;
-                        // Note: message_id of -1 (0xFFFFFFFF) means the value descriptions apply to
-                        // all signals with this name in ANY message (global value descriptions)
-                        parser.skip_newlines_and_spaces();
-                        let message_id = match parser.parse_i64() {
-                            Ok(id) => {
-                                // -1 (0xFFFFFFFF) is the magic number for global value descriptions
-                                if id == -1 {
-                                    None
-                                } else if id >= 0 && id <= u32::MAX as i64 {
-                                    Some(id as u32)
-                                } else {
-                                    parser.skip_to_end_of_line();
-                                    continue;
-                                }
-                            }
-                            Err(_) => {
-                                parser.skip_to_end_of_line();
-                                continue;
-                            }
-                        };
-                        parser.skip_newlines_and_spaces();
-                        let signal_name = match parser.parse_identifier() {
-                            Ok(name) => name.to_string(),
-                            Err(_) => {
-                                parser.skip_to_end_of_line();
-                                continue;
-                            }
-                        };
-                        // Parse value-description pairs
-                        let mut entries: std::vec::Vec<(u64, std::string::String)> =
-                            std::vec::Vec::new();
-                        loop {
-                            parser.skip_newlines_and_spaces();
-                            // Check for semicolon (end of VAL_ statement)
-                            if parser.starts_with(b";") {
-                                parser.expect(b";").ok();
-                                break;
-                            }
-                            // Parse value (as i64 first to handle negative values like -1, then convert to u64)
-                            // Note: -1 (0xFFFFFFFF) is the magic number for global value descriptions in message_id,
-                            // but values in VAL_ can also be negative
-                            let value = match parser.parse_i64() {
-                                Ok(v) => {
-                                    // Handle -1 specially: convert to 0xFFFFFFFF (u32::MAX) instead of large u64
-                                    if v == -1 { 0xFFFF_FFFFu64 } else { v as u64 }
-                                }
-                                Err(_) => {
-                                    parser.skip_to_end_of_line();
-                                    break;
-                                }
-                            };
-                            parser.skip_newlines_and_spaces();
-                            // Parse description string (expect quote, then take until quote)
-                            if parser.expect(b"\"").is_err() {
-                                parser.skip_to_end_of_line();
-                                break;
-                            }
-                            let description_bytes = match parser.take_until_quote(false, 1024) {
-                                Ok(bytes) => bytes,
-                                Err(_) => {
-                                    parser.skip_to_end_of_line();
-                                    break;
-                                }
-                            };
-                            let description = match core::str::from_utf8(description_bytes) {
-                                Ok(s) => s.to_string(),
-                                Err(_) => {
-                                    parser.skip_to_end_of_line();
-                                    break;
-                                }
-                            };
-                            entries.push((value, description));
-                        }
-                        if !entries.is_empty() {
-                            value_descriptions_buffer.push((message_id, signal_name, entries));
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume VAL_ keyword and skip the rest
-                        let _ = parser.expect(crate::VAL_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                VERSION => {
-                    // Version::parse expects VERSION keyword, don't consume it here
-                    version = Some(Version::parse(&mut parser)?);
-                    continue;
-                }
-                BU_ => {
-                    // Nodes::parse expects BU_ keyword, create parser from original input including it
-                    parser.skip_to_end_of_line();
-                    let bu_input = &data.as_bytes()[pos_at_keyword..parser.pos()];
-                    let mut bu_parser = Parser::new(bu_input)?;
-                    nodes = Some(Nodes::parse(&mut bu_parser)?);
-                    continue;
-                }
-                BO_ => {
-                    // Check limit using MAX_MESSAGES constant
-                    if message_count_actual >= MAX_MESSAGES {
-                        return Err(Error::Nodes(Error::NODES_TOO_MANY));
-                    }
-
-                    // Save parser position (at BO_ keyword, so Message::parse can consume it)
-                    let message_start_pos = pos_at_keyword;
-
-                    // Don't manually parse - just find where the header ends by looking for the colon and sender
-                    // We need to find the end of the header line to separate it from signals
-                    let header_line_end = {
-                        // Skip to end of line to find where header ends
-                        let mut temp_parser = Parser::new(&data.as_bytes()[pos_at_keyword..])?;
-                        // Skip BO_ keyword
-                        temp_parser.expect(crate::BO_.as_bytes()).ok();
-                        temp_parser.skip_whitespace().ok();
-                        temp_parser.parse_u32().ok(); // ID
-                        temp_parser.skip_whitespace().ok();
-                        temp_parser.parse_identifier().ok(); // name
-                        temp_parser.skip_whitespace().ok();
-                        temp_parser.expect(b":").ok(); // colon
-                        temp_parser.skip_whitespace().ok();
-                        temp_parser.parse_u8().ok(); // DLC
-                        temp_parser.skip_whitespace().ok();
-                        temp_parser.parse_identifier().ok(); // sender
-                        pos_at_keyword + temp_parser.pos()
-                    };
-
-                    // Now parse signals from the original parser
-                    parser.skip_to_end_of_line(); // Skip past header line
-
-                    let mut signals_array: Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }> = Vec::new();
-
-                    loop {
-                        parser.skip_newlines_and_spaces();
-                        if parser.starts_with(crate::SG_.as_bytes()) {
-                            if let Some(next_byte) = parser.peek_byte_at(3) {
-                                if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
-                                    if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
-                                        return Err(Error::Receivers(
-                                            Error::SIGNAL_RECEIVERS_TOO_MANY,
-                                        ));
-                                    }
-                                    // Signal::parse expects SG_ keyword, which we've already verified with starts_with
-                                    let signal = Signal::parse(&mut parser)?;
-                                    signals_array.push(signal).map_err(|_| {
-                                        Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
-                                    })?;
-                                    continue;
-                                }
-                            }
-                        }
-                        break;
-                    }
-
-                    // Restore parser to start of message line and use Message::parse
-                    // Create a new parser from the original input, but only up to the end of the header
-                    // (not including signals, so Message::parse doesn't complain about extra content)
-                    let message_input = &data.as_bytes()[message_start_pos..header_line_end];
-                    let mut message_parser = Parser::new(message_input)?;
-
-                    // Use Message::parse which will parse the header and use our signals
-                    let message = Message::parse(&mut message_parser, signals_array.as_slice())?;
-
-                    messages_buffer
-                        .push(message)
-                        .map_err(|_| Error::Message(Error::NODES_TOO_MANY))?;
-                    message_count_actual += 1;
-                    continue;
-                }
-                SG_MUL_VAL_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume SG_MUL_VAL_ keyword
-                        if parser.expect(crate::SG_MUL_VAL_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: SG_MUL_VAL_ message_id signal_name multiplexer_switch value_ranges ;
-                        // Example: SG_MUL_VAL_ 500 Signal_A Mux1 0-5,10-15 ;
-                        if let Ok(ext_mux) = (|| -> Result<ExtendedMultiplexing> {
-                            let message_id = parser.parse_u32().map_err(|_| {
-                                Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                            })?;
-                            parser.skip_newlines_and_spaces();
-
-                            let signal_name = parser.parse_identifier()?;
-                            let signal_name = crate::validate_name(signal_name)?;
-                            parser.skip_newlines_and_spaces();
-
-                            let multiplexer_switch = parser.parse_identifier()?;
-                            let multiplexer_switch = crate::validate_name(multiplexer_switch)?;
-                            parser.skip_newlines_and_spaces();
-
-                            let mut value_ranges = crate::compat::Vec::<(u8, u8), 64>::new();
-
-                            loop {
-                                parser.skip_newlines_and_spaces();
-                                // Check for semicolon (end of SG_MUL_VAL_ statement)
-                                if parser.starts_with(b";") {
-                                    parser.expect(b";").ok();
-                                    break;
-                                }
-
-                                // Parse value range: min-max
-                                let min = parser.parse_u32().map_err(|_| {
-                                    Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                })? as u8;
-                                parser
-                                    .expect(b"-")
-                                    .map_err(|_| Error::Expected("Expected '-' in value range"))?;
-                                let max = parser.parse_u32().map_err(|_| {
-                                    Error::Expected(crate::error::Error::EXPECTED_NUMBER)
-                                })? as u8;
-
-                                value_ranges.push((min, max)).map_err(|_| {
-                                    Error::Validation(crate::error::Error::MAX_NAME_SIZE_EXCEEDED)
-                                })?;
-
-                                // Check for comma (more ranges) or semicolon (end)
-                                parser.skip_newlines_and_spaces();
-                                if parser.starts_with(b",") {
-                                    parser.expect(b",").ok();
-                                    // Continue to next range
-                                } else if parser.starts_with(b";") {
-                                    parser.expect(b";").ok();
-                                    break;
-                                } else {
-                                    // End of ranges
-                                    break;
-                                }
-                            }
-
-                            Ok(ExtendedMultiplexing::new(
-                                message_id,
-                                signal_name,
-                                multiplexer_switch,
-                                value_ranges,
-                            ))
-                        })() {
-                            extended_multiplexing_buffer.push(ext_mux);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume SG_MUL_VAL_ keyword and skip the rest
-                        let _ = parser.expect(crate::SG_MUL_VAL_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                SGTYPE_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume SGTYPE_ keyword
-                        if parser.expect(crate::SGTYPE_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: SGTYPE_ type_name : size ;
-                        // Example: SGTYPE_ SignalType1 : 16;
-                        if let Ok(ext_type) = crate::signal_type::SignalType::parse(&mut parser) {
-                            signal_types_buffer.push(ext_type);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        let _ = parser.expect(crate::SGTYPE_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                SIG_TYPE_REF_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume SIG_TYPE_REF_ keyword
-                        if parser.expect(crate::SIG_TYPE_REF_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: SIG_TYPE_REF_ message_id signal_name : type_name ;
-                        // Example: SIG_TYPE_REF_ 256 RPM : SignalType1;
-                        if let Ok(ext_ref) =
-                            crate::signal_type::SignalTypeReference::parse(&mut parser)
-                        {
-                            signal_type_references_buffer.push(ext_ref);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        let _ = parser.expect(crate::SIG_TYPE_REF_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                SGTYPE_VAL_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume SGTYPE_VAL_ keyword
-                        if parser.expect(crate::SGTYPE_VAL_.as_bytes()).is_err() {
-                            parser.skip_to_end_of_line();
-                            continue;
-                        }
-                        parser.skip_newlines_and_spaces();
-
-                        // Parse: SGTYPE_VAL_ type_name value "description" value "description" ... ;
-                        // Example: SGTYPE_VAL_ SignalType1 0 "Zero" 1 "One" 2 "Two";
-                        if let Ok(values) = crate::signal_type::SignalTypeValue::parse(&mut parser)
-                        {
-                            signal_type_values_buffer.extend(values);
-                        } else {
-                            // If parsing fails, just skip the line
-                            parser.skip_to_end_of_line();
-                        }
-                    }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        let _ = parser.expect(crate::SGTYPE_VAL_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
-                    }
-                    continue;
-                }
-                BA_DEF_SGTYPE_ | BA_SGTYPE_ => {
-                    // Attribute definitions and values for signal types
-                    // Similar to BA_DEF_ and BA_ but for signal types
-                    // For now, skip these (can be implemented later if needed)
-                    let _ = parser.expect(keyword.as_bytes()).ok();
-                    parser.skip_to_end_of_line();
-                    continue;
-                }
-                #[allow(unreachable_patterns)]
-                // False positive: peek_next_keyword returns longest match first
-                SG_ => {
-                    // Orphaned signal (not inside a message) - skip it
-                    parser.skip_to_end_of_line();
-                    continue;
-                }
-                #[allow(unreachable_patterns)]
-                // False positive: all keywords should be handled above
-                _ => {
-                    parser.skip_to_end_of_line();
-                    continue;
-                }
-            }
-        }
-
-        // Allow empty nodes (DBC spec allows empty BU_: line)
-        let nodes = nodes.unwrap_or_default();
-
-        // If no version was parsed, default to empty version
-        let version = version.or_else(|| {
-            static EMPTY_VERSION: &[u8] = b"VERSION \"\"";
-            let mut parser = Parser::new(EMPTY_VERSION).ok()?;
-            Version::parse(&mut parser).ok()
-        });
-
-        // Build value descriptions map for storage in Dbc
-        #[cfg(feature = "std")]
-        let value_descriptions_list = {
-            let mut map: BTreeMap<(Option<u32>, std::string::String), ValueDescriptions> =
-                BTreeMap::new();
-            for (message_id, signal_name, entries) in value_descriptions_buffer {
-                let key = (message_id, signal_name);
-                let value_descriptions = ValueDescriptions::from_slice(&entries);
-                map.insert(key, value_descriptions);
-            }
-            ValueDescriptionsList::from_map(map)
-        };
-
-        // Convert messages buffer to slice for validation and construction
-        let messages_slice: &[Message] = messages_buffer.as_slice();
-
-        // Validate messages (duplicate IDs, sender in nodes, etc.)
-        #[cfg(feature = "std")]
-        Self::validate(&nodes, messages_slice, Some(&value_descriptions_list)).map_err(|e| {
-            crate::error::map_val_error(e, Error::Message, || {
-                Error::Message(Error::MESSAGE_ERROR_PREFIX)
-            })
-        })?;
-        #[cfg(not(feature = "std"))]
-        Self::validate(&nodes, messages_slice).map_err(|e| {
-            crate::error::map_val_error(e, Error::Message, || {
-                Error::Message(Error::MESSAGE_ERROR_PREFIX)
-            })
-        })?;
-
-        // Construct directly (validation already done)
-        let messages = MessageList::new(messages_slice)?;
-        Ok(Self {
-            version,
-            nodes,
-            messages,
-            #[cfg(feature = "std")]
-            value_descriptions: value_descriptions_list,
-            #[cfg(feature = "std")]
-            attributes: attributes_buffer,
-            #[cfg(feature = "std")]
-            attribute_defaults: attribute_defaults_buffer,
-            #[cfg(feature = "std")]
-            attribute_values: attribute_values_buffer,
-            #[cfg(feature = "std")]
-            comments: comments_buffer,
-            #[cfg(feature = "std")]
-            value_tables: value_tables_buffer,
-            #[cfg(feature = "std")]
-            extended_multiplexing: extended_multiplexing_buffer,
-            #[cfg(feature = "std")]
-            signal_value_types: signal_value_types_buffer,
-            #[cfg(feature = "std")]
-            signal_types: signal_types_buffer,
-            #[cfg(feature = "std")]
-            signal_type_references: signal_type_references_buffer,
-            #[cfg(feature = "std")]
-            signal_type_values: signal_type_values_buffer,
-            bit_timing,
-            #[cfg(feature = "std")]
-            signal_groups: signal_groups_buffer,
-        })
-    }
-
-    /// Parse a DBC file from a byte slice
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc_bytes = b"VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM";
-    /// let dbc = Dbc::parse_bytes(dbc_bytes)?;
-    /// println!("Parsed {} messages", dbc.messages().len());
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    pub fn parse_bytes(data: &[u8]) -> Result<Dbc> {
-        let content =
-            core::str::from_utf8(data).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
-        Dbc::parse(content)
-    }
-
-    /// Serialize this DBC to a DBC format string
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
-    /// let dbc_string = dbc.to_dbc_string();
-    /// // The string can be written to a file or used elsewhere
-    /// assert!(dbc_string.contains("VERSION"));
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[cfg(feature = "std")]
-    #[must_use]
-    pub fn to_dbc_string(&self) -> String {
-        // Pre-allocate with estimated capacity
-        // Estimate: ~50 chars per message + ~100 chars per signal
-        let signal_count: usize = self.messages().iter().map(|m| m.signals().len()).sum();
-        let estimated_capacity = 200 + (self.messages.len() * 50) + (signal_count * 100);
-        let mut result = String::with_capacity(estimated_capacity);
-
-        // VERSION line
-        if let Some(version) = &self.version {
-            result.push_str(&version.to_dbc_string());
-            result.push_str("\n\n");
-        }
-
-        // BU_ line
-        result.push_str(&self.nodes.to_dbc_string());
-        result.push('\n');
-
-        // BO_ and SG_ lines for each message
-        for message in self.messages().iter() {
-            result.push('\n');
-            result.push_str(&message.to_string_full());
-        }
-
-        result
-    }
-}
-
-#[cfg(feature = "std")]
-impl core::fmt::Display for Dbc {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "{}", self.to_dbc_string())
     }
 }
 
@@ -2777,5 +1146,43 @@ BO_ 256 Engine : 8 ECM
         // We just verify that decoding doesn't crash and returns a value
         assert!(decoded[0].1 >= 0.0);
         assert_eq!(decoded[0].2, Some("rpm"));
+    }
+
+    // Edge case tests using Dbc::parse
+    #[test]
+    fn test_empty_dbc_file() {
+        // Empty file should fail (needs at least nodes)
+        let result = Dbc::parse("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_minimal_valid_dbc() {
+        // Minimal valid DBC: just nodes (empty nodes allowed)
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_:
+"#;
+        let dbc = Dbc::parse(dbc_str).expect("Should parse minimal DBC");
+        assert!(dbc.nodes().is_empty());
+        assert_eq!(dbc.messages().len(), 0);
+    }
+
+    #[test]
+    fn test_duplicate_message_id() {
+        // Test duplicate message ID detection
+        let dbc_str = r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Message1 : 8 ECM
+BO_ 256 Message2 : 8 ECM
+"#;
+        let result = Dbc::parse(dbc_str);
+        assert!(result.is_err(), "Should detect duplicate message IDs");
     }
 }

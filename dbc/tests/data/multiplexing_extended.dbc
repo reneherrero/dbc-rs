@@ -1,0 +1,13 @@
+VERSION "1.0"
+
+BU_: ECM Gateway
+
+BO_ 500 ComplexMux : 8 ECM
+ SG_ Mux1 M : 0|8@1+ (1,0) [0|255] "" Gateway
+ SG_ Mux2 M : 8|8@1+ (1,0) [0|255] "" Gateway
+ SG_ Signal_A m0 : 16|16@1+ (0.1,0) [0|100] "" Gateway
+ SG_ Signal_B m1 : 16|16@1+ (0.1,0) [0|100] "" Gateway
+
+SG_MUL_VAL_ 500 Signal_A Mux1 0-5,10-15 ;
+SG_MUL_VAL_ 500 Signal_B Mux2 20-25 ;
+

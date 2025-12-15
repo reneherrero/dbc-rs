@@ -1,0 +1,12 @@
+VERSION "1.0"
+
+NS_ :
+    BS_
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 TestMessage : 8 ECM
+ SG_ TestSignal : 0|8@1+ (1,0) [0|255] "" *
+

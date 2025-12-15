@@ -1,0 +1,23 @@
+VERSION "1.0"
+
+NS_ :
+    SIG_GROUP_
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 EngineData : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+ SG_ Temperature : 16|8@1+ (1,-40) [-40|215] "°C" *
+ SG_ ThrottlePosition : 24|8@1+ (0.392157,0) [0|100] "%" *
+ SG_ OilPressure : 32|16@1+ (0.01,0) [0|1000] "kPa" *
+
+BO_ 512 TransmissionData : 8 ECM
+ SG_ Gear : 0|8@1+ (1,0) [0|5] "" *
+ SG_ ClutchEngaged : 8|1@1+ (1,0) [0|1] "" *
+ SG_ Torque : 16|16@1+ (0.1,0) [0|3276.7] "Nm" *
+
+SIG_GROUP_ 256 EngineGroup 1 RPM Temperature ThrottlePosition;
+SIG_GROUP_ 512 TransmissionGroup 1 Gear ClutchEngaged Torque;
+

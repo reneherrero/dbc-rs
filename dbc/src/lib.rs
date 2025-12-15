@@ -38,36 +38,70 @@ extern crate alloc;
 
 #[cfg(feature = "std")]
 mod attributes;
+mod bit_timing;
 mod byte_order;
 #[cfg(feature = "std")]
 mod comment;
 mod compat;
 mod dbc;
+#[cfg(feature = "std")]
+mod environment_variable;
+#[cfg(feature = "std")]
+mod environment_variable_data;
 mod error;
+mod extended_multiplexing;
 mod message;
+#[cfg(feature = "std")]
+mod message_transmitter;
 mod nodes;
 mod parser;
 mod receivers;
 mod signal;
+mod signal_extended_value_type;
+#[cfg(feature = "std")]
+mod signal_group;
 mod signal_type;
+#[cfg(feature = "std")]
+mod signal_type_attribute;
+#[cfg(feature = "std")]
+mod signal_type_attribute_definition;
+mod signal_type_reference;
+mod signal_type_value;
 #[cfg(feature = "std")]
 mod value_descriptions;
 #[cfg(feature = "std")]
 mod value_table;
 mod version;
 
+pub use bit_timing::BitTiming;
 pub use byte_order::ByteOrder;
 #[cfg(feature = "std")]
 pub use dbc::ValueDescriptionsList;
-pub use dbc::{Dbc, ExtendedMultiplexing, MessageList};
+pub use dbc::{Dbc, MessageList};
+#[cfg(feature = "std")]
+pub use environment_variable::{
+    EnvironmentVariable, EnvironmentVariableAccessType, EnvironmentVariableType,
+};
+#[cfg(feature = "std")]
+pub use environment_variable_data::EnvironmentVariableData;
 pub use error::{Error, Result};
+pub use extended_multiplexing::ExtendedMultiplexing;
 pub use message::{Message, SignalList};
+#[cfg(feature = "std")]
+pub use message_transmitter::MessageTransmitter;
 pub use nodes::Nodes;
 pub use receivers::Receivers;
 pub use signal::Signal;
-pub use signal_type::{
-    SignalExtendedValueType, SignalType, SignalTypeName, SignalTypeReference, SignalTypeValue,
-};
+pub use signal_extended_value_type::SignalExtendedValueType;
+#[cfg(feature = "std")]
+pub use signal_group::SignalGroup;
+pub use signal_type::SignalType;
+#[cfg(feature = "std")]
+pub use signal_type_attribute::SignalTypeAttribute;
+#[cfg(feature = "std")]
+pub use signal_type_attribute_definition::SignalTypeAttributeDefinition;
+pub use signal_type_reference::SignalTypeReference;
+pub use signal_type_value::SignalTypeValue;
 #[cfg(feature = "std")]
 pub use value_descriptions::{ValueDescriptions, ValueDescriptionsBuilder};
 pub use version::Version;

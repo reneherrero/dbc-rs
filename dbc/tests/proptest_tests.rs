@@ -32,7 +32,7 @@ fn gen_dbc_string() -> impl Strategy<Value = String> {
     .prop_map(|messages| {
         let mut dbc = String::from("VERSION ");
         dbc.push_str(version_strategy);
-        dbc.push_str("\n\nBU_: ");
+        dbc.push_str("\n\nBS_:\n\nBU_: ");
 
         // Collect unique nodes
         let mut nodes = std::collections::HashSet::new();
@@ -99,6 +99,8 @@ proptest! {
         let dbc_str = format!(
             r#"VERSION "1.0"
 
+BS_:
+
 BU_: ECM
 
 BO_ {} TestMessage : 8 ECM
@@ -129,6 +131,8 @@ BO_ {} TestMessage : 8 ECM
 
         let dbc_str = format!(
             r#"VERSION "1.0"
+
+BS_:
 
 BU_: ECM
 

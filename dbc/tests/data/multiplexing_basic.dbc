@@ -1,0 +1,10 @@
+VERSION "1.0"
+
+BU_: ECM Gateway
+
+BO_ 400 MultiplexedMsg : 8 ECM
+ SG_ MuxSwitch M : 0|8@1+ (1,0) [0|255] "" Gateway
+ SG_ Signal_0 m0 : 8|16@1+ (0.1,0) [0|1000] "kPa" Gateway
+ SG_ Signal_1 m1 : 8|16@1+ (0.01,0) [0|100] "°C" Gateway
+ SG_ NormalSignal : 24|8@1+ (1,0) [0|255] "" Gateway
+
