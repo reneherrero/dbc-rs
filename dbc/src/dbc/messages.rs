@@ -17,7 +17,7 @@ pub struct Messages {
 impl Messages {
     /// Create Messages from a slice of messages by cloning them
     pub(crate) fn new(messages: &[Message]) -> Result<Self> {
-        if let Some(err) = crate::check_max_limit(
+        if let Some(err) = crate::error::check_max_limit(
             messages.len(),
             MAX_MESSAGES,
             Error::Message(Error::NODES_TOO_MANY),

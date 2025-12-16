@@ -1,4 +1,4 @@
-use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions};
+use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions, error::check_max_limit};
 
 /// Builder for creating `ValueDescriptions` programmatically.
 ///
@@ -97,7 +97,7 @@ impl ValueDescriptionsBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<ValueDescriptions> {
-        if let Some(err) = crate::check_max_limit(
+        if let Some(err) = check_max_limit(
             self.entries.len(),
             MAX_VALUE_DESCRIPTIONS,
             Error::Decoding(Error::VALUE_DESCRIPTIONS_TOO_MANY),

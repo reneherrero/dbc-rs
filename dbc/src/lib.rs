@@ -40,6 +40,7 @@ mod byte_order;
 mod compat;
 mod dbc;
 mod error;
+mod extended_multiplexing;
 mod message;
 mod nodes;
 mod parser;
@@ -52,6 +53,7 @@ mod version;
 pub use byte_order::ByteOrder;
 pub use dbc::Dbc;
 pub use error::{Error, Result};
+pub use extended_multiplexing::ExtendedMultiplexing;
 pub use message::{Message, Signals};
 pub use nodes::Nodes;
 pub use receivers::Receivers;
@@ -60,8 +62,11 @@ pub use signal::Signal;
 pub use value_descriptions::{ValueDescriptions, ValueDescriptionsBuilder};
 pub use version::Version;
 
+/// Builders
 #[cfg(feature = "std")]
 pub use dbc::DbcBuilder;
+#[cfg(feature = "std")]
+pub use extended_multiplexing::ExtendedMultiplexingBuilder;
 #[cfg(feature = "std")]
 pub use message::MessageBuilder;
 #[cfg(feature = "std")]
@@ -74,42 +79,6 @@ pub use signal::SignalBuilder;
 pub use version::VersionBuilder;
 
 pub(crate) use parser::Parser;
-
-/// Helper function to validate and convert a string to a name with MAX_NAME_SIZE limit.
-///
-/// This centralizes the common pattern of converting a string reference to
-/// `String<{ MAX_NAME_SIZE }>` with proper error handling.
-///
-/// # Errors
-///
-/// Returns `Error::Expected` with `MAX_NAME_SIZE_EXCEEDED` message if the name
-/// exceeds `MAX_NAME_SIZE` (32 characters by default, per DBC specification).
-#[inline]
-pub(crate) fn validate_name<S: AsRef<str>>(name: S) -> Result<compat::String<{ MAX_NAME_SIZE }>> {
-    let name_str: &str = name.as_ref();
-
-    // Explicitly check length before conversion to ensure MAX_NAME_SIZE enforcement
-    // This check works for both alloc and heapless features
-    if name_str.len() > MAX_NAME_SIZE {
-        return Err(Error::Expected(error::Error::MAX_NAME_SIZE_EXCEEDED));
-    }
-
-    // Convert to compat::String - this will also check the limit internally,
-    // but we've already checked above for clarity and early error reporting
-    compat::String::try_from(name_str)
-        .map_err(|_| Error::Expected(error::Error::MAX_NAME_SIZE_EXCEEDED))
-}
-
-/// Helper function to check if a length exceeds a maximum limit.
-///
-/// This centralizes the common pattern of checking collection lengths against MAX limits.
-/// Returns `Some(error)` if the limit is exceeded, `None` otherwise.
-///
-/// This is an internal helper function and not part of the public API.
-#[inline]
-pub(crate) fn check_max_limit<E>(len: usize, max: usize, error: E) -> Option<E> {
-    if len > max { Some(error) } else { None }
-}
 
 /// The version of this crate as specified in `Cargo.toml`.
 ///
@@ -124,7 +93,6 @@ pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 // - DBC_MAX_SIGNALS_PER_MESSAGE (default: 64)
 // - DBC_MAX_NODES (default: 256)
 // - DBC_MAX_VALUE_DESCRIPTIONS (default: 64)
-// - DBC_MAX_RECEIVER_NODES (default: 64)
 // - DBC_MAX_NAME_SIZE (default: 32, per DBC specification)
 include!(concat!(env!("OUT_DIR"), "/limits.rs"));
 

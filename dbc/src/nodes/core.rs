@@ -2,13 +2,14 @@ use super::Nodes;
 use crate::{
     Error, MAX_NAME_SIZE, MAX_NODES, Result,
     compat::{String, Vec},
+    error::check_max_limit,
 };
 
 impl Nodes {
     // Shared validation function
     pub(crate) fn validate(nodes: &[impl AsRef<str>]) -> Result<()> {
         // Check for too many nodes (DoS protection)
-        if let Some(err) = crate::check_max_limit(
+        if let Some(err) = check_max_limit(
             nodes.len(),
             MAX_NODES,
             Error::Validation(Error::NODES_TOO_MANY),

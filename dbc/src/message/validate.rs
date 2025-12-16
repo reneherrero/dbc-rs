@@ -1,5 +1,5 @@
 use super::Message;
-use crate::{ByteOrder, Error, MAX_SIGNALS_PER_MESSAGE, Result, Signal};
+use crate::{ByteOrder, Error, MAX_SIGNALS_PER_MESSAGE, Result, Signal, error::check_max_limit};
 
 impl Message {
     #[allow(clippy::similar_names)] // physical_lsb and physical_msb are intentionally similar
@@ -66,7 +66,7 @@ impl Message {
         const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF; // 536870911
 
         // Check signal count limit per message (DoS protection)
-        if let Some(err) = crate::check_max_limit(
+        if let Some(err) = check_max_limit(
             signals.len(),
             MAX_SIGNALS_PER_MESSAGE,
             Error::Validation(Error::MESSAGE_TOO_MANY_SIGNALS),

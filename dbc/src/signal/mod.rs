@@ -52,6 +52,11 @@ pub struct Signal {
     max: f64,
     unit: Option<String<{ MAX_NAME_SIZE }>>,
     receivers: Receivers,
+    /// True if this is a multiplexer switch signal (marked with 'M')
+    is_multiplexer_switch: bool,
+    /// If this is a multiplexed signal (marked with 'm0', 'm1', etc.), this contains the switch value
+    /// None means this is a normal signal (not multiplexed)
+    multiplexer_switch_value: Option<u64>,
 }
 
 #[cfg(feature = "std")]

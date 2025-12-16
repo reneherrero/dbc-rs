@@ -1,5 +1,6 @@
 use super::Parser;
 use crate::Error;
+use core::str::from_utf8;
 
 impl<'a> Parser<'a> {
     pub(crate) fn parse_u8(&mut self) -> crate::Result<u8> {
@@ -24,7 +25,7 @@ impl<'a> Parser<'a> {
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
+        let num_str = from_utf8(num_bytes)
             .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
         num_str.parse::<u8>().map_err(|_| {
             self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_NUMBER_FORMAT))
@@ -53,9 +54,38 @@ impl<'a> Parser<'a> {
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
+        let num_str = from_utf8(num_bytes)
             .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
         num_str.parse::<u32>().map_err(|_| {
+            self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_NUMBER_FORMAT))
+        })
+    }
+
+    pub(crate) fn parse_u64(&mut self) -> crate::Result<u64> {
+        let start_pos = self.pos;
+        let input_len = self.input.len();
+        // Read until whitespace, colon, pipe, @, or end of input
+        while self.pos < input_len {
+            let byte = self.input[self.pos];
+            if byte.is_ascii_digit() {
+                self.pos += 1;
+            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@') {
+                break;
+            } else {
+                return Err(
+                    self.restore_pos_err(start_pos, Error::Expected(Error::EXPECTED_NUMBER))
+                );
+            }
+        }
+
+        if self.pos == start_pos {
+            return Err(Error::Expected(Error::EXPECTED_NUMBER));
+        }
+
+        let num_bytes = &self.input[start_pos..self.pos];
+        let num_str = from_utf8(num_bytes)
+            .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
+        num_str.parse::<u64>().map_err(|_| {
             self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_NUMBER_FORMAT))
         })
     }
@@ -95,7 +125,7 @@ impl<'a> Parser<'a> {
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
+        let num_str = from_utf8(num_bytes)
             .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
         num_str.parse::<i64>().map_err(|_| {
             self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_NUMBER_FORMAT))
@@ -153,7 +183,7 @@ impl<'a> Parser<'a> {
         }
 
         let num_bytes = &self.input[start_pos..self.pos];
-        let num_str = core::str::from_utf8(num_bytes)
+        let num_str = from_utf8(num_bytes)
             .map_err(|_| self.restore_pos_err(start_pos, Error::Expected(Error::INVALID_UTF8)))?;
         num_str.parse::<f64>().map_err(|_| {
             self.restore_pos_err(start_pos, Error::Expected(Error::PARSE_NUMBER_FAILED))
@@ -190,7 +220,7 @@ impl<'a> Parser<'a> {
         }
 
         let id_bytes = &self.input[start_pos..self.pos];
-        core::str::from_utf8(id_bytes).map_err(|_| Error::Expected(Error::INVALID_UTF8))
+        from_utf8(id_bytes).map_err(|_| Error::Expected(Error::INVALID_UTF8))
     }
 
     /// Parse a float value that may be empty (defaults to 0.0 if empty).

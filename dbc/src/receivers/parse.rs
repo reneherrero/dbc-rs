@@ -1,6 +1,6 @@
 use super::Receivers;
 use crate::{
-    Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Parser, Result,
+    Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result,
     compat::{String, Vec},
 };
 
@@ -24,7 +24,7 @@ impl Receivers {
         }
 
         // Parse space-separated identifiers into Vec
-        let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }> = Vec::new();
+        let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }> = Vec::new();
 
         loop {
             // Skip spaces (but not newlines)
@@ -44,14 +44,12 @@ impl Receivers {
             let pos_before = parser.pos();
             match parser.parse_identifier() {
                 Ok(node) => {
-                    if let Some(err) = crate::check_max_limit(
-                        nodes.len(),
-                        MAX_RECEIVER_NODES - 1,
-                        Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY),
-                    ) {
-                        return Err(err);
+                    // Check if adding this node would exceed MAX_NODES - 1 limit
+                    // Receivers can have at most MAX_NODES - 1 nodes
+                    if nodes.len() >= MAX_NODES - 1 {
+                        return Err(Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY));
                     }
-                    let node = crate::validate_name(node)?;
+                    let node = crate::compat::validate_name(node)?;
                     nodes
                         .push(node)
                         .map_err(|_| Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
@@ -164,10 +162,10 @@ mod tests {
 
         #[test]
         fn test_parse_receivers_too_many() {
-            // Create a string with 65 receiver nodes (exceeds limit of 64)
+            // Create a string with MAX_NODES receiver nodes (exceeds limit of MAX_NODES - 1)
             // Use std::vec::Vec since we need more than 64 bytes
             let mut receivers_bytes = std::vec::Vec::new();
-            for i in 0..65 {
+            for i in 0..MAX_NODES {
                 if i > 0 {
                     receivers_bytes.push(b' ');
                 }
@@ -187,10 +185,10 @@ mod tests {
 
         #[test]
         fn test_parse_receivers_at_limit() {
-            // Create a string with exactly 64 receiver nodes (at the limit)
+            // Create a string with exactly MAX_NODES - 1 receiver nodes (at the limit)
             // Use std::vec::Vec since we need more than 64 bytes
             let mut receivers_bytes = std::vec::Vec::new();
-            for i in 0..MAX_RECEIVER_NODES {
+            for i in 0..(MAX_NODES - 1) {
                 if i > 0 {
                     receivers_bytes.push(b' ');
                 }
@@ -200,7 +198,7 @@ mod tests {
             let mut parser = Parser::new(&receivers_bytes).unwrap();
             let result = Receivers::parse(&mut parser).unwrap();
             let node_count = result.len();
-            assert_eq!(node_count, 64);
+            assert_eq!(node_count, MAX_NODES - 1);
         }
     }
 }

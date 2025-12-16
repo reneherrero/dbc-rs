@@ -1,5 +1,5 @@
 use super::Receivers;
-use crate::{Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Result};
+use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Result};
 use std::{collections::HashSet, string::String};
 
 /// Builder for creating `Receivers` programmatically.
@@ -255,9 +255,10 @@ impl ReceiversBuilder {
             Ok(Receivers::new_none())
         } else {
             // Make sure the number of nodes is not greater than the maximum allowed
-            if let Some(err) = crate::check_max_limit(
+            // Receivers can have at most MAX_NODES - 1 nodes
+            if let Some(err) = crate::error::check_max_limit(
                 self.nodes.len(),
-                MAX_RECEIVER_NODES,
+                MAX_NODES - 1,
                 Error::Signal(Error::SIGNAL_RECEIVERS_TOO_MANY),
             ) {
                 return Err(err);
@@ -271,10 +272,9 @@ impl ReceiversBuilder {
 
             // Make sure the node names are not too long and convert to compat::String
             use crate::compat::{String, Vec};
-            let mut compat_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }> =
-                Vec::new();
+            let mut compat_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
             for node in &self.nodes {
-                if let Some(err) = crate::check_max_limit(
+                if let Some(err) = crate::error::check_max_limit(
                     node.len(),
                     MAX_NAME_SIZE,
                     Error::Signal(Error::MAX_NAME_SIZE_EXCEEDED),
@@ -348,10 +348,10 @@ mod tests {
     #[test]
     fn test_receivers_builder_too_many() {
         let mut builder = ReceiversBuilder::new();
-        for i in 0..MAX_RECEIVER_NODES {
+        for i in 0..MAX_NODES {
             builder = builder.add_node(format!("Node{i}"));
         }
-        let result = builder.add_node(format!("Node{}", MAX_RECEIVER_NODES)).build();
+        let result = builder.add_node(format!("Node{}", MAX_NODES)).build();
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Signal(msg) => {
@@ -443,13 +443,14 @@ mod tests {
     #[test]
     fn test_receivers_builder_at_limit() {
         let mut builder = ReceiversBuilder::new();
-        for i in 0..MAX_RECEIVER_NODES {
+        // Fill up to MAX_NODES - 1 (the limit)
+        for i in 0..(MAX_NODES - 1) {
             let node_str = format!("Node{i}");
             builder = builder.add_node(node_str);
         }
         let receivers = builder.build().unwrap();
         match &receivers {
-            Receivers::Nodes(nodes) => assert_eq!(nodes.len(), MAX_RECEIVER_NODES),
+            Receivers::Nodes(nodes) => assert_eq!(nodes.len(), MAX_NODES - 1),
             _ => panic!("Expected Nodes variant"),
         }
     }

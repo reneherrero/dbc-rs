@@ -66,6 +66,8 @@ impl Signal {
             max,
             unit,
             receivers,
+            is_multiplexer_switch: false,
+            multiplexer_switch_value: None,
         }
     }
 
@@ -134,6 +136,21 @@ impl Signal {
     pub fn receivers(&self) -> &Receivers {
         &self.receivers
     }
+
+    /// Check if this signal is a multiplexer switch (marked with 'M')
+    #[inline]
+    #[must_use]
+    pub fn is_multiplexer_switch(&self) -> bool {
+        self.is_multiplexer_switch
+    }
+
+    /// Get the multiplexer switch value if this is a multiplexed signal (marked with 'm0', 'm1', etc.)
+    /// Returns None if this is a normal signal (not multiplexed)
+    #[inline]
+    #[must_use]
+    pub fn multiplexer_switch_value(&self) -> Option<u64> {
+        self.multiplexer_switch_value
+    }
 }
 
 // Custom Eq implementation that handles f64 (treats NaN as equal to NaN)
@@ -154,5 +171,7 @@ impl core::hash::Hash for Signal {
         self.max.to_bits().hash(state);
         self.unit.hash(state);
         self.receivers.hash(state);
+        self.is_multiplexer_switch.hash(state);
+        self.multiplexer_switch_value.hash(state);
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    Dbc, Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal,
-    Version,
+    Dbc, Error, ExtendedMultiplexing, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, Nodes,
+    Parser, Result, Signal, Version,
     compat::Vec,
     dbc::{Messages, Validate},
 };
@@ -37,8 +37,8 @@ impl Dbc {
 
         // Parse version, nodes, and messages
         use crate::{
-            BA_, BA_DEF_, BA_DEF_DEF_, BO_, BO_TX_BU_, BS_, BU_, CM_, EV_, NS_, SG_, SIG_GROUP_,
-            SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
+            BA_, BA_DEF_, BA_DEF_DEF_, BO_, BO_TX_BU_, BS_, BU_, CM_, EV_, NS_, SG_, SG_MUL_VAL_,
+            SIG_GROUP_, SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
         };
 
         let mut version: Option<Version> = None;
@@ -54,6 +54,12 @@ impl Dbc {
         #[cfg(feature = "std")]
         let mut value_descriptions_buffer: std::vec::Vec<ValueDescriptionsBufferEntry> =
             std::vec::Vec::new();
+
+        // Store extended multiplexing entries during parsing
+        let mut extended_multiplexing_buffer: Vec<
+            ExtendedMultiplexing,
+            { MAX_SIGNALS_PER_MESSAGE },
+        > = Vec::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -118,6 +124,22 @@ impl Dbc {
                     // Consume keyword then skip to end of line
                     let _ = parser.expect(keyword.as_bytes()).ok();
                     parser.skip_to_end_of_line();
+                    continue;
+                }
+                SG_MUL_VAL_ => {
+                    // Consume SG_MUL_VAL_ keyword
+                    let _ = parser.expect(crate::SG_MUL_VAL_.as_bytes()).ok();
+
+                    // Parse the extended multiplexing entry
+                    if let Some(ext_mux) = ExtendedMultiplexing::parse(&mut parser) {
+                        if extended_multiplexing_buffer.push(ext_mux).is_err() {
+                            // Buffer full, skip
+                            parser.skip_to_end_of_line();
+                        }
+                    } else {
+                        // Parsing failed, skip to end of line
+                        parser.skip_to_end_of_line();
+                    }
                     continue;
                 }
                 VAL_ => {
@@ -350,9 +372,15 @@ impl Dbc {
         // Construct directly (validation already done)
         let messages = Messages::new(messages_slice)?;
         #[cfg(feature = "std")]
-        let dbc = Dbc::new(version, nodes, messages, value_descriptions_map);
+        let dbc = Dbc::new(
+            version,
+            nodes,
+            messages,
+            value_descriptions_map,
+            extended_multiplexing_buffer,
+        );
         #[cfg(not(feature = "std"))]
-        let dbc = Dbc::new(version, nodes, messages);
+        let dbc = Dbc::new(version, nodes, messages, extended_multiplexing_buffer);
         Ok(dbc)
     }
 

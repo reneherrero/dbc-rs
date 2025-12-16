@@ -52,10 +52,7 @@ impl Signal {
         }
 
         // Extract bits based on byte order
-        let raw_value = match self.byte_order {
-            ByteOrder::LittleEndian => Self::extract_bits_little_endian(data, start_bit, length),
-            ByteOrder::BigEndian => Self::extract_bits_big_endian(data, start_bit, length),
-        };
+        let raw_value = Self::extract_bits(data, start_bit, length, self.byte_order);
 
         // Convert to signed/unsigned with optimized sign extension
         let value = if self.unsigned {
@@ -77,10 +74,16 @@ impl Signal {
         Ok((value as f64) * self.factor + self.offset)
     }
 
-    /// Extract bits from data using little-endian byte order.
+    /// Extract bits from data based on byte order.
     /// Inlined for hot path optimization.
     #[inline]
-    fn extract_bits_little_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
+    #[allow(unused_variables)] // byte_order parameter kept for API consistency and future use
+    pub(crate) fn extract_bits(
+        data: &[u8],
+        start_bit: usize,
+        length: usize,
+        byte_order: ByteOrder,
+    ) -> u64 {
         let mut value: u64 = 0;
         let mut bits_remaining = length;
         let mut current_bit = start_bit;
@@ -94,34 +97,6 @@ impl Signal {
             let mask = ((1u64 << bits_to_take) - 1) << bit_in_byte;
             let extracted = (byte & mask) >> bit_in_byte;
 
-            value |= extracted << (length - bits_remaining);
-
-            bits_remaining -= bits_to_take;
-            current_bit += bits_to_take;
-        }
-
-        value
-    }
-
-    /// Extract bits from data using big-endian byte order.
-    /// Inlined for hot path optimization.
-    #[inline]
-    fn extract_bits_big_endian(data: &[u8], start_bit: usize, length: usize) -> u64 {
-        let mut value: u64 = 0;
-        let mut bits_remaining = length;
-        let mut current_bit = start_bit;
-
-        while bits_remaining > 0 {
-            let byte_idx = current_bit / 8;
-            let bit_in_byte = current_bit % 8;
-            let bits_to_take = bits_remaining.min(8 - bit_in_byte);
-
-            let byte = data[byte_idx] as u64;
-            let mask = ((1u64 << bits_to_take) - 1) << bit_in_byte;
-            let extracted = (byte & mask) >> bit_in_byte;
-
-            // For big-endian, we need to reverse the bit order within bytes
-            // and place bits in the correct position
             value |= extracted << (length - bits_remaining);
 
             bits_remaining -= bits_to_take;

@@ -79,12 +79,6 @@ fn main() {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(64); // Default to 64
 
-    // Allow override of MAX_RECEIVER_NODES via environment variable
-    let max_receiver_nodes = env::var("DBC_MAX_RECEIVER_NODES")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(64); // Default to 64
-
     // Allow override of MAX_NAME_SIZE via environment variable
     let max_name_size = env::var("DBC_MAX_NAME_SIZE")
         .ok()
@@ -102,11 +96,6 @@ fn main() {
                 "MAX_SIGNALS_PER_MESSAGE",
             ),
             ("DBC_MAX_NODES", max_nodes, "MAX_NODES"),
-            (
-                "DBC_MAX_RECEIVER_NODES",
-                max_receiver_nodes,
-                "MAX_RECEIVER_NODES",
-            ),
             ("DBC_MAX_NAME_SIZE", max_name_size, "MAX_NAME_SIZE"),
         ];
 
@@ -137,8 +126,8 @@ fn main() {
     std::fs::write(
                &dest_path,
                format!(
-                   "#[allow(dead_code)]\npub const MAX_SIGNALS_PER_MESSAGE: usize = {};\n#[allow(dead_code)]\npub const MAX_MESSAGES: usize = {};\n#[allow(dead_code)]\npub const MAX_NODES: usize = {};\n#[allow(dead_code)]\npub const MAX_VALUE_DESCRIPTIONS: usize = {};\n#[allow(dead_code)]\npub const MAX_RECEIVER_NODES: usize = {};\n#[allow(dead_code)]\npub const MAX_NAME_SIZE: usize = {};",
-                   max_signals, max_messages, max_nodes, max_value_descriptions, max_receiver_nodes, max_name_size
+                   "#[allow(dead_code)]\npub const MAX_SIGNALS_PER_MESSAGE: usize = {};\n#[allow(dead_code)]\npub const MAX_MESSAGES: usize = {};\n#[allow(dead_code)]\npub const MAX_NODES: usize = {};\n#[allow(dead_code)]\npub const MAX_VALUE_DESCRIPTIONS: usize = {};\n#[allow(dead_code)]\npub const MAX_NAME_SIZE: usize = {};",
+                   max_signals, max_messages, max_nodes, max_value_descriptions, max_name_size
                ),
            )
            .unwrap();
@@ -148,6 +137,5 @@ fn main() {
     println!("cargo:rerun-if-env-changed=DBC_MAX_MESSAGES");
     println!("cargo:rerun-if-env-changed=DBC_MAX_NODES");
     println!("cargo:rerun-if-env-changed=DBC_MAX_VALUE_DESCRIPTIONS");
-    println!("cargo:rerun-if-env-changed=DBC_MAX_RECEIVER_NODES");
     println!("cargo:rerun-if-env-changed=DBC_MAX_NAME_SIZE");
 }
