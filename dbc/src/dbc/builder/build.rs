@@ -1,6 +1,6 @@
 use super::DbcBuilder;
 use crate::{
-    Dbc, ExtendedMultiplexing, MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Result, Version,
+    Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Message, Nodes, Result, Version,
     dbc::{Messages, Validate},
 };
 use std::collections::BTreeMap;
@@ -111,7 +111,7 @@ impl DbcBuilder {
         // TODO: Add extended multiplexing
         let extended_multiplexing: crate::compat::Vec<
             ExtendedMultiplexing,
-            { MAX_SIGNALS_PER_MESSAGE },
+            { MAX_EXTENDED_MULTIPLEXING },
         > = crate::compat::Vec::new();
         Ok(Dbc::new(
             Some(version),

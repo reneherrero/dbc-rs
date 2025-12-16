@@ -82,6 +82,7 @@ impl Error {
     pub const SENDER_NOT_IN_NODES: &'static str = lang::SENDER_NOT_IN_NODES;
     pub const INVALID_RANGE: &'static str = lang::INVALID_RANGE;
     pub const MESSAGE_TOO_MANY_SIGNALS: &'static str = lang::MESSAGE_TOO_MANY_SIGNALS;
+    pub const EXTENDED_MULTIPLEXING_TOO_MANY: &'static str = lang::EXTENDED_MULTIPLEXING_TOO_MANY;
     pub const MESSAGE_NAME_EMPTY: &'static str = lang::MESSAGE_NAME_EMPTY;
     pub const MESSAGE_SENDER_EMPTY: &'static str = lang::MESSAGE_SENDER_EMPTY;
     pub const MESSAGE_DLC_TOO_SMALL: &'static str = lang::MESSAGE_DLC_TOO_SMALL;

@@ -12,7 +12,7 @@ This checklist ensures all steps are completed before publishing a new release o
   
   cargo test --no-default-features --features alloc -p dbc-rs
   
-  DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs
+  DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --release --no-default-features --features heapless -p dbc-rs
   ```
 
 - [ ] **Clippy checks pass (all targets)**
@@ -159,7 +159,7 @@ This checklist ensures all steps are completed before publishing a new release o
   - [ ] **dbc-rs Library Workflow** (`.github/workflows/dbc-rs.yml`) successful
     - [ ] `test-std` job passes (tests with std on latest stable)
     - [ ] `test-alloc` job passes (tests alloc feature: `cargo test --no-default-features --features alloc -p dbc-rs`)
-    - [ ] `test-heapless` job passes (tests heapless feature with reduced constants: `DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs`)
+    - [ ] `test-heapless` job passes (tests heapless feature with reduced constants: `DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --release --no-default-features --features heapless -p dbc-rs`)
     - [ ] `test-no-std` job passes (tests no_std on latest stable)
     - [ ] `test-std-msrv` job passes (tests with std on MSRV 1.85.0)
     - [ ] `test-no-std-msrv` job passes (tests no_std on MSRV 1.85.0)
@@ -278,7 +278,7 @@ For pre-releases:
 # Tests - all configurations
 cargo test --workspace  # Tests entire workspace including dbc-cli
 cargo test --no-default-features --features alloc -p dbc-rs  # Explicit alloc feature test
-DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs  # heapless tests (with reduced constants to avoid stack overflow)
+DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --release --no-default-features --features heapless -p dbc-rs  # heapless tests (with reduced constants to avoid stack overflow)
 
 # Builds - all configurations (release builds)
 cargo build --release -p dbc-rs  # std (default)

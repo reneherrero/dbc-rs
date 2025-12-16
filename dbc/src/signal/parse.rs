@@ -155,27 +155,60 @@ impl Signal {
 
         // Parse multiplexer indicator
         // According to spec: multiplexer_indicator = ' ' | 'M' | 'm' multiplexer_switch_value
+        // Extended multiplexing (Vector Informatik): 'm' switch_value 'M' means the signal is
+        // both a multiplexed signal (dependent on higher-level multiplexer) and a multiplexer
+        // switch itself (controlling lower-level signals).
         parser.skip_newlines_and_spaces();
 
         let mut is_multiplexer_switch = false;
         let mut multiplexer_switch_value: Option<u64> = None;
 
-        // Check for 'M' (multiplexer switch) or 'm' followed by digits (multiplexed signal)
+        // Check for 'M' (multiplexer switch) or 'm' followed by optional digits (multiplexed signal)
         if parser.expect(b"M").is_ok() {
-            // This is a multiplexer switch signal
+            // This is a multiplexer switch signal (but not multiplexed itself)
             is_multiplexer_switch = true;
             parser.skip_newlines_and_spaces();
         } else if parser.expect(b"m").is_ok() {
             // This is a multiplexed signal - parse the switch value
-            // Parse optional u64 value after 'm'
-            let pos_before = parser.pos();
-            if let Ok(value) = parser.parse_u64() {
-                multiplexer_switch_value = Some(value);
-            } else if parser.pos() == pos_before {
-                // No digits found, which is optional for multiplexed signals
-            } else {
-                // Parsing failed after consuming some input - invalid format
-                return Err(Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX));
+            // Manually parse digits because parse_u64() stops at specific chars and 'M' isn't one
+            let mut switch_value: Option<u64> = None;
+
+            // Manually parse digits until we hit 'M', whitespace, or colon
+            let mut value = 0u64;
+            let mut found_digits = false;
+            loop {
+                if parser.eof() {
+                    break;
+                }
+                let Some(byte) = parser.current_byte() else {
+                    break;
+                };
+                if byte.is_ascii_digit() {
+                    found_digits = true;
+                    value = value
+                        .checked_mul(10)
+                        .and_then(|v| v.checked_add((byte - b'0') as u64))
+                        .ok_or(Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX))?;
+                    parser.advance_one();
+                } else if byte == b'M' || parser.matches_any(b" \t:") || parser.at_newline() {
+                    // Stop at 'M', whitespace, or colon
+                    break;
+                } else {
+                    // Invalid character - stop parsing
+                    break;
+                }
+            }
+
+            if found_digits {
+                switch_value = Some(value);
+            }
+
+            multiplexer_switch_value = switch_value;
+
+            // Check if 'M' follows the switch value (extended multiplexing: m65M)
+            // This means the signal is both multiplexed AND acts as a multiplexer switch
+            if parser.expect(b"M").is_ok() {
+                is_multiplexer_switch = true;
             }
             parser.skip_newlines_and_spaces();
         }

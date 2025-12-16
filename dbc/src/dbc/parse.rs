@@ -1,6 +1,6 @@
 use crate::{
-    Dbc, Error, ExtendedMultiplexing, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, Nodes,
-    Parser, Result, Signal, Version,
+    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES,
+    MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, Version,
     compat::Vec,
     dbc::{Messages, Validate},
 };
@@ -58,7 +58,7 @@ impl Dbc {
         // Store extended multiplexing entries during parsing
         let mut extended_multiplexing_buffer: Vec<
             ExtendedMultiplexing,
-            { MAX_SIGNALS_PER_MESSAGE },
+            { MAX_EXTENDED_MULTIPLEXING },
         > = Vec::new();
 
         loop {
@@ -128,13 +128,15 @@ impl Dbc {
                 }
                 SG_MUL_VAL_ => {
                     // Consume SG_MUL_VAL_ keyword
-                    let _ = parser.expect(crate::SG_MUL_VAL_.as_bytes()).ok();
+                    parser
+                        .expect(SG_MUL_VAL_.as_bytes())
+                        .map_err(|_| Error::Expected("Failed to consume SG_MUL_VAL_ keyword"))?;
 
                     // Parse the extended multiplexing entry
                     if let Some(ext_mux) = ExtendedMultiplexing::parse(&mut parser) {
                         if extended_multiplexing_buffer.push(ext_mux).is_err() {
-                            // Buffer full, skip
-                            parser.skip_to_end_of_line();
+                            // Buffer full - return error instead of silently dropping entries
+                            return Err(Error::Validation(Error::EXTENDED_MULTIPLEXING_TOO_MANY));
                         }
                     } else {
                         // Parsing failed, skip to end of line
@@ -280,26 +282,47 @@ impl Dbc {
 
                     let mut signals_array: Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }> = Vec::new();
 
+                    // Parse signals until we find a non-signal line
                     loop {
                         parser.skip_newlines_and_spaces();
-                        if parser.starts_with(crate::SG_.as_bytes()) {
-                            if let Some(next_byte) = parser.peek_byte_at(3) {
-                                if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
-                                    if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
-                                        return Err(Error::Receivers(
-                                            Error::SIGNAL_RECEIVERS_TOO_MANY,
-                                        ));
-                                    }
-                                    // Signal::parse expects SG_ keyword, which we've already verified with starts_with
-                                    let signal = Signal::parse(&mut parser)?;
-                                    signals_array.push(signal).map_err(|_| {
-                                        Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
-                                    })?;
-                                    continue;
+
+                        // Use peek_next_keyword to check for SG_ keyword
+                        // peek_next_keyword correctly distinguishes SG_ from SG_MUL_VAL_ (checks longer keywords first)
+                        let keyword_result = parser.peek_next_keyword();
+                        let keyword = match keyword_result {
+                            Ok(kw) => kw,
+                            Err(Error::UnexpectedEof) => break,
+                            Err(_) => break, // Not a keyword, no more signals
+                        };
+
+                        // Only process SG_ signals here (SG_MUL_VAL_ is handled in main loop)
+                        if keyword != SG_ {
+                            break; // Not a signal, exit signal parsing loop
+                        }
+
+                        // Check limit before parsing
+                        if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
+                            return Err(Error::Message(Error::MESSAGE_TOO_MANY_SIGNALS));
+                        }
+
+                        // Parse signal - Signal::parse consumes SG_ itself
+                        match Signal::parse(&mut parser) {
+                            Ok(signal) => {
+                                signals_array.push(signal).map_err(|_| {
+                                    Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
+                                })?;
+                                // Receivers::parse stops at newline but doesn't consume it
+                                // Consume it so next iteration starts at the next line
+                                if parser.at_newline() {
+                                    parser.skip_to_end_of_line();
                                 }
                             }
+                            Err(_) => {
+                                // Parsing failed, skip to end of line and stop
+                                parser.skip_to_end_of_line();
+                                break;
+                            }
                         }
-                        break;
                     }
 
                     // Restore parser to start of message line and use Message::parse

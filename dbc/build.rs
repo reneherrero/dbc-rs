@@ -59,7 +59,7 @@ fn main() {
     let max_signals = env::var("DBC_MAX_SIGNALS_PER_MESSAGE")
         .ok()
         .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(64); // Default to 64
+        .unwrap_or(256); // Default to 256
 
     // Allow override of MAX_MESSAGES via environment variable
     let max_messages = env::var("DBC_MAX_MESSAGES")
@@ -85,6 +85,12 @@ fn main() {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(32); // Default to 32 (per DBC specification)
 
+    // Allow override of MAX_EXTENDED_MULTIPLEXING via environment variable
+    let max_extended_multiplexing = env::var("DBC_MAX_EXTENDED_MULTIPLEXING")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(512); // Default to 512 (power of 2, per-file limit for extended multiplexing entries)
+
     // Validate that all values are powers of 2 when heapless feature is enabled
     // heapless::Vec, heapless::String, and heapless::FnvIndexMap require power-of-2 capacities
     if has_heapless {
@@ -97,6 +103,11 @@ fn main() {
             ),
             ("DBC_MAX_NODES", max_nodes, "MAX_NODES"),
             ("DBC_MAX_NAME_SIZE", max_name_size, "MAX_NAME_SIZE"),
+            (
+                "DBC_MAX_EXTENDED_MULTIPLEXING",
+                max_extended_multiplexing,
+                "MAX_EXTENDED_MULTIPLEXING",
+            ),
         ];
 
         for (env_var, value, const_name) in heapless_constants.iter() {
@@ -126,8 +137,8 @@ fn main() {
     std::fs::write(
                &dest_path,
                format!(
-                   "#[allow(dead_code)]\npub const MAX_SIGNALS_PER_MESSAGE: usize = {};\n#[allow(dead_code)]\npub const MAX_MESSAGES: usize = {};\n#[allow(dead_code)]\npub const MAX_NODES: usize = {};\n#[allow(dead_code)]\npub const MAX_VALUE_DESCRIPTIONS: usize = {};\n#[allow(dead_code)]\npub const MAX_NAME_SIZE: usize = {};",
-                   max_signals, max_messages, max_nodes, max_value_descriptions, max_name_size
+                   "#[allow(dead_code)]\npub const MAX_SIGNALS_PER_MESSAGE: usize = {};\n#[allow(dead_code)]\npub const MAX_MESSAGES: usize = {};\n#[allow(dead_code)]\npub const MAX_NODES: usize = {};\n#[allow(dead_code)]\npub const MAX_VALUE_DESCRIPTIONS: usize = {};\n#[allow(dead_code)]\npub const MAX_NAME_SIZE: usize = {};\n#[allow(dead_code)]\npub const MAX_EXTENDED_MULTIPLEXING: usize = {};",
+                   max_signals, max_messages, max_nodes, max_value_descriptions, max_name_size, max_extended_multiplexing
                ),
            )
            .unwrap();
@@ -138,4 +149,5 @@ fn main() {
     println!("cargo:rerun-if-env-changed=DBC_MAX_NODES");
     println!("cargo:rerun-if-env-changed=DBC_MAX_VALUE_DESCRIPTIONS");
     println!("cargo:rerun-if-env-changed=DBC_MAX_NAME_SIZE");
+    println!("cargo:rerun-if-env-changed=DBC_MAX_EXTENDED_MULTIPLEXING");
 }

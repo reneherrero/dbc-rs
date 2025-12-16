@@ -3,15 +3,14 @@ use crate::Error;
 use core::str::from_utf8;
 
 impl<'a> Parser<'a> {
-    pub(crate) fn parse_u8(&mut self) -> crate::Result<u8> {
+    pub fn parse_u8(&mut self) -> crate::Result<u8> {
         let start_pos = self.pos;
         let input_len = self.input.len();
         // Read until whitespace, colon, or end of input
         while self.pos < input_len {
-            let byte = self.input[self.pos];
-            if byte.is_ascii_digit() {
-                self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
+            if self.input[self.pos].is_ascii_digit() {
+                self.advance_one();
+            } else if self.matches_any(b" \t:") || self.at_newline() {
                 break;
             } else {
                 return Err(
@@ -32,15 +31,14 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub(crate) fn parse_u32(&mut self) -> crate::Result<u32> {
+    pub fn parse_u32(&mut self) -> crate::Result<u32> {
         let start_pos = self.pos;
         let input_len = self.input.len();
         // Read until whitespace, colon, pipe, @, or end of input
         while self.pos < input_len {
-            let byte = self.input[self.pos];
-            if byte.is_ascii_digit() {
-                self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@') {
+            if self.input[self.pos].is_ascii_digit() {
+                self.advance_one();
+            } else if self.matches_any(b" \t:|@") || self.at_newline() {
                 break;
             } else {
                 return Err(
@@ -61,15 +59,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub(crate) fn parse_u64(&mut self) -> crate::Result<u64> {
+    #[allow(dead_code)]
+    pub fn parse_u64(&mut self) -> crate::Result<u64> {
         let start_pos = self.pos;
         let input_len = self.input.len();
         // Read until whitespace, colon, pipe, @, or end of input
         while self.pos < input_len {
-            let byte = self.input[self.pos];
-            if byte.is_ascii_digit() {
-                self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':' | b'|' | b'@') {
+            if self.input[self.pos].is_ascii_digit() {
+                self.advance_one();
+            } else if self.matches_any(b" \t:|@") || self.at_newline() {
                 break;
             } else {
                 return Err(
@@ -91,7 +89,7 @@ impl<'a> Parser<'a> {
     }
 
     #[cfg(feature = "std")]
-    pub(crate) fn parse_i64(&mut self) -> crate::Result<i64> {
+    pub fn parse_i64(&mut self) -> crate::Result<i64> {
         let start_pos = self.pos;
         let mut has_sign = false;
 
@@ -132,17 +130,14 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub(crate) fn parse_f64(&mut self) -> crate::Result<f64> {
+    pub fn parse_f64(&mut self) -> crate::Result<f64> {
         let start_pos = self.pos;
         let mut has_dot = false;
         let mut has_e = false;
 
         // Allow leading sign (+ or -)
-        if self.pos < self.input.len() {
-            let byte = self.input[self.pos];
-            if byte == b'+' || byte == b'-' {
-                self.pos += 1;
-            }
+        if self.pos < self.input.len() && self.matches_any(b"+-") {
+            self.advance_one();
         }
 
         // Read until whitespace, delimiter, or end of input
@@ -150,18 +145,17 @@ impl<'a> Parser<'a> {
         while self.pos < input_len {
             let byte = self.input[self.pos];
             if byte.is_ascii_digit() {
-                self.pos += 1;
+                self.advance_one();
             } else if byte == b'.' && !has_dot && !has_e {
                 has_dot = true;
-                self.pos += 1;
+                self.advance_one();
             } else if (byte == b'e' || byte == b'E') && !has_e {
                 has_e = true;
-                self.pos += 1;
+                self.advance_one();
                 // Allow sign after e/E
-                if self.pos < input_len {
-                    let next_byte = self.input[self.pos];
+                if let Some(next_byte) = self.current_byte() {
                     if next_byte == b'+' || next_byte == b'-' {
-                        self.pos += 1;
+                        self.advance_one();
                     }
                 }
             } else if matches!(
@@ -190,7 +184,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub(crate) fn parse_identifier(&mut self) -> crate::Result<&'a str> {
+    pub fn parse_identifier(&mut self) -> crate::Result<&'a str> {
         let start_pos = self.pos;
         let input_len = self.input.len();
 
@@ -200,19 +194,19 @@ impl<'a> Parser<'a> {
         }
         let first_byte = self.input[self.pos];
         if !(first_byte.is_ascii_alphabetic() || first_byte == b'_') {
-            if matches!(first_byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
+            if self.matches_any(b" \t:") || self.at_newline() {
                 return Err(Error::Expected(Error::EXPECTED_IDENTIFIER));
             }
             return Err(Error::InvalidChar(first_byte as char));
         }
-        self.pos += 1;
+        self.advance_one();
 
         // Subsequent characters can be alphanumeric or underscore
         while self.pos < input_len {
             let byte = self.input[self.pos];
             if byte.is_ascii_alphanumeric() || byte == b'_' {
-                self.pos += 1;
-            } else if matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | b':') {
+                self.advance_one();
+            } else if self.matches_any(b" \t:") || self.at_newline() {
                 break;
             } else {
                 return Err(Error::InvalidChar(byte as char));
@@ -225,7 +219,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a float value that may be empty (defaults to 0.0 if empty).
     /// This consolidates the repeated pattern of checking position before/after parse_f64.
-    pub(crate) fn parse_f64_or_default(&mut self, default: f64) -> crate::Result<f64> {
+    pub fn parse_f64_or_default(&mut self, default: f64) -> crate::Result<f64> {
         let pos_before = self.pos();
         match self.parse_f64() {
             Ok(val) => Ok(val),
@@ -243,7 +237,7 @@ impl<'a> Parser<'a> {
 
     /// Parse an identifier with a custom error mapping.
     /// Consolidates the pattern: `parse_identifier().map_err(|_| Error::X(...))`.
-    pub(crate) fn parse_identifier_with_error<F>(&mut self, map_error: F) -> crate::Result<&'a str>
+    pub fn parse_identifier_with_error<F>(&mut self, map_error: F) -> crate::Result<&'a str>
     where
         F: FnOnce() -> Error,
     {
@@ -252,7 +246,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a u32 with a custom error mapping.
     /// Consolidates the pattern: `parse_u32().map_err(|_| Error::X(...))`.
-    pub(crate) fn parse_u32_with_error<F>(&mut self, map_error: F) -> crate::Result<u32>
+    pub fn parse_u32_with_error<F>(&mut self, map_error: F) -> crate::Result<u32>
     where
         F: FnOnce() -> Error,
     {
@@ -261,7 +255,7 @@ impl<'a> Parser<'a> {
 
     /// Parse a u8 with a custom error mapping.
     /// Consolidates the pattern: `parse_u8().map_err(|_| Error::X(...))`.
-    pub(crate) fn parse_u8_with_error<F>(&mut self, map_error: F) -> crate::Result<u8>
+    pub fn parse_u8_with_error<F>(&mut self, map_error: F) -> crate::Result<u8>
     where
         F: FnOnce() -> Error,
     {

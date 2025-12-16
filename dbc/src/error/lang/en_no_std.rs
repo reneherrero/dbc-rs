@@ -39,9 +39,11 @@ pub const DUPLICATE_MESSAGE_ID: &str = "Duplicate message ID";
 pub const SENDER_NOT_IN_NODES: &str = "Message sender not in nodes list";
 pub const SIGNAL_EXTENDS_BEYOND_MESSAGE: &str = "Signal extends beyond message boundary";
 pub const INVALID_RANGE: &str = "Invalid range: min > max";
-pub const MESSAGE_TOO_MANY_SIGNALS: &str = "Too many signals: maximum allowed is 64 per message";
+pub const MESSAGE_TOO_MANY_SIGNALS: &str = "Too many signals: maximum allowed is 256 per message";
 pub const SIGNAL_RECEIVERS_TOO_MANY: &str =
-    "Too many receiver nodes: maximum allowed is 64 per signal";
+    "Too many receiver nodes: maximum allowed is 255 per signal";
+pub const EXTENDED_MULTIPLEXING_TOO_MANY: &str =
+    "Too many extended multiplexing entries: maximum allowed is 512 per DBC file";
 pub const SIGNAL_NAME_EMPTY: &str = "Signal name cannot be empty";
 pub const SIGNAL_LENGTH_TOO_SMALL: &str = "Signal length must be at least 1 bit";
 pub const SIGNAL_LENGTH_TOO_LARGE: &str = "Signal length cannot exceed 512 bits (CAN FD maximum)";

@@ -37,8 +37,37 @@ impl ExtendedMultiplexing {
             parser.skip_newlines_and_spaces();
 
             // Parse value range: min-max
-            let min_u32 = parser.parse_u32().ok()?;
-            let min = min_u32 as u64;
+            // We need to manually parse numbers because parse_u32() stops at whitespace/colon/pipe/@,
+            // but not at "-", which causes it to error when it encounters "-" after the number.
+            // We'll parse digits manually until we hit "-", whitespace, comma, or semicolon.
+            let mut min_value = 0u32;
+            let mut found_min_digits = false;
+            loop {
+                if parser.eof() {
+                    break;
+                }
+                let Some(byte) = parser.current_byte() else {
+                    break;
+                };
+                if byte.is_ascii_digit() {
+                    found_min_digits = true;
+                    min_value = min_value
+                        .checked_mul(10)
+                        .and_then(|v| v.checked_add((byte - b'0') as u32))?;
+                    parser.advance_one();
+                } else if parser.matches_any(b" \t-,;") || parser.at_newline() {
+                    // Stop at whitespace, -, comma, or semicolon
+                    break;
+                } else {
+                    // Invalid character - stop parsing
+                    break;
+                }
+            }
+
+            if !found_min_digits {
+                break;
+            }
+            let min = min_value as u64;
             parser.skip_newlines_and_spaces();
 
             if parser.expect(b"-").is_err() {
@@ -46,8 +75,35 @@ impl ExtendedMultiplexing {
             }
             parser.skip_newlines_and_spaces();
 
-            let max_u32 = parser.parse_u32().ok()?;
-            let max = max_u32 as u64;
+            // Parse max value similarly
+            let mut max_value = 0u32;
+            let mut found_max_digits = false;
+            loop {
+                if parser.eof() {
+                    break;
+                }
+                let Some(byte) = parser.current_byte() else {
+                    break;
+                };
+                if byte.is_ascii_digit() {
+                    found_max_digits = true;
+                    max_value = max_value
+                        .checked_mul(10)
+                        .and_then(|v| v.checked_add((byte - b'0') as u32))?;
+                    parser.advance_one();
+                } else if parser.matches_any(b" \t-,;") || parser.at_newline() {
+                    // Stop at whitespace, -, comma, or semicolon
+                    break;
+                } else {
+                    // Invalid character - stop parsing
+                    break;
+                }
+            }
+
+            if !found_max_digits {
+                break;
+            }
+            let max = max_value as u64;
 
             if value_ranges.push((min, max)).is_err() {
                 // Vector full, stop parsing
@@ -79,5 +135,37 @@ impl ExtendedMultiplexing {
             multiplexer_switch,
             value_ranges,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExtendedMultiplexing;
+    use crate::Parser;
+
+    #[test]
+    fn test_parse_extended_multiplexing_entry() {
+        let input = b" 500 Signal_A Mux1 5-10 ;";
+        let mut parser = Parser::new(input).unwrap();
+        let result = ExtendedMultiplexing::parse(&mut parser);
+        assert!(
+            result.is_some(),
+            "ExtendedMultiplexing::parse should succeed"
+        );
+        let ext_mux = result.unwrap();
+        assert_eq!(ext_mux.message_id(), 500);
+        assert_eq!(ext_mux.signal_name(), "Signal_A");
+        assert_eq!(ext_mux.multiplexer_switch(), "Mux1");
+        assert_eq!(ext_mux.value_ranges(), [(5, 10)]);
+    }
+
+    #[test]
+    fn test_parse_extended_multiplexing_multiple_ranges() {
+        let input = b" 500 Signal_B Mux1 0-5,10-15,20-25 ;";
+        let mut parser = Parser::new(input).unwrap();
+        let result = ExtendedMultiplexing::parse(&mut parser);
+        assert!(result.is_some());
+        let ext_mux = result.unwrap();
+        assert_eq!(ext_mux.value_ranges(), [(0, 5), (10, 15), (20, 25)]);
     }
 }

@@ -122,12 +122,25 @@ impl Message {
         // Check if any two signals overlap in the same message
         // Must account for byte order: little-endian signals extend forward,
         // big-endian signals extend backward from start_bit
+        // NOTE: Multiplexed signals (signals with multiplexer_switch_value) are allowed
+        // to overlap because they're only active when the multiplexer has a specific value.
+        // We skip overlap checking for multiplexed signals.
         // We iterate over pairs without collecting to avoid alloc
         for (i, sig1) in signals.iter().enumerate() {
+            // Skip overlap check if sig1 is multiplexed
+            if sig1.multiplexer_switch_value().is_some() {
+                continue;
+            }
+
             let (sig1_lsb, sig1_msb) =
                 Self::bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
 
             for sig2 in signals.iter().skip(i + 1) {
+                // Skip overlap check if sig2 is multiplexed
+                if sig2.multiplexer_switch_value().is_some() {
+                    continue;
+                }
+
                 let (sig2_lsb, sig2_msb) =
                     Self::bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
 
