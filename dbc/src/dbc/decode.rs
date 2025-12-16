@@ -77,9 +77,7 @@ impl Dbc {
 
         // Step 1: Decode all multiplexer switch signals first
         // Map switch signal names to their decoded values
-        // Also build a mapping from switch index (0, 1, 2, ...) to switch name
         let mut switch_values: Vec<(&str, u64), 16> = Vec::new();
-        let mut switch_index_to_name: Vec<&str, 16> = Vec::new();
         for signal in signals.iter() {
             if signal.is_multiplexer_switch() {
                 let value = signal.decode(payload)?;
@@ -106,8 +104,9 @@ impl Dbc {
                         }
                     }
                 };
-                switch_values.push((signal.name(), raw_value as u64)).ok();
-                switch_index_to_name.push(signal.name()).ok();
+                switch_values
+                    .push((signal.name(), raw_value as u64))
+                    .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
                 // Also add to decoded signals
                 decoded_signals
                     .push((signal.name(), value, signal.unit()))
