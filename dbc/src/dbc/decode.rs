@@ -149,7 +149,7 @@ impl Dbc {
                     }
 
                     // ALL switches referenced by this signal must have matching values
-                    let all_switches_match = unique_switches.iter().all(|switch_name| {
+                    unique_switches.iter().all(|switch_name| {
                         // Find the switch value by name
                         let switch_val = switch_values
                             .iter()
@@ -171,9 +171,7 @@ impl Dbc {
                             // Switch not found, cannot match
                             false
                         }
-                    });
-
-                    all_switches_match
+                    })
                 } else {
                     // Use basic multiplexing: Check if any switch value equals mux_value
                     // m0 means decode when any switch value is 0, m1 means decode when any switch value is 1, etc.
@@ -339,17 +337,18 @@ BO_ 256 Engine : 8 ECM
         // Payload: [MuxId=0, Signal0_low=0x64, Signal0_high=0x00, padding, NormalSignal=0x32, ...]
         let decoded = dbc.decode(256, &payload).unwrap();
 
-        let decoded_map: std::collections::HashMap<&str, f64> =
-            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        // Helper to find value by signal name
+        let find_signal =
+            |name: &str| decoded.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
 
         // MuxId should always be decoded
-        assert!(decoded_map.contains_key("MuxId"));
+        assert!(find_signal("MuxId").is_some());
         // Signal0 should be decoded (MuxId == 0)
-        assert!(decoded_map.contains_key("Signal0"));
+        assert!(find_signal("Signal0").is_some());
         // Signal1 should NOT be decoded (MuxId != 1)
-        assert!(!decoded_map.contains_key("Signal1"));
+        assert!(find_signal("Signal1").is_none());
         // NormalSignal should always be decoded (not multiplexed)
-        assert!(decoded_map.contains_key("NormalSignal"));
+        assert!(find_signal("NormalSignal").is_some());
     }
 
     #[test]
@@ -373,15 +372,15 @@ BO_ 256 Engine : 8 ECM
         // Signal1 value: 100 (raw: 100, little-endian bytes: 0x64, 0x00)
         let decoded = dbc.decode(256, &payload).unwrap();
 
-        let decoded_map: std::collections::HashMap<&str, f64> =
-            decoded.iter().map(|(name, value, _)| (*name, *value)).collect();
+        // Helper to find value by signal name
+        let find_signal =
+            |name: &str| decoded.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
 
         // MuxId should always be decoded
-        assert!(decoded_map.contains_key("MuxId"));
-        assert_eq!(*decoded_map.get("MuxId").unwrap(), 1.0);
+        assert_eq!(find_signal("MuxId"), Some(1.0));
         // Signal0 should NOT be decoded (MuxId != 0)
-        assert!(!decoded_map.contains_key("Signal0"));
+        assert!(find_signal("Signal0").is_none());
         // Signal1 should be decoded (MuxId == 1)
-        assert!(decoded_map.contains_key("Signal1"));
+        assert!(find_signal("Signal1").is_some());
     }
 }
