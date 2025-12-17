@@ -39,7 +39,7 @@ use crate::{ByteOrder, MAX_NAME_SIZE, Receivers, compat::String};
 /// println!("Signal: {} (bits: {}-{})", signal.name(), signal.start_bit(), signal.start_bit() + signal.length() - 1);
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct Signal {
     name: String<{ MAX_NAME_SIZE }>,
     start_bit: u16,

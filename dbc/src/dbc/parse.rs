@@ -419,7 +419,7 @@ impl Dbc {
     /// println!("Parsed {} messages", dbc.messages().len());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn parse_bytes(data: &[u8]) -> Result<Dbc> {
+    pub fn parse_bytes(data: &[u8]) -> Result<Self> {
         let content =
             core::str::from_utf8(data).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
         Dbc::parse(content)

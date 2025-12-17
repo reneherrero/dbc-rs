@@ -58,3 +58,4 @@ pub const MESSAGE_INVALID_ID: &str = "Invalid message ID";
 pub const MESSAGE_INVALID_DLC: &str = "Invalid DLC";
 pub const MESSAGE_NOT_FOUND: &str = "Message ID not found in database";
 pub const PAYLOAD_LENGTH_MISMATCH: &str = "Payload length does not match message DLC";
+pub const MULTIPLEXER_SWITCH_NEGATIVE: &str = "Multiplexer switch value cannot be negative";

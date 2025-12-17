@@ -99,6 +99,11 @@ impl Dbc {
                         }
                     }
                 };
+                // Multiplexer switch values must be non-negative (u64)
+                // If the raw value is negative, it cannot be used as a multiplexer switch value
+                if raw_value < 0 {
+                    return Err(Error::Decoding(Error::MULTIPLEXER_SWITCH_NEGATIVE));
+                }
                 switch_values
                     .push((signal.name(), raw_value as u64))
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
@@ -138,7 +143,9 @@ impl Dbc {
                     for ext_mux in extended_entries_for_signal.iter() {
                         let switch_name = ext_mux.multiplexer_switch();
                         if !unique_switches.iter().any(|&s| s == switch_name) {
-                            let _ = unique_switches.push(switch_name);
+                            unique_switches
+                                .push(switch_name)
+                                .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
                         }
                     }
 
@@ -654,5 +661,117 @@ SG_MUL_VAL_ 504 Signal_E Mux2 10-15 ;
         assert_eq!(find2("Mux1"), Some(64.0));
         assert_eq!(find2("Mux2"), Some(12.0));
         assert!(find2("Signal_E").is_none());
+    }
+
+    #[test]
+    fn test_decode_negative_multiplexer_switch() {
+        use crate::Error;
+        // Create a DBC with a signed multiplexer switch signal
+        // 8-bit signed signal: values -128 to 127
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 MuxMessage : 8 ECM
+ SG_ MuxSwitch M : 0|8@1- (1,0) [-128|127] ""
+ SG_ SignalA m0 : 8|8@1+ (1,0) [0|255] ""
+"#,
+        )
+        .unwrap();
+
+        // Try to decode with a negative raw value for the multiplexer switch
+        // -5 in 8-bit two's complement is 0xFB
+        // Little-endian: MuxSwitch at bits 0-7, SignalA at bits 8-15
+        let payload = [0xFB, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let result = dbc.decode(256, &payload);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Decoding(msg) => {
+                assert_eq!(msg, Error::MULTIPLEXER_SWITCH_NEGATIVE);
+            }
+            _ => panic!("Expected Error::Decoding with MULTIPLEXER_SWITCH_NEGATIVE"),
+        }
+    }
+
+    #[test]
+    fn test_decode_too_many_unique_switches() {
+        use crate::{Error, MAX_SIGNALS_PER_MESSAGE};
+        // Skip this test if MAX_SIGNALS_PER_MESSAGE is too low to create 17 signals
+        // (16 multiplexer switches + 1 signal = 17 total signals needed)
+        if MAX_SIGNALS_PER_MESSAGE < 17 {
+            return;
+        }
+
+        // Create a DBC with more than 16 unique switches in extended multiplexing
+        // This should trigger an error when trying to decode
+        // Using string literal concatenation to avoid std features
+        let dbc_str = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 600 TooManySwitches : 18 ECM
+ SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
+ SG_ Mux2 M : 8|8@1+ (1,0) [0|255] ""
+ SG_ Mux3 M : 16|8@1+ (1,0) [0|255] ""
+ SG_ Mux4 M : 24|8@1+ (1,0) [0|255] ""
+ SG_ Mux5 M : 32|8@1+ (1,0) [0|255] ""
+ SG_ Mux6 M : 40|8@1+ (1,0) [0|255] ""
+ SG_ Mux7 M : 48|8@1+ (1,0) [0|255] ""
+ SG_ Mux8 M : 56|8@1+ (1,0) [0|255] ""
+ SG_ Mux9 M : 64|8@1+ (1,0) [0|255] ""
+ SG_ Mux10 M : 72|8@1+ (1,0) [0|255] ""
+ SG_ Mux11 M : 80|8@1+ (1,0) [0|255] ""
+ SG_ Mux12 M : 88|8@1+ (1,0) [0|255] ""
+ SG_ Mux13 M : 96|8@1+ (1,0) [0|255] ""
+ SG_ Mux14 M : 104|8@1+ (1,0) [0|255] ""
+ SG_ Mux15 M : 112|8@1+ (1,0) [0|255] ""
+ SG_ Mux16 M : 120|8@1+ (1,0) [0|255] ""
+ SG_ Mux17 M : 128|8@1+ (1,0) [0|255] ""
+ SG_ Signal_X m0 : 136|8@1+ (1,0) [0|255] "unit" *
+
+SG_MUL_VAL_ 600 Signal_X Mux1 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux2 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux3 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux4 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux5 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux6 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux7 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux8 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux9 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux10 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux11 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux12 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux13 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux14 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux15 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux16 0-255 ;
+SG_MUL_VAL_ 600 Signal_X Mux17 0-255 ;
+"#;
+
+        let dbc = Dbc::parse(dbc_str).unwrap();
+
+        // Try to decode - should fail with MESSAGE_TOO_MANY_SIGNALS error
+        // because we have 17 unique switches (exceeding the limit of 16)
+        let payload = [0x00; 18];
+        let result = dbc.decode(600, &payload);
+        assert!(
+            result.is_err(),
+            "Decode should fail when there are more than 16 unique switches"
+        );
+        match result.unwrap_err() {
+            Error::Decoding(msg) => {
+                assert_eq!(
+                    msg,
+                    Error::MESSAGE_TOO_MANY_SIGNALS,
+                    "Expected MESSAGE_TOO_MANY_SIGNALS error, got: {}",
+                    msg
+                );
+            }
+            e => panic!(
+                "Expected Error::Decoding with MESSAGE_TOO_MANY_SIGNALS, got: {:?}",
+                e
+            ),
+        }
     }
 }

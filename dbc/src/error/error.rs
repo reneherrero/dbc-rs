@@ -96,6 +96,7 @@ impl Error {
     pub const MESSAGE_INVALID_DLC: &'static str = lang::MESSAGE_INVALID_DLC;
     pub const MESSAGE_NOT_FOUND: &'static str = lang::MESSAGE_NOT_FOUND;
     pub const PAYLOAD_LENGTH_MISMATCH: &'static str = lang::PAYLOAD_LENGTH_MISMATCH;
+    pub const MULTIPLEXER_SWITCH_NEGATIVE: &'static str = lang::MULTIPLEXER_SWITCH_NEGATIVE;
     #[cfg(feature = "std")]
     pub const RECEIVERS_DUPLICATE_NAME: &'static str = lang::RECEIVERS_DUPLICATE_NAME;
     #[cfg(feature = "std")]
