@@ -71,7 +71,7 @@ impl ValueDescriptionsBuilder {
     ///     .add_entry(1, "On");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_entry(mut self, value: u64, description: impl AsRef<str>) -> Self {
         if self.entries.len() < MAX_VALUE_DESCRIPTIONS {
             self.entries.push((value, description.as_ref().to_string()));

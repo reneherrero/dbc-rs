@@ -17,22 +17,22 @@ impl ExtendedMultiplexing {
         }
     }
 
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn message_id(&self) -> u32 {
         self.message_id
     }
 
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn signal_name(&self) -> &str {
         self.signal_name.as_str()
     }
 
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn multiplexer_switch(&self) -> &str {
         self.multiplexer_switch.as_str()
     }
 
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn value_ranges(&self) -> &[(u64, u64)] {
         self.value_ranges.as_slice()
     }

@@ -39,7 +39,7 @@ impl Dbc {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn version(&self) -> Option<&Version> {
         self.version.as_ref()
     }
@@ -62,7 +62,7 @@ impl Dbc {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn nodes(&self) -> &Nodes {
         &self.nodes
     }
@@ -83,7 +83,7 @@ impl Dbc {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn messages(&self) -> &Messages {
         &self.messages
     }
@@ -132,13 +132,13 @@ impl Dbc {
     /// ```
     #[cfg(feature = "std")]
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn value_descriptions(&self) -> &ValueDescriptionsMap {
         &self.value_descriptions
     }
 
     #[cfg(feature = "std")]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn value_descriptions_for_signal(
         &self,
         message_id: u32,
@@ -172,7 +172,7 @@ impl Dbc {
     /// assert_eq!(extended.len(), 1);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn extended_multiplexing_for_message(
         &self,
         message_id: u32,

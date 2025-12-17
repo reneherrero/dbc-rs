@@ -6,7 +6,7 @@ use std::{
 };
 
 impl Signal {
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn to_dbc_string(&self) -> String {
         let mut result = String::with_capacity(100); // Pre-allocate reasonable capacity
 
@@ -70,7 +70,7 @@ impl Signal {
                         if i > 0 {
                             result.push(' ');
                         }
-                        result.push_str(node.as_str());
+                        result.push_str(node);
                     }
                 }
             }

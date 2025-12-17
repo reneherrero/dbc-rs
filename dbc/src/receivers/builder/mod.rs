@@ -85,7 +85,7 @@ impl ReceiversBuilder {
     /// assert_eq!(receivers, dbc_rs::Receivers::Broadcast);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn broadcast(mut self) -> Self {
         self.is_broadcast = true;
         self.nodes.clear();
@@ -108,7 +108,7 @@ impl ReceiversBuilder {
     /// assert_eq!(receivers, dbc_rs::Receivers::None);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn none(mut self) -> Self {
         self.is_broadcast = false;
         self.nodes.clear();
@@ -201,7 +201,7 @@ impl ReceiversBuilder {
     /// assert!(!receivers.contains("TCM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn clear(mut self) -> Self {
         self.nodes.clear();
         self.is_broadcast = false;

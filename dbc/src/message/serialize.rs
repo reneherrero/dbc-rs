@@ -2,7 +2,7 @@ use super::Message;
 
 #[cfg(feature = "std")]
 impl Message {
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn to_dbc_string(&self) -> std::string::String {
         format!(
             "BO_ {} {} : {} {}",
@@ -13,7 +13,7 @@ impl Message {
         )
     }
 
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn to_string_full(&self) -> std::string::String {
         let mut result = std::string::String::with_capacity(200 + (self.signals.len() * 100));
         result.push_str(&self.to_dbc_string());

@@ -15,7 +15,7 @@ impl Dbc {
     /// assert!(dbc_string.contains("VERSION"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn to_dbc_string(&self) -> String {
         // Pre-allocate with estimated capacity
         // Estimate: ~50 chars per message + ~100 chars per signal

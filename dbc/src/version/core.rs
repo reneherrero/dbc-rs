@@ -35,7 +35,7 @@ impl Version {
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn as_str(&self) -> &str {
         self.version.as_str()
     }

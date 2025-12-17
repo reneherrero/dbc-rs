@@ -78,68 +78,68 @@ impl Signal {
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn start_bit(&self) -> u16 {
         self.start_bit
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn length(&self) -> u16 {
         self.length
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn byte_order(&self) -> ByteOrder {
         self.byte_order
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn is_unsigned(&self) -> bool {
         self.unsigned
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn factor(&self) -> f64 {
         self.factor
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn offset(&self) -> f64 {
         self.offset
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn min(&self) -> f64 {
         self.min
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn max(&self) -> f64 {
         self.max
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn unit(&self) -> Option<&str> {
         self.unit.as_ref().map(|u| u.as_ref())
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn receivers(&self) -> &Receivers {
         &self.receivers
     }
 
     /// Check if this signal is a multiplexer switch (marked with 'M')
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn is_multiplexer_switch(&self) -> bool {
         self.is_multiplexer_switch
     }
@@ -147,7 +147,7 @@ impl Signal {
     /// Get the multiplexer switch value if this is a multiplexed signal (marked with 'm0', 'm1', etc.)
     /// Returns None if this is a normal signal (not multiplexed)
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn multiplexer_switch_value(&self) -> Option<u64> {
         self.multiplexer_switch_value
     }

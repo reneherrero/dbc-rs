@@ -46,67 +46,67 @@ impl SignalBuilder {
         }
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
         self.name = Some(name.as_ref().to_string());
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn start_bit(mut self, start_bit: u16) -> Self {
         self.start_bit = Some(start_bit);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn length(mut self, length: u16) -> Self {
         self.length = Some(length);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn byte_order(mut self, byte_order: ByteOrder) -> Self {
         self.byte_order = Some(byte_order);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn unsigned(mut self, unsigned: bool) -> Self {
         self.unsigned = Some(unsigned);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn factor(mut self, factor: f64) -> Self {
         self.factor = Some(factor);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn offset(mut self, offset: f64) -> Self {
         self.offset = Some(offset);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn min(mut self, min: f64) -> Self {
         self.min = Some(min);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn max(mut self, max: f64) -> Self {
         self.max = Some(max);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn unit(mut self, unit: impl AsRef<str>) -> Self {
         self.unit = Some(unit.as_ref().to_string());
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn receivers(mut self, receivers: ReceiversBuilder) -> Self {
         self.receivers = receivers;
         self
@@ -116,12 +116,12 @@ impl SignalBuilder {
         let name = self.name.clone().ok_or(Error::Signal(Error::SIGNAL_NAME_EMPTY))?;
         let start_bit = self.start_bit.ok_or(Error::Signal(Error::SIGNAL_START_BIT_REQUIRED))?;
         let length = self.length.ok_or(Error::Signal(Error::SIGNAL_LENGTH_REQUIRED))?;
-        let byte_order = self.byte_order.ok_or(Error::Signal("byte_order is required"))?;
-        let unsigned = self.unsigned.ok_or(Error::Signal("unsigned is required"))?;
-        let factor = self.factor.ok_or(Error::Signal("factor is required"))?;
-        let offset = self.offset.ok_or(Error::Signal("offset is required"))?;
-        let min = self.min.ok_or(Error::Signal("min is required"))?;
-        let max = self.max.ok_or(Error::Signal("max is required"))?;
+        let byte_order = self.byte_order.ok_or(Error::Signal(Error::SIGNAL_BYTE_ORDER_REQUIRED))?;
+        let unsigned = self.unsigned.ok_or(Error::Signal(Error::SIGNAL_UNSIGNED_REQUIRED))?;
+        let factor = self.factor.ok_or(Error::Signal(Error::SIGNAL_FACTOR_REQUIRED))?;
+        let offset = self.offset.ok_or(Error::Signal(Error::SIGNAL_OFFSET_REQUIRED))?;
+        let min = self.min.ok_or(Error::Signal(Error::SIGNAL_MIN_REQUIRED))?;
+        let max = self.max.ok_or(Error::Signal(Error::SIGNAL_MAX_REQUIRED))?;
         Ok((
             name,
             start_bit,

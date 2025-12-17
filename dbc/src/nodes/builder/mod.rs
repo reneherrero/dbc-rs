@@ -73,7 +73,7 @@ impl NodesBuilder {
     /// assert_eq!(nodes.len(), 2);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
         self.nodes.push(node.as_ref().to_string());
         self
@@ -104,7 +104,7 @@ impl NodesBuilder {
     /// assert_eq!(nodes2.len(), 2);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_nodes<I, S>(mut self, nodes: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -135,7 +135,7 @@ impl NodesBuilder {
     /// assert!(!nodes.contains("ECM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn clear(mut self) -> Self {
         self.nodes.clear();
         self

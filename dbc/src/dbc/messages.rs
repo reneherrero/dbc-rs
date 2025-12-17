@@ -102,7 +102,7 @@ impl Messages {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn len(&self) -> usize {
         self.messages.len()
     }
@@ -119,7 +119,7 @@ impl Messages {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -138,7 +138,7 @@ impl Messages {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn at(&self, index: usize) -> Option<&Message> {
         self.messages.get(index)
     }
@@ -157,7 +157,7 @@ impl Messages {
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn find(&self, name: &str) -> Option<&Message> {
         self.iter().find(|m| m.name() == name)
     }
@@ -182,7 +182,7 @@ impl Messages {
     /// - With `alloc` feature (no heapless): O(log n) lookup using binary search on sorted indices
     /// - Otherwise: O(n) linear search
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn find_by_id(&self, id: u32) -> Option<&Message> {
         #[cfg(feature = "heapless")]
         {

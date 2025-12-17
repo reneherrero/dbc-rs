@@ -14,7 +14,7 @@ impl DbcBuilder {
     ///     .version(vb);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn version(mut self, version: VersionBuilder) -> Self {
         self.version = version;
         self
@@ -31,7 +31,7 @@ impl DbcBuilder {
     ///     .nodes(NodesBuilder::new().add_node("ECM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn nodes(mut self, nodes: NodesBuilder) -> Self {
         self.nodes = nodes;
         self
@@ -54,7 +54,7 @@ impl DbcBuilder {
     ///     .add_message(message);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_message(mut self, message: MessageBuilder) -> Self {
         self.messages.push(message);
         self
@@ -74,7 +74,7 @@ impl DbcBuilder {
     ///     .add_messages(vec![msg1, msg2]);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_messages(mut self, messages: impl IntoIterator<Item = MessageBuilder>) -> Self {
         self.messages.extend(messages);
         self
@@ -90,7 +90,7 @@ impl DbcBuilder {
     /// let builder = DbcBuilder::new()
     ///     .clear_messages();
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn clear_messages(mut self) -> Self {
         self.messages.clear();
         self

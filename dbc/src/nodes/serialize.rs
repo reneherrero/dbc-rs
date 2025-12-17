@@ -56,7 +56,7 @@ impl Nodes {
     /// # Feature Requirements
     ///
     /// This method requires the `std` feature to be enabled.
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn to_dbc_string(&self) -> std::string::String {
         let mut result = format!("{}:", BU_);
         let nodes_str = format!("{}", self);

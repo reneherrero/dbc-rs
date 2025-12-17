@@ -76,7 +76,7 @@ impl ExtendedMultiplexingBuilder {
     ///     .message_id(500);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn message_id(mut self, message_id: u32) -> Self {
         self.message_id = Some(message_id);
         self
@@ -97,7 +97,7 @@ impl ExtendedMultiplexingBuilder {
     ///     .signal_name("Signal_A");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn signal_name(mut self, signal_name: impl AsRef<str>) -> Self {
         self.signal_name = Some(signal_name.as_ref().to_string());
         self
@@ -118,7 +118,7 @@ impl ExtendedMultiplexingBuilder {
     ///     .multiplexer_switch("Mux1");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn multiplexer_switch(mut self, multiplexer_switch: impl AsRef<str>) -> Self {
         self.multiplexer_switch = Some(multiplexer_switch.as_ref().to_string());
         self
@@ -141,7 +141,7 @@ impl ExtendedMultiplexingBuilder {
     ///     .add_value_range(10, 15);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_value_range(mut self, min: u64, max: u64) -> Self {
         self.value_ranges.push((min, max));
         self

@@ -69,7 +69,7 @@ impl ValueDescriptionsMap {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn len(&self) -> usize {
         self.value_descriptions.len()
     }
@@ -86,7 +86,7 @@ impl ValueDescriptionsMap {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn is_empty(&self) -> bool {
         self.value_descriptions.is_empty()
     }
@@ -120,7 +120,7 @@ impl ValueDescriptionsMap {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn for_signal(&self, message_id: u32, signal_name: &str) -> Option<&ValueDescriptions> {
         // First try to find a specific entry for this message_id
         // Then fall back to a global entry (None message_id) that applies to all messages

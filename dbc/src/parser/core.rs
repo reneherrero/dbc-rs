@@ -14,26 +14,26 @@ impl<'a> Parser<'a> {
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn pos(&self) -> usize {
         self.pos
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     #[allow(dead_code)] // Public API for error reporting - will be used in future error messages
     pub fn line(&self) -> usize {
         self.line
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn remaining(&self) -> &'a [u8] {
         &self.input[self.pos..]
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn is_empty(&self) -> bool {
         self.remaining().is_empty()
     }
@@ -41,7 +41,7 @@ impl<'a> Parser<'a> {
     /// Check if we're at the end of the file.
     /// Returns `true` if the current position is at or beyond the end of the input.
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn eof(&self) -> bool {
         self.pos >= self.input.len()
     }
@@ -49,7 +49,7 @@ impl<'a> Parser<'a> {
     /// Check if the current byte at the parser's position matches any of the bytes in the provided slice.
     /// Returns `true` if the current byte is found in the slice, `false` otherwise.
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn matches_any(&self, matches: &[u8]) -> bool {
         if self.pos < self.input.len() {
             let byte = self.input[self.pos];
@@ -60,13 +60,13 @@ impl<'a> Parser<'a> {
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn starts_with(&self, pattern: &[u8]) -> bool {
         self.remaining().starts_with(pattern)
     }
 
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn peek_byte_at(&self, offset: usize) -> Option<u8> {
         let pos = self.pos + offset;
         if pos < self.input.len() {

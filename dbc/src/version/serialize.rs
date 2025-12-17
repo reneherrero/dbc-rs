@@ -74,7 +74,7 @@ impl Version {
     /// # Feature Requirements
     ///
     /// This method requires the `std` feature to be enabled.
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn to_dbc_string(&self) -> String {
         if self.version.is_empty() {
             format!("{} \"\"", VERSION)

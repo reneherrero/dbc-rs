@@ -64,7 +64,7 @@ impl VersionBuilder {
     /// assert_eq!(version.as_str(), "1.2.3");
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn version(mut self, version: impl AsRef<str>) -> Self {
         self.version = Some(version.as_ref().to_string());
         self

@@ -21,49 +21,49 @@ impl MessageBuilder {
         }
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn id(mut self, id: u32) -> Self {
         self.id = Some(id);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn name(mut self, name: impl AsRef<str>) -> Self {
         self.name = Some(name.as_ref().to_string());
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn dlc(mut self, dlc: u8) -> Self {
         self.dlc = Some(dlc);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn sender(mut self, sender: impl AsRef<str>) -> Self {
         self.sender = Some(sender.as_ref().to_string());
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_signal(mut self, signal: SignalBuilder) -> Self {
         self.signals.push(signal);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn add_signals(mut self, signals: impl IntoIterator<Item = SignalBuilder>) -> Self {
         self.signals.extend(signals);
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn signals(mut self, signals: Vec<SignalBuilder>) -> Self {
         self.signals = signals;
         self
     }
 
-    #[must_use]
+    #[must_use = "builder method returns modified builder"]
     pub fn clear_signals(mut self) -> Self {
         self.signals.clear();
         self

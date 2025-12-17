@@ -13,7 +13,6 @@ impl Receivers {
         Receivers::None
     }
 
-    #[cfg(feature = "std")]
     pub(crate) fn new_nodes(nodes: &[String<{ MAX_NAME_SIZE }>]) -> Self {
         // Validation should have been done prior (by builder or parse)
         // Receivers can have at most MAX_NODES - 1 nodes
@@ -71,12 +70,61 @@ impl Receivers {
     /// assert_eq!(signal.receivers().iter().count(), 0);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    /// Returns an iterator over the receiver node names as borrowed references.
+    ///
+    /// For `Receivers::Broadcast` and `Receivers::None`, the iterator will be empty.
+    /// For `Receivers::Nodes`, it iterates over the specific node names.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM BCM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    /// "#)?;
+    ///
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    ///
+    /// // Iterate over receiver nodes
+    /// let mut iter = signal.receivers().iter();
+    /// assert_eq!(iter.next(), Some("TCM"));
+    /// assert_eq!(iter.next(), Some("BCM"));
+    /// assert_eq!(iter.next(), None);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    ///
+    /// # Broadcast and None
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+    /// "#)?;
+    ///
+    /// let message = dbc.messages().at(0).unwrap();
+    /// let signal = message.signals().at(0).unwrap();
+    ///
+    /// // Broadcast receivers return empty iterator
+    /// assert_eq!(signal.receivers().iter().count(), 0);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
-    pub fn iter(&self) -> impl Iterator<Item = String<{ MAX_NAME_SIZE }>> {
+    pub fn iter(&self) -> impl Iterator<Item = &str> {
         match self {
             Receivers::Nodes(nodes) => ReceiversIter {
-                nodes: Some(nodes.clone()),
+                nodes: Some(nodes.as_slice()),
                 pos: 0,
             },
             _ => ReceiversIter {
@@ -110,7 +158,7 @@ impl Receivers {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn len(&self) -> usize {
         match self {
             Receivers::Nodes(nodes) => nodes.len(),
@@ -142,7 +190,7 @@ impl Receivers {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -178,9 +226,9 @@ impl Receivers {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn contains(&self, node: &str) -> bool {
-        self.iter().any(|n| n.as_str() == node)
+        self.iter().any(|n| n == node)
     }
 
     /// Gets a receiver node by index.
@@ -215,7 +263,7 @@ impl Receivers {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn at(&self, index: usize) -> Option<&str> {
         match self {
             Receivers::Nodes(nodes) => nodes.get(index).map(|s| s.as_str()),
@@ -224,17 +272,17 @@ impl Receivers {
     }
 }
 
-struct ReceiversIter {
-    nodes: Option<Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }>>,
+struct ReceiversIter<'a> {
+    nodes: Option<&'a [String<{ MAX_NAME_SIZE }>]>,
     pos: usize,
 }
 
-impl Iterator for ReceiversIter {
-    type Item = String<{ MAX_NAME_SIZE }>;
+impl<'a> Iterator for ReceiversIter<'a> {
+    type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(nodes) = &self.nodes {
+        if let Some(nodes) = self.nodes {
             if self.pos < nodes.len() {
-                let result: String<{ MAX_NAME_SIZE }> = nodes[self.pos].clone();
+                let result = nodes[self.pos].as_str();
                 self.pos += 1;
                 Some(result)
             } else {
@@ -285,8 +333,8 @@ mod tests {
             let mut parser = Parser::new(input.as_bytes()).unwrap();
             let result = Receivers::parse(&mut parser).unwrap();
             let mut iter = result.iter();
-            assert_eq!(iter.next().unwrap().as_str(), "TCM");
-            assert_eq!(iter.next().unwrap().as_str(), "BCM");
+            assert_eq!(iter.next(), Some("TCM"));
+            assert_eq!(iter.next(), Some("BCM"));
             assert!(iter.next().is_none());
 
             let broadcast = Receivers::new_broadcast();

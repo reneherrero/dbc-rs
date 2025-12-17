@@ -89,7 +89,7 @@ impl Nodes {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn contains(&self, node: &str) -> bool {
         self.iter().any(|n| n == node)
     }
@@ -110,7 +110,7 @@ impl Nodes {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn len(&self) -> usize {
         self.nodes.len()
     }
@@ -166,7 +166,7 @@ impl Nodes {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn at(&self, index: usize) -> Option<&str> {
         self.nodes.get(index).map(|s| s.as_str())
     }

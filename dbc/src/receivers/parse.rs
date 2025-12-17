@@ -111,7 +111,7 @@ impl Receivers {
         if nodes.is_empty() {
             Ok(Self::new_none())
         } else {
-            Ok(Receivers::Nodes(nodes))
+            Ok(Self::new_nodes(&nodes))
         }
     }
 }
@@ -150,8 +150,7 @@ mod tests {
                 assert_eq!(nodes.len(), 1);
                 let node_count = result.len();
                 assert_eq!(node_count, 1);
-                let first_node = result.iter().next().unwrap();
-                assert_eq!(first_node.as_str(), "TCM");
+                assert_eq!(result.iter().next(), Some("TCM"));
             }
             _ => panic!("Expected Nodes variant"),
         }
@@ -166,9 +165,9 @@ mod tests {
             let node_count = result.len();
             assert_eq!(node_count, 3);
             let mut iter = result.iter();
-            assert_eq!(iter.next().unwrap().as_str(), "TCM");
-            assert_eq!(iter.next().unwrap().as_str(), "BCM");
-            assert_eq!(iter.next().unwrap().as_str(), "ECM");
+            assert_eq!(iter.next(), Some("TCM"));
+            assert_eq!(iter.next(), Some("BCM"));
+            assert_eq!(iter.next(), Some("ECM"));
             assert!(iter.next().is_none());
         }
     }
@@ -189,10 +188,8 @@ mod tests {
         let node_count = result.len();
         assert_eq!(node_count, 2);
         let mut iter = result.iter();
-        let node1 = iter.next().unwrap();
-        assert_eq!(node1.as_str(), "TCM");
-        let node2 = iter.next().unwrap();
-        assert_eq!(node2.as_str(), "BCM");
+        assert_eq!(iter.next(), Some("TCM"));
+        assert_eq!(iter.next(), Some("BCM"));
         assert!(iter.next().is_none());
     }
 

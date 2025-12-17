@@ -56,7 +56,7 @@ impl Message {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn id(&self) -> u32 {
         self.id
     }
@@ -74,7 +74,7 @@ impl Message {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -95,20 +95,41 @@ impl Message {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn dlc(&self) -> u8 {
         self.dlc
     }
 
+    /// Get the sender node name for this message.
+    ///
+    /// The sender is the node that transmits this message on the CAN bus.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM TCM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+    /// "#)?;
+    ///
+    /// let message = dbc.messages().iter().next().unwrap();
+    /// assert_eq!(message.sender(), "ECM");
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn sender(&self) -> &str {
         self.sender.as_str()
     }
 
     /// Get a reference to the signals collection
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn signals(&self) -> &Signals {
         &self.signals
     }

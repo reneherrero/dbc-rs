@@ -71,7 +71,7 @@ impl Signals {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn len(&self) -> usize {
         self.signals.len()
     }
@@ -89,7 +89,7 @@ impl Signals {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -109,7 +109,7 @@ impl Signals {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     #[inline]
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn at(&self, index: usize) -> Option<&Signal> {
         self.signals.get(index)
     }
@@ -129,7 +129,7 @@ impl Signals {
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use]
+    #[must_use = "return value should be used"]
     pub fn find(&self, name: &str) -> Option<&Signal> {
         self.iter().find(|s| s.name() == name)
     }
