@@ -66,6 +66,8 @@ impl Signal {
             max,
             unit,
             receivers,
+            is_multiplexer_switch: false,
+            multiplexer_switch_value: None,
         }
     }
 
@@ -134,9 +136,59 @@ impl Signal {
     pub fn receivers(&self) -> &Receivers {
         &self.receivers
     }
+
+    /// Check if this signal is a multiplexer switch (marked with 'M')
+    #[inline]
+    #[must_use]
+    pub fn is_multiplexer_switch(&self) -> bool {
+        self.is_multiplexer_switch
+    }
+
+    /// Get the multiplexer switch value if this is a multiplexed signal (marked with 'm0', 'm1', etc.)
+    /// Returns None if this is a normal signal (not multiplexed)
+    #[inline]
+    #[must_use]
+    pub fn multiplexer_switch_value(&self) -> Option<u64> {
+        self.multiplexer_switch_value
+    }
 }
 
-// Custom Eq implementation that handles f64 (treats NaN as equal to NaN)
+#[inline]
+fn canonical_f64_bits(v: f64) -> u64 {
+    // Ensure Hash/Eq are consistent and satisfy the contracts:
+
+    // - Treat -0.0 and 0.0 as equal (and hash identically)
+
+    // - Treat NaN values as equal (and hash identically)
+
+    if v == 0.0 {
+        0.0f64.to_bits()
+    } else if v.is_nan() {
+        f64::NAN.to_bits()
+    } else {
+        v.to_bits()
+    }
+}
+
+impl PartialEq for Signal {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.start_bit == other.start_bit
+            && self.length == other.length
+            && self.byte_order == other.byte_order
+            && self.unsigned == other.unsigned
+            && canonical_f64_bits(self.factor) == canonical_f64_bits(other.factor)
+            && canonical_f64_bits(self.offset) == canonical_f64_bits(other.offset)
+            && canonical_f64_bits(self.min) == canonical_f64_bits(other.min)
+            && canonical_f64_bits(self.max) == canonical_f64_bits(other.max)
+            && self.unit == other.unit
+            && self.receivers == other.receivers
+            && self.is_multiplexer_switch == other.is_multiplexer_switch
+            && self.multiplexer_switch_value == other.multiplexer_switch_value
+    }
+}
+
+// Custom Eq implementation that handles f64 (treats NaN as equal to NaN, and -0.0 == 0.0)
 impl Eq for Signal {}
 
 // Custom Hash implementation that handles f64 (treats NaN consistently)
@@ -148,11 +200,13 @@ impl core::hash::Hash for Signal {
         self.byte_order.hash(state);
         self.unsigned.hash(state);
         // Handle f64: convert to bits for hashing (NaN will have consistent representation)
-        self.factor.to_bits().hash(state);
-        self.offset.to_bits().hash(state);
-        self.min.to_bits().hash(state);
-        self.max.to_bits().hash(state);
+        canonical_f64_bits(self.factor).hash(state);
+        canonical_f64_bits(self.offset).hash(state);
+        canonical_f64_bits(self.min).hash(state);
+        canonical_f64_bits(self.max).hash(state);
         self.unit.hash(state);
         self.receivers.hash(state);
+        self.is_multiplexer_switch.hash(state);
+        self.multiplexer_switch_value.hash(state);
     }
 }

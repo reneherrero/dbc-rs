@@ -1,6 +1,9 @@
 #[cfg(feature = "std")]
 use super::ValueDescriptionsMap;
-use crate::{Dbc, Nodes, Version, dbc::Messages};
+use crate::{
+    Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version, compat::Vec,
+    dbc::Messages,
+};
 
 impl Dbc {
     pub(crate) fn new(
@@ -8,6 +11,7 @@ impl Dbc {
         nodes: Nodes,
         messages: Messages,
         #[cfg(feature = "std")] value_descriptions: ValueDescriptionsMap,
+        extended_multiplexing: Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
@@ -16,6 +20,7 @@ impl Dbc {
             messages,
             #[cfg(feature = "std")]
             value_descriptions,
+            extended_multiplexing,
         }
     }
 
@@ -141,11 +146,75 @@ impl Dbc {
     ) -> Option<&crate::value_descriptions::ValueDescriptions> {
         self.value_descriptions.for_signal(message_id, signal_name)
     }
+
+    /// Get extended multiplexing entries for a specific message
+    ///
+    /// Extended multiplexing (SG_MUL_VAL_) entries define which multiplexer switch values
+    /// activate specific multiplexed signals. This method returns all extended multiplexing
+    /// entries for the given message ID.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 500 ComplexMux : 8 ECM
+    ///  SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
+    ///  SG_ Signal_A m0 : 16|16@1+ (0.1,0) [0|100] ""
+    ///
+    /// SG_MUL_VAL_ 500 Signal_A Mux1 0-5,10-15 ;
+    /// "#)?;
+    /// let extended = dbc.extended_multiplexing_for_message(500);
+    /// assert_eq!(extended.len(), 1);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use]
+    pub fn extended_multiplexing_for_message(
+        &self,
+        message_id: u32,
+    ) -> Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }> {
+        self.extended_multiplexing
+            .iter()
+            .filter(|ext_mux| ext_mux.message_id() == message_id)
+            .cloned()
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::Dbc;
+
+    #[test]
+    fn test_parse_extended_multiplexing() {
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 500 ComplexMux : 8 ECM
+ SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
+ SG_ Signal_A m0 : 16|16@1+ (0.1,0) [0|100] "unit" *
+
+SG_MUL_VAL_ 500 Signal_A Mux1 5-10 ;
+"#,
+        )
+        .unwrap();
+
+        let ext_entries = dbc.extended_multiplexing_for_message(500);
+        assert_eq!(
+            ext_entries.len(),
+            1,
+            "Extended multiplexing entry should be parsed"
+        );
+        assert_eq!(ext_entries[0].signal_name(), "Signal_A");
+        assert_eq!(ext_entries[0].multiplexer_switch(), "Mux1");
+        assert_eq!(ext_entries[0].value_ranges(), [(5, 10)]);
+    }
 
     #[test]
     fn test_version() {

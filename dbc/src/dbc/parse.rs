@@ -1,6 +1,6 @@
 use crate::{
-    Dbc, Error, MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal,
-    Version,
+    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES,
+    MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, Version,
     compat::Vec,
     dbc::{Messages, Validate},
 };
@@ -37,8 +37,8 @@ impl Dbc {
 
         // Parse version, nodes, and messages
         use crate::{
-            BA_, BA_DEF_, BA_DEF_DEF_, BO_, BO_TX_BU_, BS_, BU_, CM_, EV_, NS_, SG_, SIG_GROUP_,
-            SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
+            BA_, BA_DEF_, BA_DEF_DEF_, BO_, BO_TX_BU_, BS_, BU_, CM_, EV_, NS_, SG_, SG_MUL_VAL_,
+            SIG_GROUP_, SIG_VALTYPE_, VAL_, VAL_TABLE_, VERSION,
         };
 
         let mut version: Option<Version> = None;
@@ -54,6 +54,12 @@ impl Dbc {
         #[cfg(feature = "std")]
         let mut value_descriptions_buffer: std::vec::Vec<ValueDescriptionsBufferEntry> =
             std::vec::Vec::new();
+
+        // Store extended multiplexing entries during parsing
+        let mut extended_multiplexing_buffer: Vec<
+            ExtendedMultiplexing,
+            { MAX_EXTENDED_MULTIPLEXING },
+        > = Vec::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -118,6 +124,24 @@ impl Dbc {
                     // Consume keyword then skip to end of line
                     let _ = parser.expect(keyword.as_bytes()).ok();
                     parser.skip_to_end_of_line();
+                    continue;
+                }
+                SG_MUL_VAL_ => {
+                    // Consume SG_MUL_VAL_ keyword
+                    parser
+                        .expect(SG_MUL_VAL_.as_bytes())
+                        .map_err(|_| Error::Expected("Failed to consume SG_MUL_VAL_ keyword"))?;
+
+                    // Parse the extended multiplexing entry
+                    if let Some(ext_mux) = ExtendedMultiplexing::parse(&mut parser) {
+                        if extended_multiplexing_buffer.push(ext_mux).is_err() {
+                            // Buffer full - return error instead of silently dropping entries
+                            return Err(Error::Validation(Error::EXTENDED_MULTIPLEXING_TOO_MANY));
+                        }
+                    } else {
+                        // Parsing failed, skip to end of line
+                        parser.skip_to_end_of_line();
+                    }
                     continue;
                 }
                 VAL_ => {
@@ -258,26 +282,47 @@ impl Dbc {
 
                     let mut signals_array: Vec<Signal, { MAX_SIGNALS_PER_MESSAGE }> = Vec::new();
 
+                    // Parse signals until we find a non-signal line
                     loop {
                         parser.skip_newlines_and_spaces();
-                        if parser.starts_with(crate::SG_.as_bytes()) {
-                            if let Some(next_byte) = parser.peek_byte_at(3) {
-                                if matches!(next_byte, b' ' | b'\n' | b'\r' | b'\t') {
-                                    if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
-                                        return Err(Error::Receivers(
-                                            Error::SIGNAL_RECEIVERS_TOO_MANY,
-                                        ));
-                                    }
-                                    // Signal::parse expects SG_ keyword, which we've already verified with starts_with
-                                    let signal = Signal::parse(&mut parser)?;
-                                    signals_array.push(signal).map_err(|_| {
-                                        Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
-                                    })?;
-                                    continue;
+
+                        // Use peek_next_keyword to check for SG_ keyword
+                        // peek_next_keyword correctly distinguishes SG_ from SG_MUL_VAL_ (checks longer keywords first)
+                        let keyword_result = parser.peek_next_keyword();
+                        let keyword = match keyword_result {
+                            Ok(kw) => kw,
+                            Err(Error::UnexpectedEof) => break,
+                            Err(_) => break, // Not a keyword, no more signals
+                        };
+
+                        // Only process SG_ signals here (SG_MUL_VAL_ is handled in main loop)
+                        if keyword != SG_ {
+                            break; // Not a signal, exit signal parsing loop
+                        }
+
+                        // Check limit before parsing
+                        if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
+                            return Err(Error::Message(Error::MESSAGE_TOO_MANY_SIGNALS));
+                        }
+
+                        // Parse signal - Signal::parse consumes SG_ itself
+                        match Signal::parse(&mut parser) {
+                            Ok(signal) => {
+                                signals_array.push(signal).map_err(|_| {
+                                    Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
+                                })?;
+                                // Receivers::parse stops at newline but doesn't consume it
+                                // Consume it so next iteration starts at the next line
+                                if parser.at_newline() {
+                                    parser.skip_to_end_of_line();
                                 }
                             }
+                            Err(_) => {
+                                // Parsing failed, skip to end of line and stop
+                                parser.skip_to_end_of_line();
+                                break;
+                            }
                         }
-                        break;
                     }
 
                     // Restore parser to start of message line and use Message::parse
@@ -350,9 +395,15 @@ impl Dbc {
         // Construct directly (validation already done)
         let messages = Messages::new(messages_slice)?;
         #[cfg(feature = "std")]
-        let dbc = Dbc::new(version, nodes, messages, value_descriptions_map);
+        let dbc = Dbc::new(
+            version,
+            nodes,
+            messages,
+            value_descriptions_map,
+            extended_multiplexing_buffer,
+        );
         #[cfg(not(feature = "std"))]
-        let dbc = Dbc::new(version, nodes, messages);
+        let dbc = Dbc::new(version, nodes, messages, extended_multiplexing_buffer);
         Ok(dbc)
     }
 
@@ -368,7 +419,7 @@ impl Dbc {
     /// println!("Parsed {} messages", dbc.messages().len());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    pub fn parse_bytes(data: &[u8]) -> Result<Dbc> {
+    pub fn parse_bytes(data: &[u8]) -> Result<Self> {
         let content =
             core::str::from_utf8(data).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
         Dbc::parse(content)

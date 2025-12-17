@@ -1,5 +1,16 @@
 use super::error_impl::Error;
 
+/// Helper function to check if a length exceeds a maximum limit.
+///
+/// This centralizes the common pattern of checking collection lengths against MAX limits.
+/// Returns `Some(error)` if the limit is exceeded, `None` otherwise.
+///
+/// This is an internal helper function and not part of the public API.
+#[inline]
+pub(crate) fn check_max_limit<E>(len: usize, max: usize, error: E) -> Option<E> {
+    if len > max { Some(error) } else { None }
+}
+
 /// Helper function to convert `Error::Validation` to a specific `Error` variant.
 ///
 /// This centralizes the common pattern of converting validation errors to specific error variants

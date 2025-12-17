@@ -1,6 +1,6 @@
 use super::Receivers;
 use crate::{
-    MAX_NAME_SIZE, MAX_RECEIVER_NODES,
+    MAX_NAME_SIZE, MAX_NODES,
     compat::{String, Vec},
 };
 
@@ -16,8 +16,9 @@ impl Receivers {
     #[cfg(feature = "std")]
     pub(crate) fn new_nodes(nodes: &[String<{ MAX_NAME_SIZE }>]) -> Self {
         // Validation should have been done prior (by builder or parse)
-        let vec_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }> =
-            nodes.iter().take(MAX_RECEIVER_NODES).cloned().collect();
+        // Receivers can have at most MAX_NODES - 1 nodes
+        let vec_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }> =
+            nodes.iter().take(MAX_NODES - 1).cloned().collect();
         Receivers::Nodes(vec_nodes)
     }
 
@@ -224,7 +225,7 @@ impl Receivers {
 }
 
 struct ReceiversIter {
-    nodes: Option<Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }>>,
+    nodes: Option<Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }>>,
     pos: usize,
 }
 

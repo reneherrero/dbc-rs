@@ -5,7 +5,7 @@ mod parse;
 mod builder;
 
 use crate::{
-    MAX_NAME_SIZE, MAX_RECEIVER_NODES,
+    MAX_NAME_SIZE, MAX_NODES,
     compat::{String, Vec},
 };
 
@@ -55,7 +55,7 @@ pub enum Receivers {
     /// Broadcast receiver - signal is sent to all nodes on the bus.
     Broadcast,
     /// Specific receiver nodes - vector of node names.
-    Nodes(Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }>),
+    Nodes(Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }>),
     /// No explicit receivers specified.
     None,
 }

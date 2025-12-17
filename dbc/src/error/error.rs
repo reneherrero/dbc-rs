@@ -82,6 +82,7 @@ impl Error {
     pub const SENDER_NOT_IN_NODES: &'static str = lang::SENDER_NOT_IN_NODES;
     pub const INVALID_RANGE: &'static str = lang::INVALID_RANGE;
     pub const MESSAGE_TOO_MANY_SIGNALS: &'static str = lang::MESSAGE_TOO_MANY_SIGNALS;
+    pub const EXTENDED_MULTIPLEXING_TOO_MANY: &'static str = lang::EXTENDED_MULTIPLEXING_TOO_MANY;
     pub const MESSAGE_NAME_EMPTY: &'static str = lang::MESSAGE_NAME_EMPTY;
     pub const MESSAGE_SENDER_EMPTY: &'static str = lang::MESSAGE_SENDER_EMPTY;
     pub const MESSAGE_DLC_TOO_SMALL: &'static str = lang::MESSAGE_DLC_TOO_SMALL;
@@ -95,6 +96,7 @@ impl Error {
     pub const MESSAGE_INVALID_DLC: &'static str = lang::MESSAGE_INVALID_DLC;
     pub const MESSAGE_NOT_FOUND: &'static str = lang::MESSAGE_NOT_FOUND;
     pub const PAYLOAD_LENGTH_MISMATCH: &'static str = lang::PAYLOAD_LENGTH_MISMATCH;
+    pub const MULTIPLEXER_SWITCH_NEGATIVE: &'static str = lang::MULTIPLEXER_SWITCH_NEGATIVE;
     #[cfg(feature = "std")]
     pub const RECEIVERS_DUPLICATE_NAME: &'static str = lang::RECEIVERS_DUPLICATE_NAME;
     #[cfg(feature = "std")]

@@ -52,7 +52,7 @@ impl<'a> Parser<'a> {
 
     /// Expect a pattern, skip whitespace/newlines, then parse a value.
     /// This is a common pattern: `expect(b",")` followed by `skip_newlines_and_spaces()`.
-    pub(crate) fn expect_then_skip(&mut self, expected: &[u8]) -> crate::Result<&mut Self> {
+    pub fn expect_then_skip(&mut self, expected: &[u8]) -> crate::Result<&mut Self> {
         self.expect(expected)?;
         self.skip_newlines_and_spaces();
         Ok(self)
@@ -60,7 +60,7 @@ impl<'a> Parser<'a> {
 
     /// Expect a pattern with a custom error message.
     /// Consolidates the common pattern: `expect(...).map_err(|_| Error::Expected(msg))`.
-    pub(crate) fn expect_with_msg(
+    pub fn expect_with_msg(
         &mut self,
         expected: &[u8],
         msg: &'static str,
@@ -70,7 +70,7 @@ impl<'a> Parser<'a> {
 
     /// Expect a keyword, map to a custom error, then skip newlines and spaces.
     /// Consolidates the common pattern: `expect(keyword).map_err(...)?; skip_newlines_and_spaces()`.
-    pub(crate) fn expect_keyword_then_skip(
+    pub fn expect_keyword_then_skip(
         &mut self,
         keyword: &[u8],
         error_msg: &'static str,
@@ -157,5 +157,40 @@ mod tests {
         let result = parser.expect(VERSION.as_bytes());
         assert!(result.is_ok());
         assert_eq!(parser.pos, 8);
+    }
+
+    #[test]
+    fn at_newline_returns_true_for_unix_newline() {
+        let input = b"\ntest";
+        let parser = Parser::new(input).unwrap();
+        assert!(parser.at_newline());
+    }
+
+    #[test]
+    fn at_newline_returns_true_for_windows_newline() {
+        let input = b"\r\ntest";
+        let parser = Parser::new(input).unwrap();
+        assert!(parser.at_newline());
+    }
+
+    #[test]
+    fn at_newline_returns_true_for_mac_newline() {
+        let input = b"\rtest";
+        let parser = Parser::new(input).unwrap();
+        assert!(parser.at_newline());
+    }
+
+    #[test]
+    fn at_newline_returns_false_for_non_newline() {
+        let input = b"test";
+        let parser = Parser::new(input).unwrap();
+        assert!(!parser.at_newline());
+    }
+
+    #[test]
+    fn at_newline_returns_false_for_space() {
+        let input = b" test";
+        let parser = Parser::new(input).unwrap();
+        assert!(!parser.at_newline());
     }
 }

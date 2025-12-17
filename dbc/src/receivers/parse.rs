@@ -1,41 +1,55 @@
 use super::Receivers;
 use crate::{
-    Error, MAX_NAME_SIZE, MAX_RECEIVER_NODES, Parser, Result,
+    Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result,
     compat::{String, Vec},
 };
 
 impl Receivers {
     pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Skip any leading spaces (but not newlines - newlines indicate end of line)
-        // If we get UnexpectedEof, we're at EOF, so return None
-        if let Err(Error::UnexpectedEof) = parser.skip_whitespace() {
+        // Skip whitespace (spaces and tabs, but not newlines) before checking for broadcast/newline
+        // Manually skip spaces and tabs since skip_whitespace() only handles spaces
+        while !parser.eof() && !parser.at_newline() {
+            match parser.current_byte() {
+                Some(b' ') | Some(b'\t') => {
+                    parser.advance_one();
+                }
+                _ => break,
+            }
+        }
+
+        // Check if we're at a newline (end of signal line) - do this BEFORE checking for '*'
+        if parser.at_newline() || parser.eof() {
             return Ok(Self::new_none());
         }
-        // Other errors (like Expected) mean there's no whitespace, continue
 
         // Check if next character is '*' (broadcast marker)
         if parser.expect(b"*").is_ok() {
             return Ok(Self::new_broadcast());
         }
 
-        // Check if we're at a newline (end of signal line)
-        if parser.expect(b"\n").is_ok() || parser.expect(b"\r").is_ok() {
-            return Ok(Self::new_none());
-        }
-
         // Parse space-separated identifiers into Vec
-        let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_RECEIVER_NODES }> = Vec::new();
+        let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }> = Vec::new();
 
         loop {
-            // Skip spaces (but not newlines)
-            // If we get UnexpectedEof, we're at EOF, so break
-            if let Err(Error::UnexpectedEof) = parser.skip_whitespace() {
+            // Check if we're at a newline (end of signal line) BEFORE doing anything else
+            if parser.at_newline() || parser.eof() {
                 break;
             }
-            // Other errors mean there's no whitespace, continue
 
-            // Check if we're at a newline (end of signal line)
-            if parser.expect(b"\n").is_ok() || parser.expect(b"\r").is_ok() {
+            // Skip whitespace (spaces and tabs, but not newlines)
+            // Manually skip spaces and tabs since skip_whitespace() only handles spaces
+            while !parser.eof() && !parser.at_newline() {
+                match parser.current_byte() {
+                    Some(b' ') | Some(b'\t') => {
+                        parser.advance_one();
+                    }
+                    _ => break,
+                }
+            }
+
+            // Check again if we're at a newline after skipping whitespace
+            if parser.at_newline() || parser.eof() {
                 break;
             }
 
@@ -44,17 +58,43 @@ impl Receivers {
             let pos_before = parser.pos();
             match parser.parse_identifier() {
                 Ok(node) => {
-                    if let Some(err) = crate::check_max_limit(
-                        nodes.len(),
-                        MAX_RECEIVER_NODES - 1,
-                        Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY),
-                    ) {
-                        return Err(err);
+                    // Check if adding this node would exceed MAX_NODES - 1 limit
+                    // Receivers can have at most MAX_NODES - 1 nodes
+                    if nodes.len() >= MAX_NODES - 1 {
+                        return Err(Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY));
                     }
-                    let node = crate::validate_name(node)?;
+                    let node = crate::compat::validate_name(node)?;
                     nodes
                         .push(node)
                         .map_err(|_| Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
+
+                    // After parsing an identifier, check what's next
+                    // parse_identifier() stops at newlines/whitespace without consuming them
+
+                    // Safety check: if position didn't advance, we're stuck - break
+                    if parser.pos() == pos_before {
+                        break;
+                    }
+
+                    // CRITICAL: Check for newline FIRST - parse_identifier() stops at \r/\n without consuming
+                    // Check what's next after parsing the identifier
+                    if parser.at_newline() || parser.eof() {
+                        // At newline or EOF - we're done
+                        break;
+                    }
+                    // Check if we're at whitespace (there might be another receiver)
+                    if let Some(byte) = parser.current_byte() {
+                        if byte == b' ' || byte == b'\t' {
+                            // At whitespace - there might be another receiver
+                            // Continue loop to skip whitespace and parse next receiver
+                            continue;
+                        }
+                        // Not whitespace and not newline - parse_identifier() should have stopped here
+                        // This indicates a bug, but break to prevent infinite loop
+                        break;
+                    }
+                    // EOF - we're done
+                    break;
                 }
                 Err(Error::UnexpectedEof) => break,
                 Err(_) => {
@@ -164,10 +204,10 @@ mod tests {
 
         #[test]
         fn test_parse_receivers_too_many() {
-            // Create a string with 65 receiver nodes (exceeds limit of 64)
+            // Create a string with MAX_NODES receiver nodes (exceeds limit of MAX_NODES - 1)
             // Use std::vec::Vec since we need more than 64 bytes
             let mut receivers_bytes = std::vec::Vec::new();
-            for i in 0..65 {
+            for i in 0..MAX_NODES {
                 if i > 0 {
                     receivers_bytes.push(b' ');
                 }
@@ -187,10 +227,10 @@ mod tests {
 
         #[test]
         fn test_parse_receivers_at_limit() {
-            // Create a string with exactly 64 receiver nodes (at the limit)
+            // Create a string with exactly MAX_NODES - 1 receiver nodes (at the limit)
             // Use std::vec::Vec since we need more than 64 bytes
             let mut receivers_bytes = std::vec::Vec::new();
-            for i in 0..MAX_RECEIVER_NODES {
+            for i in 0..(MAX_NODES - 1) {
                 if i > 0 {
                     receivers_bytes.push(b' ');
                 }
@@ -200,7 +240,7 @@ mod tests {
             let mut parser = Parser::new(&receivers_bytes).unwrap();
             let result = Receivers::parse(&mut parser).unwrap();
             let node_count = result.len();
-            assert_eq!(node_count, 64);
+            assert_eq!(node_count, MAX_NODES - 1);
         }
     }
 }

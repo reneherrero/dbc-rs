@@ -44,7 +44,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn skip_to_end_of_line(&mut self) {
+    pub fn skip_to_end_of_line(&mut self) {
         let input_len = self.input.len();
         while self.pos < input_len {
             let byte = self.input[self.pos];
@@ -73,7 +73,7 @@ impl<'a> Parser<'a> {
     /// Skip whitespace optionally (don't error if no whitespace).
     /// Consolidates the pattern: `let _ = parser.skip_whitespace();` or `skip_whitespace().ok()`.
     #[inline]
-    pub(crate) fn skip_whitespace_optional(&mut self) {
+    pub fn skip_whitespace_optional(&mut self) {
         let _ = self.skip_whitespace();
     }
 }

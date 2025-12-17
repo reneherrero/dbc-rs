@@ -1,7 +1,8 @@
 use super::Nodes;
 use crate::{
     BU_, Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result,
-    compat::{String, Vec},
+    compat::{String, Vec, validate_name},
+    error::{check_max_limit, map_val_error},
 };
 
 impl Nodes {
@@ -29,14 +30,14 @@ impl Nodes {
             // parse_identifier() will fail if we're at EOF
             match parser.parse_identifier() {
                 Ok(node) => {
-                    if let Some(err) = crate::check_max_limit(
+                    if let Some(err) = check_max_limit(
                         nodes.len(),
                         MAX_NODES - 1,
                         Error::Nodes(Error::NODES_TOO_MANY),
                     ) {
                         return Err(err);
                     }
-                    let node_str = crate::validate_name(node)?;
+                    let node_str = validate_name(node)?;
                     nodes.push(node_str).map_err(|_| Error::Nodes(Error::NODES_TOO_MANY))?;
                 }
                 Err(_) => {
@@ -52,7 +53,7 @@ impl Nodes {
 
         // Validate before construction
         Self::validate(nodes.as_slice()).map_err(|e| {
-            crate::error::map_val_error(e, Error::Nodes, || Error::Nodes(Error::NODES_ERROR_PREFIX))
+            map_val_error(e, Error::Nodes, || Error::Nodes(Error::NODES_ERROR_PREFIX))
         })?;
         // Construct directly (validation already done)
         Ok(Nodes::new(nodes))

@@ -55,7 +55,8 @@ jobs:
     env:
       DBC_MAX_MESSAGES: 16
       DBC_MAX_SIGNALS_PER_MESSAGE: 8
-      DBC_MAX_RECEIVER_NODES: 4
+      DBC_MAX_NODES: 4
+      DBC_MAX_EXTENDED_MULTIPLEXING: 8
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -106,7 +107,8 @@ jobs:
     env:
       DBC_MAX_MESSAGES: 16
       DBC_MAX_SIGNALS_PER_MESSAGE: 8
-      DBC_MAX_RECEIVER_NODES: 4
+      DBC_MAX_NODES: 4
+      DBC_MAX_EXTENDED_MULTIPLEXING: 8
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

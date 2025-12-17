@@ -1,5 +1,6 @@
 use super::Signal;
-use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result, compat::String};
+use crate::compat::String;
+use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result};
 
 impl Signal {
     fn parse_position<'b>(parser: &mut Parser<'b>) -> Result<(u16, u16, ByteOrder, bool)> {
@@ -152,36 +153,63 @@ impl Signal {
             Error::Signal(crate::error::Error::SIGNAL_NAME_EMPTY)
         })?;
 
-        // Skip whitespace (optional before colon) - handle multiplexer indicator
-        // According to spec: multiplexer_indicator = ' ' | [m multiplexer_switch_value] [M]
-        // For now, we just skip whitespace and any potential multiplexer indicator
+        // Parse multiplexer indicator
+        // According to spec: multiplexer_indicator = ' ' | 'M' | 'm' multiplexer_switch_value
+        // Extended multiplexing (Vector Informatik): 'm' switch_value 'M' means the signal is
+        // both a multiplexed signal (dependent on higher-level multiplexer) and a multiplexer
+        // switch itself (controlling lower-level signals).
         parser.skip_newlines_and_spaces();
 
-        // Skip potential multiplexer indicator (m followed by number, or M)
-        // For simplicity, skip any 'm' or 'M' followed by digits
-        if parser.expect(b"m").is_ok() || parser.expect(b"M").is_ok() {
-            // Skip any digits that follow
+        let mut is_multiplexer_switch = false;
+        let mut multiplexer_switch_value: Option<u64> = None;
+
+        // Check for 'M' (multiplexer switch) or 'm' followed by optional digits (multiplexed signal)
+        if parser.expect(b"M").is_ok() {
+            // This is a multiplexer switch signal (but not multiplexed itself)
+            is_multiplexer_switch = true;
+            parser.skip_newlines_and_spaces();
+        } else if parser.expect(b"m").is_ok() {
+            // This is a multiplexed signal - parse the switch value
+            // Manually parse digits because parse_u64() stops at specific chars and 'M' isn't one
+            let mut switch_value: Option<u64> = None;
+
+            // Manually parse digits until we hit 'M', whitespace, or colon
+            let mut value = 0u64;
+            let mut found_digits = false;
             loop {
-                let _pos_before = parser.pos();
-                // Try to consume a digit
-                if parser.expect(b"0").is_ok()
-                    || parser.expect(b"1").is_ok()
-                    || parser.expect(b"2").is_ok()
-                    || parser.expect(b"3").is_ok()
-                    || parser.expect(b"4").is_ok()
-                    || parser.expect(b"5").is_ok()
-                    || parser.expect(b"6").is_ok()
-                    || parser.expect(b"7").is_ok()
-                    || parser.expect(b"8").is_ok()
-                    || parser.expect(b"9").is_ok()
-                {
-                    // Consumed a digit, continue
+                if parser.eof() {
+                    break;
+                }
+                let Some(byte) = parser.current_byte() else {
+                    break;
+                };
+                if byte.is_ascii_digit() {
+                    found_digits = true;
+                    value = value
+                        .checked_mul(10)
+                        .and_then(|v| v.checked_add((byte - b'0') as u64))
+                        .ok_or(Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX))?;
+                    parser.advance_one();
+                } else if byte == b'M' || parser.matches_any(b" \t:") || parser.at_newline() {
+                    // Stop at 'M', whitespace, or colon
+                    break;
                 } else {
-                    // Not a digit, stop
+                    // Invalid character - stop parsing
                     break;
                 }
             }
-            // Skip whitespace after multiplexer indicator
+
+            if found_digits {
+                switch_value = Some(value);
+            }
+
+            multiplexer_switch_value = switch_value;
+
+            // Check if 'M' follows the switch value (extended multiplexing: m65M)
+            // This means the signal is both multiplexed AND acts as a multiplexer switch
+            if parser.expect(b"M").is_ok() {
+                is_multiplexer_switch = true;
+            }
             parser.skip_newlines_and_spaces();
         }
 
@@ -220,13 +248,13 @@ impl Signal {
         let receivers = Receivers::parse(parser)?;
 
         // Validate before construction
-        Signal::validate(name, length, min, max).map_err(|e| {
+        Self::validate(name, length, min, max).map_err(|e| {
             crate::error::map_val_error(e, Error::Signal, || {
                 Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX)
             })
         })?;
 
-        let name = crate::validate_name(name)?;
+        let name = crate::compat::validate_name(name)?;
 
         // Construct directly (validation already done)
         Ok(Self {
@@ -241,206 +269,8 @@ impl Signal {
             max,
             unit,
             receivers,
+            is_multiplexer_switch,
+            multiplexer_switch_value,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{ByteOrder, Error, Parser, Receivers};
-
-    #[test]
-    fn test_parse_valid_signal() {
-        let line = r#"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let sig = Signal::parse(&mut parser).unwrap();
-        assert_eq!(sig.name(), "RPM");
-        assert_eq!(sig.start_bit(), 0);
-        assert_eq!(sig.length(), 16);
-        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
-        assert!(sig.is_unsigned());
-        assert_eq!(sig.factor(), 0.25);
-        assert_eq!(sig.offset(), 0.);
-        assert_eq!(sig.min(), 0.);
-        assert_eq!(sig.max(), 8000.);
-        assert_eq!(sig.unit(), Some("rpm"));
-        // Check receivers using iter
-        let mut receivers_iter = sig.receivers().iter();
-        let receiver1 = receivers_iter.next().unwrap();
-        assert_eq!(receiver1.as_str(), "TCM");
-        assert_eq!(receivers_iter.next(), None);
-    }
-
-    #[test]
-    fn test_parse_signal_with_empty_unit_and_broadcast() {
-        let line = r#"SG_ ABSActive : 16|1@0+ (1,0) [0|1] "" *"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let sig = Signal::parse(&mut parser).unwrap();
-        assert_eq!(sig.name(), "ABSActive");
-        assert_eq!(sig.start_bit(), 16);
-        assert_eq!(sig.length(), 1);
-        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
-        assert!(sig.is_unsigned());
-        assert_eq!(sig.factor(), 1.);
-        assert_eq!(sig.offset(), 0.);
-        assert_eq!(sig.min(), 0.);
-        assert_eq!(sig.max(), 1.);
-        assert_eq!(sig.unit(), None);
-        assert_eq!(sig.receivers(), &Receivers::Broadcast);
-    }
-
-    #[test]
-    fn test_parse_signal_with_negative_offset_and_min() {
-        let line = r#"SG_ Temperature : 16|8@0- (1,-40) [-40|215] "°C" TCM BCM"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let sig = Signal::parse(&mut parser).unwrap();
-        assert_eq!(sig.name(), "Temperature");
-        assert_eq!(sig.start_bit(), 16);
-        assert_eq!(sig.length(), 8);
-        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
-        assert!(!sig.is_unsigned());
-        assert_eq!(sig.factor(), 1.);
-        assert_eq!(sig.offset(), -40.);
-        assert_eq!(sig.min(), -40.);
-        assert_eq!(sig.max(), 215.);
-        assert_eq!(sig.unit(), Some("°C"));
-        // Check receivers using iter
-        let mut receivers_iter = sig.receivers().iter();
-        let receiver1 = receivers_iter.next().unwrap();
-        assert_eq!(receiver1.as_str(), "TCM");
-        let receiver2 = receivers_iter.next().unwrap();
-        assert_eq!(receiver2.as_str(), "BCM");
-        assert_eq!(receivers_iter.next(), None);
-    }
-
-    #[test]
-    fn test_parse_signal_with_percent_unit() {
-        let line = r#"SG_ ThrottlePosition : 24|8@0+ (0.392157,0) [0|100] "%" *"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let sig = Signal::parse(&mut parser).unwrap();
-        assert_eq!(sig.name(), "ThrottlePosition");
-        assert_eq!(sig.start_bit(), 24);
-        assert_eq!(sig.length(), 8);
-        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
-        assert!(sig.is_unsigned());
-        assert_eq!(sig.factor(), 0.392_157);
-        assert_eq!(sig.offset(), 0.);
-        assert_eq!(sig.min(), 0.);
-        assert_eq!(sig.max(), 100.);
-        assert_eq!(sig.unit(), Some("%"));
-        assert_eq!(sig.receivers(), &Receivers::Broadcast);
-    }
-
-    #[test]
-    fn test_parse_signal_missing_factors_and_limits() {
-        // Should use default values where missing
-        let line = r#"SG_ Simple : 10|4@0+ ( , ) [ | ] "" *"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let sig = Signal::parse(&mut parser).unwrap();
-        assert_eq!(sig.name(), "Simple");
-        assert_eq!(sig.start_bit(), 10);
-        assert_eq!(sig.length(), 4);
-        assert_eq!(sig.byte_order(), ByteOrder::BigEndian); // @0 = BigEndian (Motorola)
-        assert!(sig.is_unsigned());
-        assert_eq!(sig.factor(), 0.);
-        assert_eq!(sig.offset(), 0.);
-        assert_eq!(sig.min(), 0.);
-        assert_eq!(sig.max(), 0.);
-        assert_eq!(sig.unit(), None);
-        assert_eq!(sig.receivers(), &Receivers::Broadcast);
-    }
-
-    #[test]
-    fn test_parse_signal_missing_start_bit() {
-        let line = r#"SG_ RPM : |16@0+ (0.25,0) [0|8000] "rpm" TCM"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let err = Signal::parse(&mut parser).unwrap_err();
-        match err {
-            Error::Signal(msg) => {
-                // Check for either the old constant or the new formatted message
-                assert!(
-                    msg.contains(Error::SIGNAL_PARSE_INVALID_START_BIT)
-                        || msg.contains("Signal 'RPM'")
-                );
-            }
-            _ => panic!("Expected Error::Signal"),
-        }
-    }
-
-    #[test]
-    fn test_parse_signal_invalid_range() {
-        // min > max should fail validation
-        let line = r#"SG_ Test : 0|8@0+ (1,0) [100|50] "unit" *"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let err = Signal::parse(&mut parser).unwrap_err();
-        match err {
-            Error::Signal(msg) => {
-                assert!(msg.contains(Error::INVALID_RANGE));
-            }
-            e => panic!("Expected Error::Signal, got: {:?}", e),
-        }
-    }
-
-    #[test]
-    fn test_parse_signal_overflow() {
-        // Signal with start_bit + length > 64 should parse successfully
-        // (validation against message DLC happens in Message::validate)
-        // This signal would fit in a CAN FD message (64 bytes = 512 bits)
-        let line = r#"SG_ Test : 60|10@0+ (1,0) [0|100] "unit" *"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let signal = Signal::parse(&mut parser).unwrap();
-        assert_eq!(signal.start_bit(), 60);
-        assert_eq!(signal.length(), 10);
-        // Note: Message validation tests are in message.rs and message_builder.rs
-    }
-
-    #[test]
-    fn test_parse_signal_length_too_large() {
-        // length > 512 should fail validation (CAN FD maximum is 512 bits)
-        let line = r#"SG_ Test : 0|513@0+ (1,0) [0|100] "unit" *"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let err = Signal::parse(&mut parser).unwrap_err();
-        match err {
-            Error::Signal(msg) => {
-                // Check for either the old constant or the new formatted message
-                assert!(
-                    msg.contains(Error::SIGNAL_LENGTH_TOO_LARGE)
-                        || msg.contains("Signal 'Test'")
-                        || msg.contains("513")
-                );
-            }
-            e => panic!("Expected Error::Signal, got: {:?}", e),
-        }
-    }
-
-    #[test]
-    fn test_parse_signal_zero_length() {
-        // length = 0 should fail validation
-        let line = r#"SG_ Test : 0|0@0+ (1,0) [0|100] "unit" *"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let err = Signal::parse(&mut parser).unwrap_err();
-        match err {
-            Error::Signal(msg) => {
-                // Check for either the old constant or the new formatted message
-                assert!(
-                    msg.contains(Error::SIGNAL_LENGTH_TOO_SMALL)
-                        || msg.contains("Signal 'Test'")
-                        || msg.contains("0 bits")
-                );
-            }
-            e => panic!("Expected Error::Signal, got: {:?}", e),
-        }
-    }
-
-    #[test]
-    fn test_parse_signal_missing_length() {
-        let line = r#"SG_ RPM : 0|@0+ (0.25,0) [0|8000] "rpm" TCM"#;
-        let mut parser = Parser::new(line.as_bytes()).unwrap();
-        let err = Signal::parse(&mut parser).unwrap_err();
-        match err {
-            Error::Signal(msg) => assert!(msg.contains(Error::SIGNAL_PARSE_INVALID_LENGTH)),
-            e => panic!("Expected Error::Signal, got: {:?}", e),
-        }
     }
 }

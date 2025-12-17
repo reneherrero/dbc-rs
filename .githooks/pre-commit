@@ -134,7 +134,7 @@ fi
 
 # Run tests with heapless feature (with reduced constants to avoid stack overflow)
 echo -e "\n${YELLOW}Running tests with heapless feature (release mode, reduced constants)...${NC}"
-if DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_RECEIVER_NODES=4 cargo test --release --no-default-features --features heapless -p dbc-rs 2>&1; then
+if DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --release --no-default-features --features heapless -p dbc-rs 2>&1; then
     echo -e "${GREEN}✓ Tests passed (heapless)${NC}"
 else
     echo -e "${RED}✗ Tests failed (heapless)${NC}"

@@ -132,7 +132,6 @@ Capacity limits prevent resource exhaustion (DoS protection). Defaults accommoda
 | `DBC_MAX_SIGNALS_PER_MESSAGE` | `64` | Maximum number of signals per message |
 | `DBC_MAX_NODES` | `256` | Maximum number of nodes in the bus |
 | `DBC_MAX_VALUE_DESCRIPTIONS` | `64` | Maximum number of value descriptions |
-| `DBC_MAX_RECEIVER_NODES` | `64` | Maximum number of receiver nodes per signal |
 | `DBC_MAX_NAME_SIZE` | `64` | Maximum length of names (messages, signals, nodes, etc.) |
 
 **Example:**

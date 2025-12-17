@@ -1,4 +1,4 @@
-use crate::{Nodes, Version};
+use crate::{ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version, compat::Vec};
 
 // Module declarations
 mod messages;
@@ -57,4 +57,5 @@ pub struct Dbc {
     messages: Messages,
     #[cfg(feature = "std")]
     value_descriptions: ValueDescriptionsMap,
+    extended_multiplexing: Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>,
 }

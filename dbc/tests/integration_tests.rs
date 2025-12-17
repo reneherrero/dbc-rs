@@ -559,4 +559,160 @@ mod std {
         // // J1939-specific attributes in the file include NmJ1939Function, NmStationAddress, etc.
         // // See SPECIFICATIONS.md Section 17.3: J1939-Specific Attributes
     }
+
+    #[test]
+    fn test_parse_29_bit_odb2_dbc() {
+        // Integration test for 11-bit-odb2.dbc file
+        // This file contains a standard 11-bit CAN ID (2024 = 0x7E8)
+        // with OBD2 diagnostic data and extensive multiplexing (149 signals)
+        let content =
+            read_to_string("tests/data/11-bit-odb2.dbc").expect("Failed to read 11-bit-odb2.dbc");
+        let dbc = Dbc::parse(&content).expect("Failed to parse 11-bit-odb2.dbc");
+
+        // Verify version (empty string)
+        assert_eq!(dbc.version().map(|v| v.to_string()), Some("".to_string()));
+
+        // Verify messages (should have 1 message with 11-bit ID)
+        assert_eq!(dbc.messages().len(), 1);
+
+        // Verify OBD2 message with standard 11-bit CAN ID
+        // Message ID 2024 = 0x7E8 (standard 11-bit CAN ID)
+        let obd2_msg =
+            dbc.messages().iter().find(|m| m.id() == 2024).expect("OBD2 message not found");
+
+        assert_eq!(obd2_msg.name(), "OBD2");
+        assert_eq!(obd2_msg.dlc(), 8);
+        assert_eq!(obd2_msg.sender(), "Vector__XXX");
+
+        // Verify the message has many signals (this file has 150+ signals)
+        assert!(
+            obd2_msg.signals().len() > 100,
+            "Expected many signals in OBD2 message"
+        );
+
+        // Verify multiplexor signal S
+        let s_signal = obd2_msg.signals().find("S").expect("S signal not found");
+        assert_eq!(s_signal.start_bit(), 15);
+        assert_eq!(s_signal.length(), 8);
+        assert_eq!(s_signal.factor(), 1.0);
+        assert_eq!(s_signal.offset(), 0.0);
+        assert_eq!(s_signal.min(), 0.0);
+        assert_eq!(s_signal.max(), 15.0);
+
+        // Verify multiplexor signal S01PID
+        let s01pid_signal = obd2_msg.signals().find("S01PID").expect("S01PID signal not found");
+        assert_eq!(s01pid_signal.start_bit(), 23);
+        assert_eq!(s01pid_signal.length(), 8);
+        assert_eq!(s01pid_signal.factor(), 1.0);
+        assert_eq!(s01pid_signal.offset(), 0.0);
+        assert_eq!(s01pid_signal.min(), 0.0);
+        assert_eq!(s01pid_signal.max(), 255.0);
+
+        // Verify some key multiplexed signals
+        // S01PID00_PIDsSupported_01_20
+        let pids_supported = obd2_msg
+            .signals()
+            .find("S01PID00_PIDsSupported_01_20")
+            .expect("S01PID00_PIDsSupported_01_20 signal not found");
+        assert_eq!(pids_supported.start_bit(), 31);
+        assert_eq!(pids_supported.length(), 32);
+        assert_eq!(pids_supported.factor(), 1.0);
+        assert_eq!(pids_supported.offset(), 0.0);
+        assert_eq!(pids_supported.min(), 0.0);
+        assert_eq!(pids_supported.max(), 4294967295.0);
+
+        // S01PID0C_EngineRPM
+        let engine_rpm = obd2_msg
+            .signals()
+            .find("S01PID0C_EngineRPM")
+            .expect("S01PID0C_EngineRPM signal not found");
+        assert_eq!(engine_rpm.start_bit(), 31);
+        assert_eq!(engine_rpm.length(), 16);
+        assert_eq!(engine_rpm.factor(), 0.25);
+        assert_eq!(engine_rpm.offset(), 0.0);
+        assert_eq!(engine_rpm.min(), 0.0);
+        assert_eq!(engine_rpm.max(), 16383.75);
+        assert_eq!(engine_rpm.unit(), Some("rpm"));
+
+        // S01PID0D_VehicleSpeed
+        let vehicle_speed = obd2_msg
+            .signals()
+            .find("S01PID0D_VehicleSpeed")
+            .expect("S01PID0D_VehicleSpeed signal not found");
+        assert_eq!(vehicle_speed.start_bit(), 31);
+        assert_eq!(vehicle_speed.length(), 8);
+        assert_eq!(vehicle_speed.factor(), 1.0);
+        assert_eq!(vehicle_speed.offset(), 0.0);
+        assert_eq!(vehicle_speed.min(), 0.0);
+        assert_eq!(vehicle_speed.max(), 255.0);
+        assert_eq!(vehicle_speed.unit(), Some("km/h"));
+
+        // S01PID05_EngineCoolantTemp
+        let coolant_temp = obd2_msg
+            .signals()
+            .find("S01PID05_EngineCoolantTemp")
+            .expect("S01PID05_EngineCoolantTemp signal not found");
+        assert_eq!(coolant_temp.start_bit(), 31);
+        assert_eq!(coolant_temp.length(), 8);
+        assert_eq!(coolant_temp.factor(), 1.0);
+        assert_eq!(coolant_temp.offset(), -40.0);
+        assert_eq!(coolant_temp.min(), -40.0);
+        assert_eq!(coolant_temp.max(), 215.0);
+        assert_eq!(coolant_temp.unit(), Some("degC"));
+
+        // S01PID04_CalcEngineLoad
+        let engine_load = obd2_msg
+            .signals()
+            .find("S01PID04_CalcEngineLoad")
+            .expect("S01PID04_CalcEngineLoad signal not found");
+        assert_eq!(engine_load.start_bit(), 31);
+        assert_eq!(engine_load.length(), 8);
+        assert_eq!(engine_load.factor(), 0.39216);
+        assert_eq!(engine_load.offset(), 0.0);
+        assert_eq!(engine_load.min(), 0.0);
+        assert_eq!(engine_load.max(), 100.0);
+        assert_eq!(engine_load.unit(), Some("%"));
+
+        // S01PID11_ThrottlePosition
+        let throttle_pos = obd2_msg
+            .signals()
+            .find("S01PID11_ThrottlePosition")
+            .expect("S01PID11_ThrottlePosition signal not found");
+        assert_eq!(throttle_pos.start_bit(), 31);
+        assert_eq!(throttle_pos.length(), 8);
+        assert_eq!(throttle_pos.factor(), 0.39216);
+        assert_eq!(throttle_pos.offset(), 0.0);
+        assert_eq!(throttle_pos.min(), 0.0);
+        assert_eq!(throttle_pos.max(), 100.0);
+        assert_eq!(throttle_pos.unit(), Some("%"));
+
+        // Verify S02PID signal exists
+        let s02pid_signal = obd2_msg.signals().find("S02PID").expect("S02PID signal not found");
+        assert_eq!(s02pid_signal.start_bit(), 23);
+        assert_eq!(s02pid_signal.length(), 8);
+
+        // Verify S02PID02_FreezeDTC signal
+        let freeze_dtc = obd2_msg
+            .signals()
+            .find("S02PID02_FreezeDTC")
+            .expect("S02PID02_FreezeDTC signal not found");
+        assert_eq!(freeze_dtc.start_bit(), 31);
+        assert_eq!(freeze_dtc.length(), 16);
+        assert_eq!(freeze_dtc.factor(), 1.0);
+        assert_eq!(freeze_dtc.offset(), 0.0);
+        assert_eq!(freeze_dtc.min(), 0.0);
+        assert_eq!(freeze_dtc.max(), 65535.0);
+
+        // Verify that the message ID is indeed a standard 11-bit ID
+        // Standard 11-bit IDs are in the range 0-0x7FF (0-2047)
+        assert!(
+            obd2_msg.id() <= 0x7FF,
+            "Message ID should be a standard 11-bit CAN ID (<= 0x7FF)"
+        );
+        assert_eq!(
+            obd2_msg.id(),
+            2024u32,
+            "Message ID should be exactly 2024 (0x7E8)"
+        );
+    }
 }
