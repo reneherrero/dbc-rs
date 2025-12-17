@@ -8,9 +8,11 @@ use crate::{Error, MAX_MESSAGES, Message, Result, compat::Vec};
 pub struct Messages {
     messages: Vec<Message, { MAX_MESSAGES }>,
     // Optional index for fast ID lookup (feature-flagged)
-    #[cfg(feature = "heapless")]
+    // NOTE: When both `alloc` and `heapless` are enabled, prefer the `alloc` index to avoid
+    // large stack allocations during construction (heapless maps are stored inline).
+    #[cfg(all(feature = "heapless", not(feature = "alloc")))]
     id_index: Option<heapless::FnvIndexMap<u32, usize, { MAX_MESSAGES }>>,
-    #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+    #[cfg(feature = "alloc")]
     sorted_indices: Option<alloc::vec::Vec<(u32, usize)>>, // (id, index) pairs sorted by id
 }
 
@@ -27,22 +29,22 @@ impl Messages {
         let messages_vec: Vec<Message, { MAX_MESSAGES }> = messages.iter().cloned().collect();
 
         // Build index for fast lookup (if features allow)
-        #[cfg(feature = "heapless")]
+        #[cfg(all(feature = "heapless", not(feature = "alloc")))]
         let id_index = Self::build_heapless_index(&messages_vec);
-        #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+        #[cfg(feature = "alloc")]
         let sorted_indices = Self::build_sorted_index(&messages_vec);
 
         Ok(Self {
             messages: messages_vec,
-            #[cfg(feature = "heapless")]
+            #[cfg(all(feature = "heapless", not(feature = "alloc")))]
             id_index,
-            #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+            #[cfg(feature = "alloc")]
             sorted_indices,
         })
     }
 
     /// Build heapless index for O(1) lookup (only with heapless feature)
-    #[cfg(feature = "heapless")]
+    #[cfg(all(feature = "heapless", not(feature = "alloc")))]
     fn build_heapless_index(
         messages: &[Message],
     ) -> Option<heapless::FnvIndexMap<u32, usize, { MAX_MESSAGES }>> {
@@ -58,7 +60,7 @@ impl Messages {
     }
 
     /// Build sorted index for O(log n) lookup (only with alloc feature, no heapless)
-    #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+    #[cfg(feature = "alloc")]
     fn build_sorted_index(messages: &[Message]) -> Option<alloc::vec::Vec<(u32, usize)>> {
         let mut indices = alloc::vec::Vec::with_capacity(messages.len());
         for (idx, msg) in messages.iter().enumerate() {
@@ -179,12 +181,12 @@ impl Messages {
     /// Find a message by CAN ID with optimized lookup based on available features.
     ///
     /// - With `heapless` feature: O(1) lookup using FnvIndexMap
-    /// - With `alloc` feature (no heapless): O(log n) lookup using binary search on sorted indices
+    /// - With `alloc` feature: O(log n) lookup using binary search on sorted indices
     /// - Otherwise: O(n) linear search
     #[inline]
     #[must_use]
     pub fn find_by_id(&self, id: u32) -> Option<&Message> {
-        #[cfg(feature = "heapless")]
+        #[cfg(all(feature = "heapless", not(feature = "alloc")))]
         {
             if let Some(ref index) = self.id_index {
                 if let Some(&idx) = index.get(&id) {
@@ -194,7 +196,7 @@ impl Messages {
             }
         }
 
-        #[cfg(all(feature = "alloc", not(feature = "heapless")))]
+        #[cfg(feature = "alloc")]
         {
             if let Some(ref sorted) = self.sorted_indices {
                 // Binary search for O(log n) lookup

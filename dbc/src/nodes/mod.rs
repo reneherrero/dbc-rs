@@ -16,7 +16,7 @@ pub use builder::NodesBuilder;
 /// Represents a collection of node (ECU) names from a DBC file.
 ///
 /// The `BU_` statement in a DBC file lists all nodes (ECUs) on the CAN bus.
-/// This struct stores the node names as borrowed references.
+/// This struct stores the node names as owned, fixed-capacity strings.
 ///
 /// # Examples
 ///

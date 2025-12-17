@@ -11,7 +11,7 @@ use crate::{MAX_NAME_SIZE, compat::String};
 /// Represents a version string from a DBC file.
 ///
 /// The `VERSION` statement in a DBC file specifies the database version.
-/// This struct stores the version string as a borrowed reference.
+/// This struct stores the version string as an owned, fixed-capacity string.
 ///
 /// # Examples
 ///
