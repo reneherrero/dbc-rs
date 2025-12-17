@@ -73,6 +73,48 @@ impl Signal {
         // Apply factor and offset to get physical value (single mul-add operation)
         Ok((value as f64) * self.factor + self.offset)
     }
+
+    /// Decode the signal and return both raw and physical values in a single pass.
+    ///
+    /// This is an optimized method for multiplexer switch decoding where both the
+    /// raw integer value (for switch matching) and the physical value are needed.
+    /// Avoids the overhead of extracting bits twice.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The CAN message data bytes (up to 8 bytes for classic CAN, 64 for CAN FD)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok((raw_value, physical_value))` - The raw signed integer and physical (factor+offset) value
+    /// * `Err(Error)` - If the signal extends beyond the data length
+    #[inline]
+    pub fn decode_raw(&self, data: &[u8]) -> Result<(i64, f64)> {
+        let start_bit = self.start_bit as usize;
+        let length = self.length as usize;
+        let end_byte = (start_bit + length - 1) / 8;
+
+        if end_byte >= data.len() {
+            return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+        }
+
+        let raw_bits = self.byte_order.extract_bits(data, start_bit, length);
+
+        let raw_value = if self.unsigned {
+            raw_bits as i64
+        } else {
+            let sign_bit_mask = 1u64 << (length - 1);
+            if (raw_bits & sign_bit_mask) != 0 {
+                let mask = !((1u64 << length) - 1);
+                (raw_bits | mask) as i64
+            } else {
+                raw_bits as i64
+            }
+        };
+
+        let physical_value = (raw_value as f64) * self.factor + self.offset;
+        Ok((raw_value, physical_value))
+    }
 }
 
 #[cfg(test)]

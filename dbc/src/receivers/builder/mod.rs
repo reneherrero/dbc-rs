@@ -1,6 +1,6 @@
 use super::Receivers;
 use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Result};
-use std::{collections::HashSet, string::String};
+use std::string::String;
 
 /// Builder for creating `Receivers` programmatically.
 ///
@@ -136,6 +136,7 @@ impl ReceiversBuilder {
     /// assert!(receivers.contains("TCM"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use = "builder method returns modified builder"]
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
         let node = node.as_ref().to_string();
         self.is_broadcast = false;
@@ -171,6 +172,7 @@ impl ReceiversBuilder {
     /// assert_eq!(receivers2.len(), 2);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[must_use = "builder method returns modified builder"]
     pub fn add_nodes<I, S>(mut self, nodes: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -248,7 +250,7 @@ impl ReceiversBuilder {
     /// }
     /// assert!(builder.build().is_err());
     /// ```
-    pub fn build(&self) -> Result<Receivers> {
+    pub fn build(self) -> Result<Receivers> {
         if self.is_broadcast {
             Ok(Receivers::new_broadcast())
         } else if self.nodes.is_empty() {
@@ -265,9 +267,14 @@ impl ReceiversBuilder {
             }
 
             // Make sure the nodes are not duplicated
-            let mut seen = HashSet::new();
-            if !self.nodes.iter().all(|item| seen.insert(item)) {
-                return Err(Error::Signal(Error::RECEIVERS_DUPLICATE_NAME));
+            // Using O(n²) loop instead of HashSet to avoid allocation overhead
+            // (receiver lists are typically small, making this faster in practice)
+            for (i, node1) in self.nodes.iter().enumerate() {
+                for node2 in self.nodes.iter().skip(i + 1) {
+                    if node1 == node2 {
+                        return Err(Error::Signal(Error::RECEIVERS_DUPLICATE_NAME));
+                    }
+                }
             }
 
             // Make sure the node names are not too long and convert to compat::String

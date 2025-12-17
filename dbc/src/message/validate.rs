@@ -2,6 +2,36 @@ use super::Message;
 use crate::{ByteOrder, Error, MAX_SIGNALS_PER_MESSAGE, Result, Signal, error::check_max_limit};
 
 impl Message {
+    /// Validates message-level fields without building signals.
+    ///
+    /// This is a lightweight validation that checks:
+    /// - Message ID is within valid CAN range
+    /// - Message name is not empty
+    /// - DLC is within valid range (1-64)
+    ///
+    /// Used by `MessageBuilder::validate()` for cheap pre-flight checks.
+    #[cfg(feature = "std")]
+    pub(crate) fn validate_message_fields(id: u32, name: &str, dlc: u8) -> Result<()> {
+        const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF;
+
+        if name.trim().is_empty() {
+            return Err(Error::Validation(Error::MESSAGE_NAME_EMPTY));
+        }
+
+        if dlc == 0 {
+            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_SMALL));
+        }
+        if dlc > 64 {
+            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_LARGE));
+        }
+
+        if id > MAX_EXTENDED_ID {
+            return Err(Error::Validation(Error::MESSAGE_ID_OUT_OF_RANGE));
+        }
+
+        Ok(())
+    }
+
     #[allow(clippy::similar_names)] // physical_lsb and physical_msb are intentionally similar
     pub(crate) fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
         let start = start_bit;

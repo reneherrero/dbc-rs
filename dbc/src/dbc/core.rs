@@ -150,8 +150,14 @@ impl Dbc {
     /// Get extended multiplexing entries for a specific message
     ///
     /// Extended multiplexing (SG_MUL_VAL_) entries define which multiplexer switch values
-    /// activate specific multiplexed signals. This method returns all extended multiplexing
-    /// entries for the given message ID.
+    /// activate specific multiplexed signals. This method returns an iterator over
+    /// references to extended multiplexing entries for the given message ID.
+    ///
+    /// # Performance
+    ///
+    /// Returns an iterator of references (zero allocation) instead of cloning entries.
+    /// This is optimized for the decode hot path where extended multiplexing is checked
+    /// on every CAN frame.
     ///
     /// # Examples
     ///
@@ -168,20 +174,19 @@ impl Dbc {
     ///
     /// SG_MUL_VAL_ 500 Signal_A Mux1 0-5,10-15 ;
     /// "#)?;
-    /// let extended = dbc.extended_multiplexing_for_message(500);
+    /// let extended: Vec<_> = dbc.extended_multiplexing_for_message(500).collect();
     /// assert_eq!(extended.len(), 1);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[must_use = "return value should be used"]
+    #[inline]
+    #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn extended_multiplexing_for_message(
         &self,
         message_id: u32,
-    ) -> Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }> {
+    ) -> impl Iterator<Item = &ExtendedMultiplexing> + '_ {
         self.extended_multiplexing
             .iter()
-            .filter(|ext_mux| ext_mux.message_id() == message_id)
-            .cloned()
-            .collect()
+            .filter(move |ext_mux| ext_mux.message_id() == message_id)
     }
 }
 
@@ -205,7 +210,8 @@ SG_MUL_VAL_ 500 Signal_A Mux1 5-10 ;
         )
         .unwrap();
 
-        let ext_entries = dbc.extended_multiplexing_for_message(500);
+        let ext_entries: crate::compat::Vec<_, { crate::MAX_EXTENDED_MULTIPLEXING }> =
+            dbc.extended_multiplexing_for_message(500).collect();
         assert_eq!(
             ext_entries.len(),
             1,

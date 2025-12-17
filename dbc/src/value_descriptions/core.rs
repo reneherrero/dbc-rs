@@ -95,32 +95,9 @@ impl ValueDescriptions {
     /// }
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
-    pub fn iter(&self) -> ValueDescriptionsIter<'_> {
-        ValueDescriptionsIter {
-            entries: &self.entries,
-            pos: 0,
-        }
-    }
-}
-
-/// Iterator over value descriptions
-pub struct ValueDescriptionsIter<'a> {
-    entries: &'a [(u64, String)],
-    pos: usize,
-}
-
-impl<'a> Iterator for ValueDescriptionsIter<'a> {
-    type Item = (u64, &'a str);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos < self.entries.len() {
-            let entry = &self.entries[self.pos];
-            let result = (entry.0, entry.1.as_str());
-            self.pos += 1;
-            Some(result)
-        } else {
-            None
-        }
+    pub fn iter(&self) -> impl Iterator<Item = (u64, &str)> + '_ {
+        self.entries.iter().map(|(value, desc)| (*value, desc.as_str()))
     }
 }

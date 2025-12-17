@@ -72,7 +72,7 @@ impl Signal {
     }
 
     #[inline]
-    #[must_use = "return value should be checked"]
+    #[must_use = "return value should be used"]
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }

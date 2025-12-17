@@ -50,7 +50,7 @@ use validate::Validate;
 /// println!("Parsed {} messages", dbc.messages().len());
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Dbc {
     version: Option<Version>,
     nodes: Nodes,

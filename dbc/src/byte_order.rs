@@ -45,26 +45,45 @@ impl ByteOrder {
                 value
             }
             ByteOrder::BigEndian => {
-                // Big-endian: start_bit is MSB in big-endian numbering, signal extends backward
+                // Big-endian (Motorola): start_bit is MSB in big-endian numbering.
                 // BE bit N maps to physical bit: byte_num * 8 + (7 - bit_in_byte)
-                // We need to extract bits from MSB to LSB and assemble them correctly
-
-                // Extract bits from MSB to LSB (physical order)
+                //
+                // Optimization: Process up to 8 bits at a time instead of 1 bit at a time.
+                // This reduces loop iterations from O(length) to O(length/8).
                 let mut value: u64 = 0;
-                for i in 0..length {
-                    // Calculate which physical bit this corresponds to
-                    let be_bit = start_bit + i;
+                let mut bits_remaining = length;
+                let mut signal_bit_offset = 0; // How many bits of the signal we've processed
+
+                while bits_remaining > 0 {
+                    // Current BE bit position
+                    let be_bit = start_bit + signal_bit_offset;
                     let byte_num = be_bit / 8;
                     let bit_in_byte = be_bit % 8;
-                    let physical_bit = byte_num * 8 + (7 - bit_in_byte);
 
-                    // Extract the bit from the physical position
-                    let byte_idx = physical_bit / 8;
-                    let bit_pos_in_byte = physical_bit % 8;
-                    let bit_value = ((data[byte_idx] as u64) >> (7 - bit_pos_in_byte)) & 1;
+                    // Calculate how many bits we can take from this byte
+                    // In BE numbering, bits go from high to low within a byte (7,6,5,4,3,2,1,0)
+                    // bit_in_byte 0 = physical bit 7, bit_in_byte 7 = physical bit 0
+                    // Available bits in this byte: from bit_in_byte down to 0 = bit_in_byte + 1
+                    let available_in_byte = bit_in_byte + 1;
+                    let bits_to_take = bits_remaining.min(available_in_byte);
 
-                    // Place it in the result (MSB first)
-                    value |= bit_value << (length - 1 - i);
+                    // Extract the bits from the physical byte
+                    // BE bit_in_byte maps to physical position (7 - bit_in_byte)
+                    // We want to extract 'bits_to_take' bits starting from bit_in_byte going down
+                    // Physical positions: (7 - bit_in_byte) to (7 - bit_in_byte + bits_to_take - 1)
+                    let physical_start = 7 - bit_in_byte;
+                    let byte = data[byte_num] as u64;
+
+                    // Create mask for bits_to_take consecutive bits starting at physical_start
+                    let mask = ((1u64 << bits_to_take) - 1) << physical_start;
+                    let extracted = (byte & mask) >> physical_start;
+
+                    // Place extracted bits into result (MSB first, so at the high end)
+                    let shift_amount = bits_remaining - bits_to_take;
+                    value |= extracted << shift_amount;
+
+                    bits_remaining -= bits_to_take;
+                    signal_bit_offset += bits_to_take;
                 }
 
                 value

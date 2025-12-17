@@ -1,4 +1,7 @@
-use crate::{Dbc, Error, MAX_EXTENDED_MULTIPLEXING, MAX_SIGNALS_PER_MESSAGE, Result, compat::Vec};
+use crate::{
+    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_SIGNALS_PER_MESSAGE, Result,
+    compat::Vec,
+};
 
 /// Decoding functionality for DBC structures
 impl Dbc {
@@ -77,30 +80,15 @@ impl Dbc {
 
         // Step 1: Decode all multiplexer switch signals first
         // Map switch signal names to their decoded values
+        // Uses decode_raw() to get both raw and physical values in a single pass
         let mut switch_values: Vec<(&str, u64), 16> = Vec::new();
         for signal in signals.iter() {
             if signal.is_multiplexer_switch() {
-                let value = signal.decode(payload)?;
-                // Store the raw integer value (before factor/offset) for switch matching
-                // We need to decode again to get the raw value for comparison
-                let raw_value = {
-                    let start_bit = signal.start_bit() as usize;
-                    let length = signal.length() as usize;
-                    let raw_bits = signal.byte_order().extract_bits(payload, start_bit, length);
-                    if signal.is_unsigned() {
-                        raw_bits as i64
-                    } else {
-                        let sign_bit_mask = 1u64 << (length - 1);
-                        if (raw_bits & sign_bit_mask) != 0 {
-                            let mask = !((1u64 << length) - 1);
-                            (raw_bits | mask) as i64
-                        } else {
-                            raw_bits as i64
-                        }
-                    }
-                };
+                // decode_raw() returns (raw_value, physical_value) in one pass
+                // avoiding the overhead of extracting bits twice
+                let (raw_value, physical_value) = signal.decode_raw(payload)?;
+
                 // Multiplexer switch values must be non-negative (u64)
-                // If the raw value is negative, it cannot be used as a multiplexer switch value
                 if raw_value < 0 {
                     return Err(Error::Decoding(Error::MULTIPLEXER_SWITCH_NEGATIVE));
                 }
@@ -109,15 +97,13 @@ impl Dbc {
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
                 // Also add to decoded signals
                 decoded_signals
-                    .push((signal.name(), value, signal.unit()))
+                    .push((signal.name(), physical_value, signal.unit()))
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
             }
         }
 
-        // Step 2: Get extended multiplexing entries for this message
-        let extended_mux_entries = self.extended_multiplexing_for_message(id);
-
-        // Step 3: Decode all non-switch signals based on multiplexing rules
+        // Step 2: Decode all non-switch signals based on multiplexing rules
+        // Note: extended_multiplexing_for_message() now returns an iterator (no allocation)
         for signal in signals.iter() {
             // Skip multiplexer switches (already decoded)
             if signal.is_multiplexer_switch() {
@@ -129,12 +115,15 @@ impl Dbc {
                 // This is a multiplexed signal (m0, m1, etc.)
                 // Extended multiplexing: Check SG_MUL_VAL_ ranges first
                 // If extended multiplexing entries exist, they take precedence over basic m0/m1 values
-                let extended_entries_for_signal: Vec<_, { MAX_EXTENDED_MULTIPLEXING }> =
-                    extended_mux_entries
-                        .iter()
-                        .filter(|ext_mux| ext_mux.signal_name() == signal.name())
-                        .cloned()
-                        .collect();
+
+                // Collect extended entries for this signal (uses references, no clone)
+                let extended_entries_for_signal: Vec<
+                    &ExtendedMultiplexing,
+                    { MAX_EXTENDED_MULTIPLEXING },
+                > = self
+                    .extended_multiplexing_for_message(id)
+                    .filter(|ext_mux| ext_mux.signal_name() == signal.name())
+                    .collect();
 
                 if !extended_entries_for_signal.is_empty() {
                     // Extended multiplexing: Check ALL switches referenced in extended entries (AND logic)
@@ -470,9 +459,8 @@ SG_MUL_VAL_ 500 Signal_A Mux1 5-10 ;
 
         assert_eq!(find_signal("Mux1"), Some(5.0));
         // Extended multiplexing: Signal_A should decode when Mux1 is in range 5-10
-        let ext_entries = dbc.extended_multiplexing_for_message(500);
         assert_eq!(
-            ext_entries.len(),
+            dbc.extended_multiplexing_for_message(500).count(),
             1,
             "Extended multiplexing entries should be parsed"
         );

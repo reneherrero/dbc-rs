@@ -77,28 +77,31 @@ impl MessageBuilder {
         Ok((id, name, dlc, sender, self.signals))
     }
 
-    #[must_use = "validation result should be checked"]
-    pub fn validate(mut self) -> Result<Self> {
-        // Extract fields (this consumes signals, but we'll reconstruct)
-        let signals_clone = self.signals.clone();
+    /// Validates the builder configuration without building.
+    ///
+    /// This performs lightweight validation of the message fields:
+    /// - Checks that required fields (id, name, dlc, sender) are set
+    /// - Validates message-level constraints (DLC range, name not empty)
+    ///
+    /// **Note:** Full signal validation (overlap detection, bounds checking)
+    /// is performed during `build()`. For complete validation, call `build()`
+    /// directly.
+    ///
+    /// # Performance
+    ///
+    /// This method borrows `self` and performs no allocations, making it
+    /// suitable for pre-flight checks before expensive `build()` operations.
+    pub fn validate(&self) -> Result<()> {
+        // Validate required fields are present
         let id = self.id.ok_or(Error::Message(Error::MESSAGE_ID_REQUIRED))?;
-        let name = self.name.ok_or(Error::Message(Error::MESSAGE_NAME_EMPTY))?;
+        let name = self.name.as_ref().ok_or(Error::Message(Error::MESSAGE_NAME_EMPTY))?;
         let dlc = self.dlc.ok_or(Error::Message(Error::MESSAGE_DLC_REQUIRED))?;
-        let sender = self.sender.ok_or(Error::Message(Error::MESSAGE_SENDER_EMPTY))?;
-        // Build signals for validation using cloned signals
-        let built_signals: Vec<Signal> = signals_clone
-            .into_iter()
-            .map(|sig_builder| sig_builder.build())
-            .collect::<Result<Vec<_>>>()?;
-        // Validate signals directly
-        Message::validate_internal(id, &name, dlc, &sender, &built_signals)?;
-        // Reconstruct from original data (signals were cloned before, so use original)
-        self.id = Some(id);
-        self.name = Some(name);
-        self.dlc = Some(dlc);
-        self.sender = Some(sender);
-        // signals are already set (we cloned before, so self.signals is still there)
-        Ok(self)
+        let _sender = self.sender.as_ref().ok_or(Error::Message(Error::MESSAGE_SENDER_EMPTY))?;
+
+        // Validate message-level constraints
+        Message::validate_message_fields(id, name, dlc)?;
+
+        Ok(())
     }
 }
 

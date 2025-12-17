@@ -137,6 +137,8 @@ impl Nodes {
     /// assert!(!dbc2.nodes().is_empty());
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
