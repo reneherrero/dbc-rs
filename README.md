@@ -9,6 +9,26 @@ A production-ready Rust workspace for parsing, editing, and manipulating DBC (CA
 [![dbc-rs CI](https://github.com/reneherrero/dbc-rs/workflows/dbc-rs%20Library%20CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions/workflows/dbc-rs.yml)
 [![dbc-cli CI](https://github.com/reneherrero/dbc-rs/workflows/dbc-cli%20CI/badge.svg)](https://github.com/reneherrero/dbc-rs/actions/workflows/dbc-cli.yml)
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Key Advantages](#key-advantages)
+- [Projects](#projects)
+  - [DBC Core Library - `dbc-rs`](#dbc-core-library---dbc-rs)
+  - [Command-Line Interface - `dbc-cli`](#command-line-interface---dbc-cli)
+- [Quick Start](#quick-start)
+  - [Installation](#installation)
+  - [Basic Usage](#basic-usage)
+  - [Embedded Usage (no_std)](#embedded-usage-no_std)
+  - [Creating and Editing DBC Files](#creating-and-editing-dbc-files)
+- [Building](#building)
+- [Testing](#testing)
+- [Code Coverage](#code-coverage)
+- [Security](#security)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Overview
 
 dbc-rs provides a comprehensive, type-safe solution for working with DBC files in Rust. The library is designed with embedded systems in mind, offering full `no_std` support while maintaining compatibility with standard library environments.
@@ -36,10 +56,19 @@ use dbc_rs::Dbc;
 // Parse DBC files in any environment
 let dbc = Dbc::parse(dbc_content)?;
 
-// Access messages and signals with type-safe APIs
-if let Some(msg) = dbc.messages().find_by_id(256) {
-    if let Some(sig) = msg.signals().find("RPM") {
-        println!("RPM: {} rpm", sig.decode(&can_frame)?);
+// Decode a real CAN frame from your vehicle's ECU
+let can_id = 0x100;  // Engine data message ID
+let can_payload = [0x40, 0x1F, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+// Decode all signals in the message at once
+let decoded = dbc.decode(can_id, &can_payload)?;
+
+// Process decoded signals with proper units
+for (signal_name, value, unit) in decoded {
+    match signal_name {
+        "RPM" => println!("Engine RPM: {:.0} {}", value, unit.unwrap_or("")),
+        "EngineTemp" => println!("Temperature: {:.1}{}", value, unit.unwrap_or("")),
+        _ => println!("{}: {:.2} {}", signal_name, value, unit.unwrap_or("")),
     }
 }
 ```
@@ -78,14 +107,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dbc-rs = "0.1.0-beta.3"
+dbc-rs = "0.1.0-rc.3"
 ```
 
 For embedded targets without standard library:
 
 ```toml
 [dependencies]
-dbc-rs = { version = "0.1.0-beta.3", default-features = false, features = ["heapless"] }
+dbc-rs = { version = "0.1.0-rc.3", default-features = false, features = ["heapless"] }
 ```
 
 
@@ -107,7 +136,7 @@ for message in dbc.messages().iter() {
         println!("  Signal: {} - {} {}", 
             signal.name(), 
             signal.factor(), 
-            signal.unit()
+            signal.unit().unwrap_or("")
         );
     }
 }
@@ -234,7 +263,8 @@ Contributions are welcome and appreciated. Please see [CONTRIBUTING.md](./CONTRI
 - Value tables (`VAL_TABLE_`)
 - Structured comments (`CM_`)
 - Attributes (`BA_DEF_`, `BA_`, etc.)
-- Signal multiplexing support
+- Signal groups (`SIG_GROUP_`)
+- Environment variables (`EV_`)
 
 ## License
 

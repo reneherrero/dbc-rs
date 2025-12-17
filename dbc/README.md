@@ -15,6 +15,14 @@ A clean, zero-dependency DBC (CAN Database) file parser and editor for Rust.
 - ✅ **Full editing & writing** - Modify and save DBC files
 - ✅ **Well tested** - Tested with real-world DBC files
 
+## Design Principles
+
+- **Immutability**: All data structures are immutable after creation
+- **Validation**: Input validation at construction time
+- **no_std First**: Designed for `no_std`, optional `std` feature
+- **Zero Dependencies**: No dependencies with `alloc`/`std` features
+- **Result-based errors**: All fallible operations return `Result<T>`
+
 ## Quick Start
 
 ```rust
@@ -56,10 +64,11 @@ dbc-rs = { version = "1", default-features = false, features = ["heapless"] }
 ### Core Features ✅
 - **Version** (`VERSION`), **Nodes** (`BU_`), **Messages** (`BO_`), **Signals** (`SG_`), **Value Descriptions** (`VAL_`)
 - All signal features: start bit, length, byte order, sign, factor, offset, min/max, unit, receivers
-- 29-bit Extended CAN IDs (2048-536870911)
+- Extended CAN IDs (bit 31 flag per DBC spec)
+- **Signal multiplexing**: Basic (`M`, `m0`, `m1`) and extended (`SG_MUL_VAL_`)
 
 ### Limitations ❌
-Not implemented: Value tables (`VAL_TABLE_`), structured comments (`CM_`), attributes (`BA_*`), signal groups, environment variables (`EV_`), signal multiplexing.
+Not implemented: Value tables (`VAL_TABLE_`), structured comments (`CM_`), attributes (`BA_*`), signal groups, environment variables (`EV_`).
 
 **Note:** `NS_` and `BS_` are parsed but ignored. Single-line `//` comments are parsed but not preserved on save.
 
@@ -77,32 +86,33 @@ println!("Messages: {}", dbc.messages().len());
 ### Creating DBC Files
 
 ```rust
-use dbc_rs::{DbcBuilder, VersionBuilder, NodesBuilder, MessageBuilder, SignalBuilder, ByteOrder};
-
-let version = VersionBuilder::new().version("1.0").build()?;
-let nodes = NodesBuilder::new().add_node("ECM").build()?;
-
-let signal = SignalBuilder::new()
-    .name("EngineSpeed")
-    .start_bit(0)
-    .length(16)
-    .byte_order(ByteOrder::BigEndian)
-    .factor(0.25)
-    .unit("rpm")
-    .build()?;
-
-let message = MessageBuilder::new()
-    .id(256)
-    .name("EngineData")
-    .dlc(8)
-    .sender("ECM")
-    .add_signal(signal)
-    .build()?;
+use dbc_rs::{ByteOrder, DbcBuilder, MessageBuilder, NodesBuilder, ReceiversBuilder};
+use dbc_rs::{SignalBuilder, VersionBuilder};
 
 let dbc = DbcBuilder::new()
-    .version(version)
-    .nodes(nodes)
-    .add_message(message)
+    .version(VersionBuilder::new().version("1.0"))
+    .nodes(NodesBuilder::new().add_node("ECM"))
+    .add_message(
+        MessageBuilder::new()
+            .id(256)
+            .name("EngineData")
+            .dlc(8)
+            .sender("ECM")
+            .add_signal(
+                SignalBuilder::new()
+                    .name("EngineSpeed")
+                    .start_bit(0)
+                    .length(16)
+                    .byte_order(ByteOrder::BigEndian)
+                    .unsigned(true)
+                    .factor(0.25)
+                    .offset(0.0)
+                    .min(0.0)
+                    .max(16000.0)
+                    .unit("rpm")
+                    .receivers(ReceiversBuilder::new().none())
+            )
+    )
     .build()?;
 
 let dbc_string = dbc.to_dbc_string();
@@ -128,11 +138,12 @@ Capacity limits prevent resource exhaustion (DoS protection). Defaults accommoda
 
 | Environment Variable | Default | Description |
 |---------------------|---------|-------------|
-| `DBC_MAX_MESSAGES` | `8192` | Maximum number of messages per DBC file (must be power of 2 for heapless) |
-| `DBC_MAX_SIGNALS_PER_MESSAGE` | `64` | Maximum number of signals per message |
+| `DBC_MAX_MESSAGES` | `8192` | Maximum number of messages per DBC file |
+| `DBC_MAX_SIGNALS_PER_MESSAGE` | `256` | Maximum number of signals per message |
 | `DBC_MAX_NODES` | `256` | Maximum number of nodes in the bus |
 | `DBC_MAX_VALUE_DESCRIPTIONS` | `64` | Maximum number of value descriptions |
-| `DBC_MAX_NAME_SIZE` | `64` | Maximum length of names (messages, signals, nodes, etc.) |
+| `DBC_MAX_NAME_SIZE` | `32` | Maximum length of names (per DBC specification) |
+| `DBC_MAX_EXTENDED_MULTIPLEXING` | `512` | Maximum extended multiplexing entries per file |
 
 **Example:**
 ```bash
@@ -142,24 +153,16 @@ DBC_MAX_MESSAGES=512 cargo build --release --verbose --no-default-features --fea
 
 **Performance Notes:**
 - **`alloc`/`std`**: Heap-allocated, dynamic sizing
-- **`heapless`**: Stack-allocated, fixed-size arrays (default 8192 messages; reduce to 256-512 for embedded targets. All values must be powers of 2.)
+- **`heapless`**: Stack-allocated, fixed-size arrays. Reduce limits for embedded targets. **Most values must be powers of 2** (messages, signals, nodes, name size, extended multiplexing).
 - **Parsing**: O(n) complexity, entire file parsed into memory
 
 ## Troubleshooting
 
-- **"Message ID out of valid range"**: Standard 11-bit (0-0x7FF) or Extended 29-bit (0x800-0x1FFFFFFF)
+- **"Message ID out of valid range"**: Standard 11-bit (0-0x7FF) or Extended 29-bit with bit 31 set (0x80000000-0x9FFFFFFF)
 - **"Signal extends beyond message"**: Ensure `start_bit + length <= DLC * 8`
 - **"Signal overlap"**: Signals must not occupy overlapping bit ranges
 - **"Sender not in nodes"**: Add message sender to nodes list
 - **"Duplicate message ID"**: Use unique CAN IDs
-
-## Design
-
-- **Immutability**: All data structures are immutable after creation
-- **Validation**: Input validation at construction time
-- **no_std First**: Designed for `no_std`, optional `std` feature
-- **Zero Dependencies**: No dependencies with `alloc`/`std` features
-- **Result-based errors**: All fallible operations return `Result<T>`
 
 ## Contributing
 
