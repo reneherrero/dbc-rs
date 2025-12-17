@@ -118,7 +118,7 @@ pub(crate) const BO_TX_BU_: &str = "BO_TX_BU_";
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) const VECTOR__INDEPENDENT_SIG_MSG: &str = "VECTOR__INDEPENDENT_SIG_MSG";
 #[allow(clippy::upper_case_acronyms)]
-pub(crate) const VECTOR__XXX: &str = "VECTOR__XXX";
+pub(crate) const VECTOR__XXX: &str = "Vector__XXX";
 pub(crate) const BA_DEF_DEF_REL_: &str = "BA_DEF_DEF_REL_";
 pub(crate) const BA_DEF_SGTYPE_: &str = "BA_DEF_SGTYPE_";
 pub(crate) const SIGTYPE_VALTYPE_: &str = "SIGTYPE_VALTYPE_";

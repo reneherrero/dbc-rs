@@ -57,25 +57,28 @@ impl Signal {
             result.push_str("\"\"");
         }
 
-        // Receivers: * for Broadcast, space-separated list for Nodes, or empty
+        // Per DBC spec Section 9.5: receivers are comma-separated
+        // receivers = receiver {',' receiver} ;
+        // receiver = node_name | 'Vector__XXX' ;
         match self.receivers() {
-            Receivers::Broadcast => {
-                result.push(' ');
-                result.push('*');
-            }
             Receivers::Nodes(nodes) => {
-                if !nodes.is_empty() {
-                    result.push(' ');
+                result.push(' ');
+                if nodes.is_empty() {
+                    // Empty nodes list - use Vector__XXX per spec
+                    result.push_str(crate::VECTOR__XXX);
+                } else {
                     for (i, node) in self.receivers().iter().enumerate() {
                         if i > 0 {
-                            result.push(' ');
+                            result.push(',');
                         }
                         result.push_str(node);
                     }
                 }
             }
             Receivers::None => {
-                // No receivers specified - nothing to add
+                // No receivers specified - use Vector__XXX per spec
+                result.push(' ');
+                result.push_str(crate::VECTOR__XXX);
             }
         }
 
@@ -97,18 +100,23 @@ mod tests {
     #[test]
     fn test_signal_to_dbc_string_round_trip() {
         // Test round-trip: parse -> to_dbc_string -> parse
+        // Note: DBC spec Section 9.5 says receivers are comma-separated
+        // Per spec, '*' is not valid - we use Vector__XXX for no specific receiver
         let test_cases = vec![
             (
+                // '*' is parsed as None, serialized as Vector__XXX per spec
                 r#"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" *"#,
-                " SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *",
+                " SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" Vector__XXX",
             ),
             (
+                // Parser accepts space-separated (tool extension), serializer outputs comma-separated (per spec)
                 r#"SG_ Temperature : 16|8@1- (1,-40) [-40|215] "°C" TCM BCM"#,
-                " SG_ Temperature : 16|8@1- (1,-40) [-40|215] \"°C\" TCM BCM",
+                " SG_ Temperature : 16|8@1- (1,-40) [-40|215] \"°C\" TCM,BCM",
             ),
             (
+                // '*' is parsed as None, serialized as Vector__XXX per spec
                 r#"SG_ Flag : 24|1@0+ (1,0) [0|1] "" *"#,
-                " SG_ Flag : 24|1@0+ (1,0) [0|1] \"\" *",
+                " SG_ Flag : 24|1@0+ (1,0) [0|1] \"\" Vector__XXX",
             ),
         ];
 

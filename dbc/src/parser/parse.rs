@@ -202,11 +202,13 @@ impl<'a> Parser<'a> {
         self.advance_one();
 
         // Subsequent characters can be alphanumeric or underscore
+        // Terminators include comma per DBC spec Section 9.5 (receivers = receiver {',' receiver})
         while self.pos < input_len {
             let byte = self.input[self.pos];
             if byte.is_ascii_alphanumeric() || byte == b'_' {
                 self.advance_one();
-            } else if self.matches_any(b" \t:") || self.at_newline() {
+            } else if self.matches_any(b" \t:,") || self.at_newline() {
+                // Comma added to support comma-separated receiver lists per DBC spec
                 break;
             } else {
                 return Err(Error::InvalidChar(byte as char));

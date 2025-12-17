@@ -78,8 +78,8 @@ BO_ 256 Test : {} ECM
 }
 
 #[test]
-fn test_invalid_dlc_zero() {
-    // DLC 0 should be rejected
+fn test_valid_dlc_zero() {
+    // Per DBC spec Section 8.3: DLC 0 is valid (e.g., for control messages without data payload)
     let dbc_str = r#"VERSION "1.0"
 
 BU_: ECM
@@ -87,7 +87,9 @@ BU_: ECM
 BO_ 256 Test : 0 ECM
 "#;
     let result = Dbc::parse(dbc_str);
-    assert!(result.is_err(), "Should reject DLC 0");
+    assert!(result.is_ok(), "DLC 0 is valid per spec Section 8.3");
+    let dbc = result.unwrap();
+    assert_eq!(dbc.messages().at(0).unwrap().dlc(), 0);
 }
 
 #[test]

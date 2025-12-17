@@ -7,13 +7,14 @@ use std::string::String;
 /// This builder allows you to construct receiver configurations for signals
 /// when building DBC files programmatically.
 ///
+/// Per DBC specification Section 9.5, valid receivers are:
+/// - Specific node names (comma-separated in DBC output)
+/// - `Vector__XXX` for no specific receiver (represented as `Receivers::None`)
+///
 /// # Examples
 ///
 /// ```rust,no_run
 /// use dbc_rs::{ReceiversBuilder, SignalBuilder, ByteOrder};
-///
-/// // Broadcast receiver
-/// let broadcast = ReceiversBuilder::new().broadcast().build()?;
 ///
 /// // Specific nodes
 /// let specific = ReceiversBuilder::new()
@@ -21,7 +22,7 @@ use std::string::String;
 ///     .add_node("BCM")
 ///     .build()?;
 ///
-/// // No receivers
+/// // No receivers (serializes as Vector__XXX)
 /// let none = ReceiversBuilder::new().none().build()?;
 ///
 /// // Use with signal builder
@@ -45,7 +46,6 @@ use std::string::String;
 /// This builder requires the `std` feature to be enabled.
 #[derive(Debug, Clone)]
 pub struct ReceiversBuilder {
-    is_broadcast: bool,
     nodes: Vec<String>,
 }
 
@@ -63,38 +63,13 @@ impl ReceiversBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new() -> Self {
-        Self {
-            is_broadcast: false,
-            nodes: Vec::new(),
-        }
-    }
-
-    /// Sets the receiver to broadcast (`*` in DBC format).
-    ///
-    /// This clears any previously set nodes and sets the receiver to broadcast mode.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::ReceiversBuilder;
-    ///
-    /// let receivers = ReceiversBuilder::new()
-    ///     .add_node("TCM")  // This will be cleared
-    ///     .broadcast()
-    ///     .build()?;
-    /// assert_eq!(receivers, dbc_rs::Receivers::Broadcast);
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    #[must_use = "builder method returns modified builder"]
-    pub fn broadcast(mut self) -> Self {
-        self.is_broadcast = true;
-        self.nodes.clear();
-        self
+        Self { nodes: Vec::new() }
     }
 
     /// Sets the receiver to none (no explicit receivers).
     ///
-    /// This clears any previously set nodes and sets the receiver to none mode.
+    /// This clears any previously set nodes. Per DBC spec, this will
+    /// serialize as `Vector__XXX` (no specific receiver).
     ///
     /// # Examples
     ///
@@ -110,14 +85,11 @@ impl ReceiversBuilder {
     /// ```
     #[must_use = "builder method returns modified builder"]
     pub fn none(mut self) -> Self {
-        self.is_broadcast = false;
         self.nodes.clear();
         self
     }
 
     /// Adds a single receiver node.
-    ///
-    /// This automatically clears broadcast and none modes, switching to specific nodes mode.
     ///
     /// # Arguments
     ///
@@ -139,15 +111,11 @@ impl ReceiversBuilder {
     #[must_use = "builder method returns modified builder"]
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
         let node = node.as_ref().to_string();
-        self.is_broadcast = false;
         self.nodes.push(node);
-
         self
     }
 
     /// Adds multiple receiver nodes from an iterator.
-    ///
-    /// This automatically clears broadcast and none modes, switching to specific nodes mode.
     ///
     /// # Arguments
     ///
@@ -206,7 +174,6 @@ impl ReceiversBuilder {
     #[must_use = "builder method returns modified builder"]
     pub fn clear(mut self) -> Self {
         self.nodes.clear();
-        self.is_broadcast = false;
         self
     }
 }
@@ -224,16 +191,13 @@ impl ReceiversBuilder {
     /// ```rust,no_run
     /// use dbc_rs::ReceiversBuilder;
     ///
-    /// // Broadcast
-    /// let broadcast = ReceiversBuilder::new().broadcast().build()?;
-    ///
     /// // Specific nodes
     /// let nodes = ReceiversBuilder::new()
     ///     .add_node("TCM")
     ///     .add_node("BCM")
     ///     .build()?;
     ///
-    /// // None (default)
+    /// // None (default - serializes as Vector__XXX)
     /// let none = ReceiversBuilder::new().build()?;
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -251,9 +215,7 @@ impl ReceiversBuilder {
     /// assert!(builder.build().is_err());
     /// ```
     pub fn build(self) -> Result<Receivers> {
-        if self.is_broadcast {
-            Ok(Receivers::new_broadcast())
-        } else if self.nodes.is_empty() {
+        if self.nodes.is_empty() {
             Ok(Receivers::new_none())
         } else {
             // Make sure the number of nodes is not greater than the maximum allowed
@@ -310,12 +272,6 @@ impl Default for ReceiversBuilder {
 mod tests {
     use super::*;
     use crate::error::Error;
-
-    #[test]
-    fn test_receivers_builder_broadcast() {
-        let receivers = ReceiversBuilder::new().broadcast().build().unwrap();
-        assert_eq!(receivers, Receivers::Broadcast);
-    }
 
     #[test]
     fn test_receivers_builder_none() {
@@ -410,18 +366,6 @@ mod tests {
     }
 
     #[test]
-    fn test_receivers_builder_broadcast_clears_nodes() {
-        let receivers = ReceiversBuilder::new()
-            .add_node("ECM")
-            .add_node("TCM")
-            .broadcast()
-            .build()
-            .unwrap();
-        assert_eq!(receivers, Receivers::Broadcast);
-        assert_eq!(receivers.len(), 0);
-    }
-
-    #[test]
     fn test_receivers_builder_none_clears_nodes() {
         let receivers =
             ReceiversBuilder::new().add_node("ECM").add_node("TCM").none().build().unwrap();
@@ -430,16 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn test_receivers_builder_add_node_clears_broadcast() {
-        let receivers = ReceiversBuilder::new().broadcast().add_node("ECM").build().unwrap();
-        match &receivers {
-            Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 1),
-            _ => panic!("Expected Nodes variant"),
-        }
-    }
-
-    #[test]
-    fn test_receivers_builder_add_node_clears_none() {
+    fn test_receivers_builder_add_node_after_none() {
         let receivers = ReceiversBuilder::new().none().add_node("ECM").build().unwrap();
         match &receivers {
             Receivers::Nodes(nodes) => assert_eq!(nodes.len(), 1),

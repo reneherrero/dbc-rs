@@ -140,6 +140,7 @@ BO_ 512 BrakeData : 4 TCM
     #[test]
     fn test_save_basic() {
         // Use parsing instead of builders
+        // Note: '*' is parsed as None per spec compliance, output is 'Vector__XXX'
         let dbc_content = r#"VERSION "1.0"
 
 BU_: ECM
@@ -153,7 +154,8 @@ BO_ 256 EngineData : 8 ECM
         assert!(saved.contains("VERSION \"1.0\""));
         assert!(saved.contains("BU_: ECM"));
         assert!(saved.contains("BO_ 256 EngineData : 8 ECM"));
-        assert!(saved.contains("SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *")); // BigEndian = @0
+        // Per DBC spec Section 9.5: '*' is not valid, we output 'Vector__XXX' instead
+        assert!(saved.contains("SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" Vector__XXX"));
     }
 
     #[test]

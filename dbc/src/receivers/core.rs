@@ -5,10 +5,6 @@ use crate::{
 };
 
 impl Receivers {
-    pub(crate) fn new_broadcast() -> Self {
-        Receivers::Broadcast
-    }
-
     pub(crate) fn new_none() -> Self {
         Receivers::None
     }
@@ -23,7 +19,7 @@ impl Receivers {
 
     /// Returns an iterator over the receiver node names.
     ///
-    /// For `Receivers::Broadcast` and `Receivers::None`, the iterator will be empty.
+    /// For `Receivers::None`, the iterator will be empty.
     /// For `Receivers::Nodes`, it iterates over the specific node names.
     ///
     /// # Examples
@@ -36,56 +32,7 @@ impl Receivers {
     /// BU_: ECM TCM BCM
     ///
     /// BO_ 256 Engine : 8 ECM
-    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
-    /// "#)?;
-    ///
-    /// let message = dbc.messages().at(0).unwrap();
-    /// let signal = message.signals().at(0).unwrap();
-    ///
-    /// // Iterate over receiver nodes
-    /// let mut iter = signal.receivers().iter();
-    /// assert_eq!(iter.next().map(|s| s.to_string()), Some("TCM".to_string()));
-    /// assert_eq!(iter.next().map(|s| s.to_string()), Some("BCM".to_string()));
-    /// assert_eq!(iter.next(), None);
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    ///
-    /// # Broadcast and None
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc = Dbc::parse(r#"VERSION "1.0"
-    ///
-    /// BU_: ECM
-    ///
-    /// BO_ 256 Engine : 8 ECM
-    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
-    /// "#)?;
-    ///
-    /// let message = dbc.messages().at(0).unwrap();
-    /// let signal = message.signals().at(0).unwrap();
-    ///
-    /// // Broadcast receivers return empty iterator
-    /// assert_eq!(signal.receivers().iter().count(), 0);
-    /// # Ok::<(), dbc_rs::Error>(())
-    /// ```
-    /// Returns an iterator over the receiver node names as borrowed references.
-    ///
-    /// For `Receivers::Broadcast` and `Receivers::None`, the iterator will be empty.
-    /// For `Receivers::Nodes`, it iterates over the specific node names.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use dbc_rs::Dbc;
-    ///
-    /// let dbc = Dbc::parse(r#"VERSION "1.0"
-    ///
-    /// BU_: ECM TCM BCM
-    ///
-    /// BO_ 256 Engine : 8 ECM
-    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM,BCM
     /// "#)?;
     ///
     /// let message = dbc.messages().at(0).unwrap();
@@ -99,7 +46,7 @@ impl Receivers {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     ///
-    /// # Broadcast and None
+    /// # None Receivers
     ///
     /// ```rust,no_run
     /// use dbc_rs::Dbc;
@@ -109,13 +56,13 @@ impl Receivers {
     /// BU_: ECM
     ///
     /// BO_ 256 Engine : 8 ECM
-    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
     /// "#)?;
     ///
     /// let message = dbc.messages().at(0).unwrap();
     /// let signal = message.signals().at(0).unwrap();
     ///
-    /// // Broadcast receivers return empty iterator
+    /// // None receivers return empty iterator
     /// assert_eq!(signal.receivers().iter().count(), 0);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
@@ -137,7 +84,7 @@ impl Receivers {
     /// Returns the number of receiver nodes.
     ///
     /// - For `Receivers::Nodes`: Returns the count of specific receiver nodes
-    /// - For `Receivers::Broadcast` and `Receivers::None`: Returns `0`
+    /// - For `Receivers::None`: Returns `0`
     ///
     /// # Examples
     ///
@@ -149,7 +96,7 @@ impl Receivers {
     /// BU_: ECM TCM BCM
     ///
     /// BO_ 256 Engine : 8 ECM
-    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM,BCM
     /// "#)?;
     ///
     /// let message = dbc.messages().at(0).unwrap();
@@ -162,14 +109,14 @@ impl Receivers {
     pub fn len(&self) -> usize {
         match self {
             Receivers::Nodes(nodes) => nodes.len(),
-            Receivers::Broadcast | Receivers::None => 0,
+            Receivers::None => 0,
         }
     }
 
     /// Returns `true` if there are no specific receiver nodes.
     ///
-    /// This returns `true` for both `Receivers::Broadcast` and `Receivers::None`,
-    /// as neither has specific node names.
+    /// This returns `true` for `Receivers::None` and for `Receivers::Nodes` with
+    /// an empty node list.
     ///
     /// # Examples
     ///
@@ -197,7 +144,7 @@ impl Receivers {
 
     /// Checks if a node name is in the receivers list.
     ///
-    /// For `Receivers::Broadcast` and `Receivers::None`, this always returns `false`.
+    /// For `Receivers::None`, this always returns `false`.
     /// For `Receivers::Nodes`, it checks if the node name is in the list.
     ///
     /// # Arguments
@@ -235,7 +182,7 @@ impl Receivers {
     ///
     /// Returns `None` if:
     /// - The index is out of bounds
-    /// - The receiver is `Broadcast` or `None`
+    /// - The receiver is `None`
     ///
     /// # Arguments
     ///
@@ -251,7 +198,7 @@ impl Receivers {
     /// BU_: ECM TCM BCM
     ///
     /// BO_ 256 Engine : 8 ECM
-    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM BCM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "°C" TCM,BCM
     /// "#)?;
     ///
     /// let message = dbc.messages().at(0).unwrap();
@@ -267,7 +214,7 @@ impl Receivers {
     pub fn at(&self, index: usize) -> Option<&str> {
         match self {
             Receivers::Nodes(nodes) => nodes.get(index).map(|s| s.as_str()),
-            Receivers::Broadcast | Receivers::None => None,
+            Receivers::None => None,
         }
     }
 }
@@ -299,18 +246,6 @@ mod tests {
     use super::Receivers;
     use crate::Parser;
 
-    // Tests for new_broadcast()
-    mod test_new_broadcast {
-        use super::*;
-
-        #[test]
-        fn test_receivers_broadcast() {
-            let broadcast = Receivers::new_broadcast();
-            assert_eq!(broadcast.len(), 0);
-            assert!(broadcast.is_empty());
-        }
-    }
-
     // Tests for new_none()
     mod test_new_none {
         use super::*;
@@ -337,9 +272,6 @@ mod tests {
             assert_eq!(iter.next(), Some("BCM"));
             assert!(iter.next().is_none());
 
-            let broadcast = Receivers::new_broadcast();
-            assert_eq!(broadcast.iter().count(), 0);
-
             let none = Receivers::new_none();
             assert_eq!(none.iter().count(), 0);
         }
@@ -351,9 +283,6 @@ mod tests {
 
         #[test]
         fn test_receivers_len() {
-            let broadcast = Receivers::new_broadcast();
-            assert_eq!(broadcast.len(), 0);
-
             let none = Receivers::new_none();
             assert_eq!(none.len(), 0);
 
@@ -370,9 +299,6 @@ mod tests {
 
         #[test]
         fn test_receivers_is_empty() {
-            let broadcast = Receivers::new_broadcast();
-            assert!(broadcast.is_empty());
-
             let none = Receivers::new_none();
             assert!(none.is_empty());
 
@@ -396,9 +322,6 @@ mod tests {
             assert!(result.contains("BCM"));
             assert!(!result.contains("ECM"));
 
-            let broadcast = Receivers::new_broadcast();
-            assert!(!broadcast.contains("TCM"));
-
             let none = Receivers::new_none();
             assert!(!none.contains("TCM"));
         }
@@ -416,9 +339,6 @@ mod tests {
             assert_eq!(result.at(0), Some("TCM"));
             assert_eq!(result.at(1), Some("BCM"));
             assert_eq!(result.at(2), None);
-
-            let broadcast = Receivers::new_broadcast();
-            assert_eq!(broadcast.at(0), None);
 
             let none = Receivers::new_none();
             assert_eq!(none.at(0), None);

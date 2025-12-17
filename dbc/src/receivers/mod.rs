@@ -11,10 +11,15 @@ use crate::{
 
 /// Represents the receiver nodes for a signal in a DBC file.
 ///
-/// A signal can have three types of receivers:
-/// - **Broadcast** (`*`): The signal is broadcast to all nodes on the bus
+/// Per the DBC specification (Section 9.5), receivers are defined as:
+/// ```bnf
+/// receiver = node_name | 'Vector__XXX' ;
+/// receivers = receiver {',' receiver} ;
+/// ```
+///
+/// A signal can have two types of receivers:
 /// - **Specific nodes**: A list of specific node names that receive this signal
-/// - **None**: No explicit receivers specified (signal may be unused or receiver is implicit)
+/// - **None**: No explicit receivers specified (use `Vector__XXX` in DBC output)
 ///
 /// # Examples
 ///
@@ -26,15 +31,15 @@ use crate::{
 /// BU_: ECM TCM BCM
 ///
 /// BO_ 256 Engine : 8 ECM
-///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
-///  SG_ Temp : 16|8@0- (1,-40) [-40|215] "°C" TCM BCM
+///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" Vector__XXX
+///  SG_ Temp : 16|8@0- (1,-40) [-40|215] "°C" TCM,BCM
 /// "#)?;
 ///
 /// let message = dbc.messages().at(0).unwrap();
 ///
-/// // Broadcast receiver
+/// // No specific receiver (Vector__XXX)
 /// let rpm_signal = message.signals().find("RPM").unwrap();
-/// assert_eq!(rpm_signal.receivers().len(), 0); // Broadcast has no specific nodes
+/// assert_eq!(rpm_signal.receivers().len(), 0);
 ///
 /// // Specific nodes
 /// let temp_signal = message.signals().find("Temp").unwrap();
@@ -45,18 +50,15 @@ use crate::{
 ///
 /// # DBC Format
 ///
-/// In DBC files, receivers are specified after the signal definition:
-/// - `*` indicates broadcast
-/// - Space-separated node names indicate specific receivers
-/// - No receivers means `None`
+/// In DBC files, receivers are specified after the signal unit:
+/// - Comma-separated node names indicate specific receivers (per spec)
+/// - `Vector__XXX` indicates no specific receiver
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(clippy::large_enum_variant)]
 pub enum Receivers {
-    /// Broadcast receiver - signal is sent to all nodes on the bus.
-    Broadcast,
     /// Specific receiver nodes - vector of node names.
     Nodes(Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }>),
-    /// No explicit receivers specified.
+    /// No explicit receivers specified (serializes as `Vector__XXX`).
     None,
 }
 

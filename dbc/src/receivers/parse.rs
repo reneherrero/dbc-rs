@@ -23,12 +23,15 @@ impl Receivers {
             return Ok(Self::new_none());
         }
 
-        // Check if next character is '*' (broadcast marker)
+        // Check if next character is '*' (non-standard broadcast marker)
+        // Per DBC spec Section 9.5, '*' is not a valid receiver format.
+        // Some tools use it as an extension. We treat it as "no specific receiver" (None).
         if parser.expect(b"*").is_ok() {
-            return Ok(Self::new_broadcast());
+            return Ok(Self::new_none());
         }
 
-        // Parse space-separated identifiers into Vec
+        // Per DBC spec Section 9.5: receivers = receiver {',' receiver}
+        // We accept both comma-separated (per spec) and space-separated (tool extension)
         let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }> = Vec::new();
 
         loop {
@@ -37,18 +40,17 @@ impl Receivers {
                 break;
             }
 
-            // Skip whitespace (spaces and tabs, but not newlines)
-            // Manually skip spaces and tabs since skip_whitespace() only handles spaces
+            // Skip whitespace and commas (spaces, tabs, and commas, but not newlines)
             while !parser.eof() && !parser.at_newline() {
                 match parser.current_byte() {
-                    Some(b' ') | Some(b'\t') => {
+                    Some(b' ') | Some(b'\t') | Some(b',') => {
                         parser.advance_one();
                     }
                     _ => break,
                 }
             }
 
-            // Check again if we're at a newline after skipping whitespace
+            // Check again if we're at a newline after skipping whitespace/commas
             if parser.at_newline() || parser.eof() {
                 break;
             }
@@ -58,6 +60,21 @@ impl Receivers {
             let pos_before = parser.pos();
             match parser.parse_identifier() {
                 Ok(node) => {
+                    // Per DBC spec Section 9.5: 'Vector__XXX' means no specific receiver
+                    // If we encounter Vector__XXX as the only/first receiver, treat as None
+                    if node == crate::VECTOR__XXX {
+                        // Skip this "pseudo-receiver" - it represents no specific receiver
+                        // Continue to see if there are more receivers (there shouldn't be)
+                        // but don't add it to the nodes list
+                        if parser.pos() == pos_before {
+                            break;
+                        }
+                        if parser.at_newline() || parser.eof() {
+                            break;
+                        }
+                        continue;
+                    }
+
                     // Check if adding this node would exceed MAX_NODES - 1 limit
                     // Receivers can have at most MAX_NODES - 1 nodes
                     if nodes.len() >= MAX_NODES - 1 {
@@ -69,7 +86,7 @@ impl Receivers {
                         .map_err(|_| Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
 
                     // After parsing an identifier, check what's next
-                    // parse_identifier() stops at newlines/whitespace without consuming them
+                    // parse_identifier() stops at newlines/whitespace/comma without consuming them
 
                     // Safety check: if position didn't advance, we're stuck - break
                     if parser.pos() == pos_before {
@@ -82,14 +99,14 @@ impl Receivers {
                         // At newline or EOF - we're done
                         break;
                     }
-                    // Check if we're at whitespace (there might be another receiver)
+                    // Check if we're at whitespace or comma (there might be another receiver)
                     if let Some(byte) = parser.current_byte() {
-                        if byte == b' ' || byte == b'\t' {
-                            // At whitespace - there might be another receiver
-                            // Continue loop to skip whitespace and parse next receiver
+                        if byte == b' ' || byte == b'\t' || byte == b',' {
+                            // At separator - there might be another receiver
+                            // Continue loop to skip separators and parse next receiver
                             continue;
                         }
-                        // Not whitespace and not newline - parse_identifier() should have stopped here
+                        // Not separator and not newline - parse_identifier() should have stopped here
                         // This indicates a bug, but break to prevent infinite loop
                         break;
                     }
@@ -122,11 +139,13 @@ mod tests {
     use crate::Parser;
 
     #[test]
-    fn test_parse_receivers_broadcast() {
+    fn test_parse_receivers_asterisk_treated_as_none() {
+        // Per DBC spec Section 9.5, '*' is not a valid receiver format.
+        // We treat it as "no specific receiver" (None) for compatibility.
         let input = "*";
         let mut parser = Parser::new(input.as_bytes()).unwrap();
         let result = Receivers::parse(&mut parser).unwrap();
-        assert_eq!(result, Receivers::Broadcast);
+        assert_eq!(result, Receivers::None);
     }
 
     #[test]

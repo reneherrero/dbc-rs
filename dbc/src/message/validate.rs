@@ -2,30 +2,49 @@ use super::Message;
 use crate::{ByteOrder, Error, MAX_SIGNALS_PER_MESSAGE, Result, Signal, error::check_max_limit};
 
 impl Message {
+    // CAN ID validation constants (per DBC spec Section 8.1)
+    // - Standard CAN ID: 0 to 2047 (0x7FF) - 11-bit identifier
+    // - Extended CAN ID: Set bit 31 (0x80000000) and use bits 0-28
+    // Valid ID ranges:
+    // - 0x00000000 to 0x1FFFFFFF (standard or extended without flag)
+    // - 0x80000000 to 0x9FFFFFFF (extended with bit 31 flag)
+    // - 0xC0000000 (special pseudo-message ID per Section 8.6)
+    // Invalid: 0x20000000 to 0x7FFFFFFF and 0xA0000000+ (except 0xC0000000)
+
+    /// Maximum 29-bit extended CAN ID value
+    const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF;
+    /// Bit 31 flag indicating extended CAN ID format
+    const EXTENDED_ID_FLAG: u32 = 0x8000_0000;
+    /// Maximum extended CAN ID with bit 31 flag set
+    const MAX_EXTENDED_ID_WITH_FLAG: u32 = Self::EXTENDED_ID_FLAG | Self::MAX_EXTENDED_ID;
+    /// Special pseudo-message ID for VECTOR__INDEPENDENT_SIG_MSG (per spec Section 8.6)
+    const PSEUDO_MESSAGE_ID: u32 = 0xC000_0000;
+
     /// Validates message-level fields without building signals.
     ///
     /// This is a lightweight validation that checks:
-    /// - Message ID is within valid CAN range
+    /// - Message ID is within valid CAN range (including extended IDs with bit 31 set)
     /// - Message name is not empty
-    /// - DLC is within valid range (1-64)
+    /// - DLC is within valid range (0-64 per DBC spec Section 8.3)
     ///
     /// Used by `MessageBuilder::validate()` for cheap pre-flight checks.
     #[cfg(feature = "std")]
     pub(crate) fn validate_message_fields(id: u32, name: &str, dlc: u8) -> Result<()> {
-        const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF;
-
         if name.trim().is_empty() {
             return Err(Error::Validation(Error::MESSAGE_NAME_EMPTY));
         }
 
-        if dlc == 0 {
-            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_SMALL));
-        }
+        // Per DBC spec Section 8.3: DLC can be 0-8 for CAN 2.0, 0-64 for CAN FD
+        // DLC = 0 is valid (e.g., for control messages without data payload)
         if dlc > 64 {
             return Err(Error::Validation(Error::MESSAGE_DLC_TOO_LARGE));
         }
 
-        if id > MAX_EXTENDED_ID {
+        // Validate ID is in a valid range
+        let id_valid = id <= Self::MAX_EXTENDED_ID
+            || (Self::EXTENDED_ID_FLAG..=Self::MAX_EXTENDED_ID_WITH_FLAG).contains(&id)
+            || id == Self::PSEUDO_MESSAGE_ID;
+        if !id_valid {
             return Err(Error::Validation(Error::MESSAGE_ID_OUT_OF_RANGE));
         }
 
@@ -85,16 +104,6 @@ impl Message {
         sender: &str,
         signals: &[Signal],
     ) -> Result<()> {
-        // Validate CAN ID range
-        // CAN specification allows:
-        // - Standard 11-bit IDs: 0x000 to 0x7FF (0-2047)
-        // - Extended 29-bit IDs: 0x00000000 to 0x1FFFFFFF (0-536870911)
-        // Note: Extended IDs can technically be 0-536870911, but DBC files typically
-        // use the convention where IDs 0-2047 are treated as standard and 2048+ as extended.
-        // We only validate the maximum range here; the distinction between standard/extended
-        // is determined by the ID value in practice.
-        const MAX_EXTENDED_ID: u32 = 0x1FFF_FFFF; // 536870911
-
         // Check signal count limit per message (DoS protection)
         if let Some(err) = check_max_limit(
             signals.len(),
@@ -112,21 +121,17 @@ impl Message {
             return Err(Error::Validation(Error::MESSAGE_SENDER_EMPTY));
         }
 
-        // Validate DLC (Data Length Code): must be between 1 and 64 bytes
-        // - Classic CAN Standard (CAN 2.0A): DLC <= 8 bytes (64 bits) maximum payload
-        // - Classic CAN Extended (CAN 2.0B): DLC <= 8 bytes (64 bits) maximum payload
-        // - CAN FD (Flexible Data Rate, ISO/Bosch): DLC <= 64 bytes (512 bits) maximum payload
-        if dlc == 0 {
-            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_SMALL));
-        }
+        // Per DBC spec Section 8.3: DLC can be 0-8 for CAN 2.0, 0-64 for CAN FD
+        // DLC = 0 is valid (e.g., for control messages without data payload)
         if dlc > 64 {
             return Err(Error::Validation(Error::MESSAGE_DLC_TOO_LARGE));
         }
 
-        // Validate that ID is within valid CAN ID range
-        // Extended CAN IDs can be 0x00000000 to 0x1FFFFFFF (0 to 536870911)
-        // IDs exceeding 0x1FFFFFFF are invalid
-        if id > MAX_EXTENDED_ID {
+        // Validate ID is in a valid range
+        let id_valid = id <= Self::MAX_EXTENDED_ID
+            || (Self::EXTENDED_ID_FLAG..=Self::MAX_EXTENDED_ID_WITH_FLAG).contains(&id)
+            || id == Self::PSEUDO_MESSAGE_ID;
+        if !id_valid {
             return Err(Error::Validation(Error::MESSAGE_ID_OUT_OF_RANGE));
         }
 
@@ -135,16 +140,22 @@ impl Message {
         // - Classic CAN (2.0A/2.0B): DLC * 8 <= 64 bits (8 bytes)
         // - CAN FD: DLC * 8 <= 512 bits (64 bytes)
         // This ensures no signal extends beyond the message payload capacity
-        let max_bits = u16::from(dlc) * 8;
-        for signal in signals.iter() {
-            // Calculate the actual bit range for this signal (accounting for byte order)
-            let (lsb, msb) =
-                Self::bit_range(signal.start_bit(), signal.length(), signal.byte_order());
-            // Check if the signal extends beyond the message boundary
-            // The signal's highest bit position must be less than max_bits
-            let signal_max_bit = lsb.max(msb);
-            if signal_max_bit >= max_bits {
-                return Err(Error::Validation(Error::SIGNAL_EXTENDS_BEYOND_MESSAGE));
+        //
+        // EXCEPTION: Per spec Section 8.6, VECTOR__INDEPENDENT_SIG_MSG (ID 0xC0000000)
+        // is a special pseudo-message for "orphan" signals. Skip boundary validation
+        // for this pseudo-message since its signals aren't meant to be transmitted.
+        if id != Self::PSEUDO_MESSAGE_ID {
+            let max_bits = u16::from(dlc) * 8;
+            for signal in signals.iter() {
+                // Calculate the actual bit range for this signal (accounting for byte order)
+                let (lsb, msb) =
+                    Self::bit_range(signal.start_bit(), signal.length(), signal.byte_order());
+                // Check if the signal extends beyond the message boundary
+                // The signal's highest bit position must be less than max_bits
+                let signal_max_bit = lsb.max(msb);
+                if signal_max_bit >= max_bits {
+                    return Err(Error::Validation(Error::SIGNAL_EXTENDS_BEYOND_MESSAGE));
+                }
             }
         }
 
@@ -156,29 +167,35 @@ impl Message {
         // to overlap because they're only active when the multiplexer has a specific value.
         // We skip overlap checking for multiplexed signals.
         // We iterate over pairs without collecting to avoid alloc
-        for (i, sig1) in signals.iter().enumerate() {
-            // Skip overlap check if sig1 is multiplexed
-            if sig1.multiplexer_switch_value().is_some() {
-                continue;
-            }
-
-            let (sig1_lsb, sig1_msb) =
-                Self::bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
-
-            for sig2 in signals.iter().skip(i + 1) {
-                // Skip overlap check if sig2 is multiplexed
-                if sig2.multiplexer_switch_value().is_some() {
+        //
+        // EXCEPTION: Per spec Section 8.6, VECTOR__INDEPENDENT_SIG_MSG (ID 0xC0000000)
+        // is a special pseudo-message for "orphan" signals. Skip overlap validation
+        // for this pseudo-message since its signals aren't meant to be transmitted.
+        if id != Self::PSEUDO_MESSAGE_ID {
+            for (i, sig1) in signals.iter().enumerate() {
+                // Skip overlap check if sig1 is multiplexed
+                if sig1.multiplexer_switch_value().is_some() {
                     continue;
                 }
 
-                let (sig2_lsb, sig2_msb) =
-                    Self::bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
+                let (sig1_lsb, sig1_msb) =
+                    Self::bit_range(sig1.start_bit(), sig1.length(), sig1.byte_order());
 
-                // Check if ranges overlap
-                // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
-                // lsb1 <= msb2 && lsb2 <= msb1
-                if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
-                    return Err(Error::Validation(Error::SIGNAL_OVERLAP));
+                for sig2 in signals.iter().skip(i + 1) {
+                    // Skip overlap check if sig2 is multiplexed
+                    if sig2.multiplexer_switch_value().is_some() {
+                        continue;
+                    }
+
+                    let (sig2_lsb, sig2_msb) =
+                        Self::bit_range(sig2.start_bit(), sig2.length(), sig2.byte_order());
+
+                    // Check if ranges overlap
+                    // Two ranges [lsb1, msb1] and [lsb2, msb2] overlap if:
+                    // lsb1 <= msb2 && lsb2 <= msb1
+                    if sig1_lsb <= sig2_msb && sig2_lsb <= sig1_msb {
+                        return Err(Error::Validation(Error::SIGNAL_OVERLAP));
+                    }
                 }
             }
         }

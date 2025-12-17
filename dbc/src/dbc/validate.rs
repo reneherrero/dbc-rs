@@ -1,6 +1,6 @@
 #[cfg(feature = "std")]
 use crate::dbc::ValueDescriptionsMap;
-use crate::{Error, Message, Nodes, Result};
+use crate::{Error, Message, Nodes, Result, VECTOR__XXX};
 
 /// Validation functions for DBC structures
 pub(crate) struct Validate;
@@ -68,9 +68,12 @@ impl Validate {
 
         // Validate that all message senders are in the nodes list
         // Skip validation if nodes list is empty (empty nodes allowed per DBC spec)
+        // Per DBC spec Section 8.4: Vector__XXX means "no sender / unknown sender"
+        // and doesn't need to be in the nodes list
         if !nodes.is_empty() {
             for msg in messages {
-                if !nodes.contains(msg.sender()) {
+                let sender = msg.sender();
+                if sender != VECTOR__XXX && !nodes.contains(sender) {
                     return Err(Error::Validation(Error::SENDER_NOT_IN_NODES));
                 }
             }

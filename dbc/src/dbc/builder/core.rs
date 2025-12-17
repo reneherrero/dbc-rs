@@ -99,7 +99,6 @@ impl DbcBuilder {
 
                     // Convert receivers using ReceiversBuilder
                     let receivers_builder = match sig.receivers() {
-                        Receivers::Broadcast => ReceiversBuilder::new().broadcast(),
                         Receivers::None => ReceiversBuilder::new().none(),
                         Receivers::Nodes(nodes) => {
                             let mut rb = ReceiversBuilder::new();

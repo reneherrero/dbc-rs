@@ -735,4 +735,136 @@ VAL_ -1 DI_gear 0 "INVALID" 1 "P" 2 "R" 3 "N" 4 "D" 5 "S" 6 "L" 7 "SNA" ;
         assert_eq!(dbc.value_descriptions_for_signal(256, "EngineRPM"), None);
         assert_eq!(dbc.value_descriptions_for_signal(512, "SpeedDisplay"), None);
     }
+
+    // ============================================================================
+    // Specification Compliance Tests
+    // These tests verify against exact requirements from dbc/SPECIFICATIONS.md
+    // ============================================================================
+
+    /// Verify Section 8.3: DLC = 0 is valid
+    /// "CAN 2.0: 0 to 8 bytes"
+    /// "CAN FD: 0 to 64 bytes"
+    #[test]
+    fn test_spec_section_8_3_dlc_zero_is_valid() {
+        // DLC = 0 is valid per spec (e.g., for control messages without data payload)
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 ControlMessage : 0 ECM
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.messages().len(), 1);
+        let msg = dbc.messages().iter().next().unwrap();
+        assert_eq!(msg.dlc(), 0);
+    }
+
+    /// Verify Section 8.1: Extended CAN ID format
+    /// "Extended ID in DBC = 0x80000000 | actual_extended_id"
+    /// "Example: 0x80001234 represents extended ID 0x1234"
+    #[test]
+    fn test_spec_section_8_1_extended_can_id_format() {
+        // Extended ID 0x494 is stored as 0x80000000 | 0x494 = 0x80000494 = 2147484820
+        // 0x80000000 = 2147483648, 0x494 = 1172, 2147483648 + 1172 = 2147484820
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 2147484820 ExtendedMessage : 8 ECM
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.messages().len(), 1);
+        let msg = dbc.messages().iter().next().unwrap();
+        assert_eq!(msg.id(), 2147484820);
+        // Verify this is extended ID 0x494 with bit 31 set
+        assert_eq!(msg.id() & 0x80000000, 0x80000000); // Bit 31 is set
+        assert_eq!(msg.id() & 0x1FFFFFFF, 0x494); // Lower 29 bits are the actual ID
+    }
+
+    /// Verify Section 8.3: Maximum extended ID (0x1FFFFFFF) with bit 31 flag
+    #[test]
+    fn test_spec_section_8_1_max_extended_id() {
+        // Maximum extended ID: 0x80000000 | 0x1FFFFFFF = 0x9FFFFFFF = 2684354559
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 2684354559 MaxExtendedId : 8 ECM
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.messages().len(), 1);
+        let msg = dbc.messages().iter().next().unwrap();
+        assert_eq!(msg.id(), 0x9FFFFFFF);
+    }
+
+    /// Verify Section 8.4: Vector__XXX as transmitter
+    /// "Vector__XXX - No sender / unknown sender"
+    #[test]
+    fn test_spec_section_8_4_vector_xxx_transmitter() {
+        let data = r#"VERSION "1.0"
+
+BU_: Gateway
+
+BO_ 256 UnknownSender : 8 Vector__XXX
+ SG_ Signal1 : 0|8@1+ (1,0) [0|255] "" Gateway
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.messages().len(), 1);
+        let msg = dbc.messages().iter().next().unwrap();
+        assert_eq!(msg.sender(), "Vector__XXX");
+    }
+
+    /// Verify Section 9.5: Receivers format
+    /// Parser accepts both comma-separated (per spec) and space-separated (tool extension)
+    #[test]
+    fn test_spec_section_9_5_receivers_comma_separated() {
+        // Comma-separated receivers (per spec)
+        // Note: The parser identifier function stops at commas, so we test that comma-separated
+        // receiver parsing works correctly
+        use crate::{Parser, Signal};
+
+        // Test comma-separated receivers directly via Signal::parse
+        let signal = Signal::parse(
+            &mut Parser::new(b"SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" Gateway,Dashboard")
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(signal.receivers().len(), 2);
+        let mut receivers = signal.receivers().iter();
+        assert_eq!(receivers.next(), Some("Gateway"));
+        assert_eq!(receivers.next(), Some("Dashboard"));
+    }
+
+    /// Verify Section 9.4: Multiplexer indicator patterns
+    /// "M" for multiplexer switch, "m0", "m1", etc. for multiplexed signals
+    #[test]
+    fn test_spec_section_9_4_multiplexer_indicators() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM Gateway
+
+BO_ 400 MultiplexedMsg : 8 ECM
+ SG_ MuxSwitch M : 0|8@1+ (1,0) [0|255] "" Gateway
+ SG_ Signal_0 m0 : 8|16@1+ (0.1,0) [0|1000] "kPa" Gateway
+ SG_ Signal_1 m1 : 8|16@1+ (0.01,0) [0|100] "degC" Gateway
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        let msg = dbc.messages().iter().next().unwrap();
+
+        // Find signals by name
+        let mux_switch = msg.signals().find("MuxSwitch").unwrap();
+        let signal_0 = msg.signals().find("Signal_0").unwrap();
+        let signal_1 = msg.signals().find("Signal_1").unwrap();
+
+        // Verify multiplexer switch
+        assert!(mux_switch.is_multiplexer_switch());
+        assert_eq!(mux_switch.multiplexer_switch_value(), None);
+
+        // Verify multiplexed signals
+        assert!(!signal_0.is_multiplexer_switch());
+        assert_eq!(signal_0.multiplexer_switch_value(), Some(0));
+
+        assert!(!signal_1.is_multiplexer_switch());
+        assert_eq!(signal_1.multiplexer_switch_value(), Some(1));
+    }
 }
