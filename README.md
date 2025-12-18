@@ -107,14 +107,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dbc-rs = "0.1.0-rc.3"
+dbc-rs = "0.1.0"
 ```
 
 For embedded targets without standard library:
 
 ```toml
 [dependencies]
-dbc-rs = { version = "0.1.0-rc.3", default-features = false, features = ["heapless"] }
+dbc-rs = { version = "0.1.0", default-features = false, features = ["heapless"] }
 ```
 
 

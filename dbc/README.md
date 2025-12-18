@@ -45,19 +45,19 @@ if let Some(engine_msg) = dbc.messages().iter().find(|m| m.id() == 256) {
 **Cargo.toml examples:**
 ```toml
 # Default: std enabled
-dbc-rs = "1"
+dbc-rs = "0.1.0"
 
 # no_std with heap allocation
-dbc-rs = { version = "1", default-features = false, features = ["alloc"] }
+dbc-rs = { version = "0.1.0", default-features = false, features = ["alloc"] }
 
 # no_std with stack allocation
-dbc-rs = { version = "1", default-features = false, features = ["heapless"] }
+dbc-rs = { version = "0.1.0", default-features = false, features = ["heapless"] }
 
 # With embedded-can Frame decoding support
-dbc-rs = { version = "1", features = ["embedded-can"] }
+dbc-rs = { version = "0.1.0", features = ["embedded-can"] }
 
 # no_std with stack allocation + embedded-can (embedded targets)
-dbc-rs = { version = "1", default-features = false, features = ["heapless", "embedded-can"] }
+dbc-rs = { version = "0.1.0", default-features = false, features = ["heapless", "embedded-can"] }
 ```
 
 ## DBC Format Support
