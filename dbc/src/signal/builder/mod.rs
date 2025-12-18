@@ -113,15 +113,19 @@ impl SignalBuilder {
     }
 
     fn extract_fields(&self) -> Result<SignalFields> {
-        let name = self.name.clone().ok_or(Error::Signal(Error::SIGNAL_NAME_EMPTY))?;
-        let start_bit = self.start_bit.ok_or(Error::Signal(Error::SIGNAL_START_BIT_REQUIRED))?;
-        let length = self.length.ok_or(Error::Signal(Error::SIGNAL_LENGTH_REQUIRED))?;
-        let byte_order = self.byte_order.ok_or(Error::Signal(Error::SIGNAL_BYTE_ORDER_REQUIRED))?;
-        let unsigned = self.unsigned.ok_or(Error::Signal(Error::SIGNAL_UNSIGNED_REQUIRED))?;
-        let factor = self.factor.ok_or(Error::Signal(Error::SIGNAL_FACTOR_REQUIRED))?;
-        let offset = self.offset.ok_or(Error::Signal(Error::SIGNAL_OFFSET_REQUIRED))?;
-        let min = self.min.ok_or(Error::Signal(Error::SIGNAL_MIN_REQUIRED))?;
-        let max = self.max.ok_or(Error::Signal(Error::SIGNAL_MAX_REQUIRED))?;
+        let name = self.name.clone().ok_or_else(|| Error::signal(Error::SIGNAL_NAME_EMPTY))?;
+        let start_bit =
+            self.start_bit.ok_or_else(|| Error::signal(Error::SIGNAL_START_BIT_REQUIRED))?;
+        let length = self.length.ok_or_else(|| Error::signal(Error::SIGNAL_LENGTH_REQUIRED))?;
+        let byte_order = self
+            .byte_order
+            .ok_or_else(|| Error::signal(Error::SIGNAL_BYTE_ORDER_REQUIRED))?;
+        let unsigned =
+            self.unsigned.ok_or_else(|| Error::signal(Error::SIGNAL_UNSIGNED_REQUIRED))?;
+        let factor = self.factor.ok_or_else(|| Error::signal(Error::SIGNAL_FACTOR_REQUIRED))?;
+        let offset = self.offset.ok_or_else(|| Error::signal(Error::SIGNAL_OFFSET_REQUIRED))?;
+        let min = self.min.ok_or_else(|| Error::signal(Error::SIGNAL_MIN_REQUIRED))?;
+        let max = self.max.ok_or_else(|| Error::signal(Error::SIGNAL_MAX_REQUIRED))?;
         Ok((
             name,
             start_bit,
@@ -155,7 +159,7 @@ impl SignalBuilder {
 
         // Validate start_bit: must be between 0 and 511 (CAN FD maximum is 512 bits)
         if start_bit > 511 {
-            return Err(Error::Signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
+            return Err(Error::signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
         }
 
         // Validate that start_bit + length doesn't exceed CAN FD maximum (512 bits)
@@ -164,7 +168,7 @@ impl SignalBuilder {
         // is actually constructed, to avoid duplicate validation calls.
         let end_bit = start_bit + length - 1; // -1 because length includes the start bit
         if end_bit >= 512 {
-            return Err(Error::Signal(Error::SIGNAL_EXTENDS_BEYOND_MESSAGE));
+            return Err(Error::signal(Error::SIGNAL_EXTENDS_BEYOND_MESSAGE));
         }
         Ok(Self {
             name: Some(name),

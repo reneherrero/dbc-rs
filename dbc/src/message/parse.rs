@@ -4,57 +4,62 @@ use crate::{Error, MAX_NAME_SIZE, Parser, Result, Signal, compat};
 impl Message {
     pub(crate) fn parse(parser: &mut Parser, signals: &[Signal]) -> Result<Self> {
         // Message parsing must always start with "BO_" keyword
+        let line = parser.line();
         parser
             .expect(crate::BO_.as_bytes())
-            .map_err(|_| Error::Expected("Expected BO_ keyword"))?;
+            .map_err(|_| Error::expected_at("Expected BO_ keyword", line))?;
 
         // Skip whitespace
         let _ = parser.skip_whitespace();
 
         // Parse message ID
-        let id = parser
-            .parse_u32_with_error(|| Error::Message(crate::error::Error::MESSAGE_INVALID_ID))?;
+        let id = parser.parse_u32_with_error(|| Error::message(Error::MESSAGE_INVALID_ID))?;
 
         // Skip whitespace
-        parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
+        let line = parser.line();
+        parser
+            .skip_whitespace()
+            .map_err(|_| Error::expected_at("Expected space after message ID", line))?;
 
         // Parse message name (identifier)
-        let name = parser.parse_identifier_with_error(|| {
-            Error::Message(crate::error::Error::MESSAGE_NAME_EMPTY)
-        })?;
+        let name =
+            parser.parse_identifier_with_error(|| Error::message(Error::MESSAGE_NAME_EMPTY))?;
 
         // Skip whitespace (optional before colon)
         let _ = parser.skip_whitespace();
 
         // Expect colon
-        parser.expect_with_msg(b":", "Expected colon")?;
+        parser.expect_with_msg(b":", "Expected ':' after message name")?;
 
         // Skip whitespace after colon
         let _ = parser.skip_whitespace();
 
         // Parse DLC
-        let dlc = parser
-            .parse_u8_with_error(|| Error::Message(crate::error::Error::MESSAGE_INVALID_DLC))?;
+        let dlc = parser.parse_u8_with_error(|| Error::message(Error::MESSAGE_INVALID_DLC))?;
 
         // Skip whitespace (required)
-        parser.skip_whitespace().map_err(|_| Error::Expected("Expected whitespace"))?;
+        let line = parser.line();
+        parser
+            .skip_whitespace()
+            .map_err(|_| Error::expected_at("Expected space after DLC", line))?;
 
         // Parse sender (identifier, until end of line or whitespace)
-        let sender = parser.parse_identifier_with_error(|| {
-            Error::Message(crate::error::Error::MESSAGE_SENDER_EMPTY)
-        })?;
+        let sender =
+            parser.parse_identifier_with_error(|| Error::message(Error::MESSAGE_SENDER_EMPTY))?;
 
         // Check for extra content after sender (invalid format)
         parser.skip_newlines_and_spaces();
         if !parser.is_empty() {
-            return Err(Error::Expected("Unexpected content after message sender"));
+            return Err(parser.err_expected("Unexpected content after message sender"));
         }
 
         // Validate before construction
         Message::validate(id, name, dlc, sender, signals).map_err(|e| {
-            crate::error::map_val_error(e, crate::error::Error::Message, || {
-                crate::error::Error::Message(crate::error::Error::MESSAGE_ERROR_PREFIX)
-            })
+            crate::error::map_val_error_with_line(
+                e,
+                |msg| parser.err_message(msg),
+                || parser.err_message(Error::MESSAGE_ERROR_PREFIX),
+            )
         })?;
 
         // Convert to owned types (validation already done, so unwrap is safe)
@@ -98,8 +103,8 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(_) => {
-                // Expected
+            Error::Message { line, .. } => {
+                assert_eq!(line, Some(1));
             }
             _ => panic!("Expected Error::Message"),
         }
@@ -113,8 +118,8 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(_) => {
-                // Expected
+            Error::Message { line, .. } => {
+                assert_eq!(line, Some(1));
             }
             _ => panic!("Expected Error::Message"),
         }
@@ -128,8 +133,8 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(_) => {
-                // Expected
+            Error::Message { line, .. } => {
+                assert_eq!(line, Some(1));
             }
             _ => panic!("Expected Error::Message"),
         }
@@ -143,8 +148,8 @@ mod tests {
         let result = Message::parse(&mut parser, signals);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(_) => {
-                // Expected
+            Error::Message { line, .. } => {
+                assert_eq!(line, Some(1));
             }
             _ => panic!("Expected Error::Message"),
         }

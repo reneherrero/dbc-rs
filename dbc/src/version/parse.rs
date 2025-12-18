@@ -45,23 +45,25 @@ impl Version {
     #[must_use = "parse result should be checked"]
     pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Version parsing must always start with "VERSION" keyword
+        let line = parser.line();
         parser
             .expect(VERSION.as_bytes())
-            .map_err(|_| Error::Expected("Expected 'VERSION' keyword"))?;
+            .map_err(|_| Error::expected_at("Expected 'VERSION' keyword", line))?;
 
         // Skip whitespace and expect quote (whitespace is required)
+        let line = parser.line();
         parser
             .skip_whitespace()?
             .expect(b"\"")
-            .map_err(|_| Error::Expected("Expected opening quote after VERSION"))?;
+            .map_err(|_| Error::expected_at("Expected opening '\"' after VERSION", line))?;
 
         let version_bytes = parser.take_until_quote(false, MAX_NAME_SIZE)?;
 
         // Convert bytes to string slice using the parser's input
         let v = Vec::<u8, { MAX_NAME_SIZE }>::from_slice(version_bytes)
-            .map_err(|_| Error::Expected(Error::INVALID_UTF8))?;
+            .map_err(|_| parser.err_expected(Error::INVALID_UTF8))?;
         let version_str = String::<{ MAX_NAME_SIZE }>::from_utf8(v)
-            .map_err(|_| Error::Version(Error::MAX_NAME_SIZE_EXCEEDED))?;
+            .map_err(|_| parser.err_version(Error::MAX_NAME_SIZE_EXCEEDED))?;
 
         // Construct directly (validation already done during parsing)
         Ok(Version::new(version_str))
@@ -87,7 +89,9 @@ mod tests {
         let mut parser = Parser::new(line).unwrap();
         let version = Version::parse(&mut parser).unwrap_err();
         match version {
-            Error::Expected(_) => {}
+            Error::Expected { line, .. } => {
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Expected error, got {:?}", version),
         }
     }
@@ -98,7 +102,7 @@ mod tests {
         let result = Parser::new(line);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::UnexpectedEof => {}
+            Error::UnexpectedEof { .. } => {}
             _ => panic!("Expected UnexpectedEof"),
         }
     }
@@ -110,7 +114,9 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(_) => {}
+            Error::Expected { line, .. } => {
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Expected error"),
         }
     }
@@ -122,7 +128,9 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(_) => {}
+            Error::Expected { line, .. } => {
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Expected error"),
         }
     }
@@ -134,7 +142,9 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::UnexpectedEof => {}
+            Error::UnexpectedEof { line } => {
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected UnexpectedEof"),
         }
     }
@@ -146,7 +156,9 @@ mod tests {
         let result = Version::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(_) => {}
+            Error::Expected { line, .. } => {
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Expected error"),
         }
     }

@@ -32,8 +32,8 @@ impl<const N: usize> String<N> {
     pub fn from_utf8(vec: Vec<u8, N>) -> Result<Self> {
         #[cfg(feature = "alloc")]
         {
-            let utf8_str = str::from_utf8(vec.as_slice())
-                .map_err(|_| Error::Expected(crate::error::Error::INVALID_UTF8))?;
+            let utf8_str =
+                str::from_utf8(vec.as_slice()).map_err(|_| Error::expected(Error::INVALID_UTF8))?;
             Ok(Self(alloc::string::String::from(utf8_str)))
         }
         #[cfg(not(feature = "alloc"))]
@@ -41,7 +41,7 @@ impl<const N: usize> String<N> {
             // heapless::String::from_utf8 takes ownership of Vec
             Inner::from_utf8(vec.into_inner())
                 .map(Self)
-                .map_err(|_| Error::Expected(crate::error::Error::INVALID_UTF8))
+                .map_err(|_| Error::expected(Error::INVALID_UTF8))
         }
     }
 
@@ -81,9 +81,7 @@ impl<const N: usize> String<N> {
         }
         #[cfg(not(feature = "alloc"))]
         {
-            self.0
-                .push_str(s)
-                .map_err(|_| Error::Validation(crate::error::Error::MAX_NAME_SIZE_EXCEEDED))
+            self.0.push_str(s).map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))
         }
     }
 }
@@ -101,9 +99,7 @@ impl<'a, const N: usize> TryFrom<&'a str> for String<N> {
     #[inline]
     fn try_from(s: &'a str) -> Result<Self> {
         if s.len() > N {
-            return Err(Error::Validation(
-                crate::error::Error::MAX_NAME_SIZE_EXCEEDED,
-            ));
+            return Err(Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED));
         }
         #[cfg(feature = "alloc")]
         {
@@ -113,7 +109,7 @@ impl<'a, const N: usize> TryFrom<&'a str> for String<N> {
         {
             Inner::try_from(s)
                 .map(Self)
-                .map_err(|_| Error::Validation(crate::error::Error::MAX_NAME_SIZE_EXCEEDED))
+                .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))
         }
     }
 }

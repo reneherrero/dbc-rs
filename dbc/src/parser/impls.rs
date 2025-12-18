@@ -4,7 +4,7 @@ use crate::Error;
 impl<'a> Parser<'a> {
     pub fn new(input: &'a [u8]) -> crate::Result<Self> {
         if input.is_empty() {
-            return Err(Error::UnexpectedEof);
+            return Err(Error::unexpected_eof());
         }
         Ok(Self {
             input,
@@ -21,7 +21,6 @@ impl<'a> Parser<'a> {
 
     #[inline]
     #[must_use = "return value should be used"]
-    #[allow(dead_code)] // Public API for error reporting - will be used in future error messages
     pub fn line(&self) -> usize {
         self.line
     }
@@ -76,14 +75,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Helper to restore position and return an error.
-    /// Used to avoid duplicating the pattern of restoring position on error.
-    #[inline]
-    pub fn restore_pos_err(&mut self, pos: usize, err: Error) -> Error {
-        self.pos = pos;
-        err
-    }
-
     /// Get the byte at the current position (internal access).
     #[inline]
     pub fn current_byte(&self) -> Option<u8> {
@@ -116,6 +107,64 @@ impl<'a> Parser<'a> {
             _ => false,
         }
     }
+
+    // ============================================================================
+    // Error creation helpers - create errors with current line number
+    // ============================================================================
+
+    /// Create an UnexpectedEof error with the current line number.
+    #[inline]
+    pub fn err_unexpected_eof(&self) -> Error {
+        Error::unexpected_eof_at(self.line)
+    }
+
+    /// Create an Expected error with the current line number.
+    #[inline]
+    pub fn err_expected(&self, msg: &'static str) -> Error {
+        Error::expected_at(msg, self.line)
+    }
+
+    /// Create an InvalidChar error with the current line number.
+    #[inline]
+    pub fn err_invalid_char(&self, char: char) -> Error {
+        Error::invalid_char_at(char, self.line)
+    }
+
+    /// Create a MaxStrLength error with the current line number.
+    #[inline]
+    pub fn err_max_str_length(&self, max: usize) -> Error {
+        Error::max_str_length_at(max, self.line)
+    }
+
+    /// Create a Version error with the current line number.
+    #[inline]
+    pub fn err_version(&self, msg: &'static str) -> Error {
+        Error::version_at(msg, self.line)
+    }
+
+    /// Create a Message error with the current line number.
+    #[inline]
+    pub fn err_message(&self, msg: &'static str) -> Error {
+        Error::message_at(msg, self.line)
+    }
+
+    /// Create a Receivers error with the current line number.
+    #[inline]
+    pub fn err_receivers(&self, msg: &'static str) -> Error {
+        Error::receivers_at(msg, self.line)
+    }
+
+    /// Create a Nodes error with the current line number.
+    #[inline]
+    pub fn err_nodes(&self, msg: &'static str) -> Error {
+        Error::nodes_at(msg, self.line)
+    }
+
+    /// Create a Signal error with the current line number.
+    #[inline]
+    pub fn err_signal(&self, msg: &'static str) -> Error {
+        Error::signal_at(msg, self.line)
+    }
 }
 
 #[cfg(test)]
@@ -138,7 +187,7 @@ mod tests {
         let result = Parser::new(input);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::UnexpectedEof => {}
+            Error::UnexpectedEof { .. } => {}
             _ => panic!("Expected Error::UnexpectedEof"),
         }
     }
@@ -259,5 +308,19 @@ mod tests {
         assert!(parser_x.matches_any(b"x"));
         let parser_y = Parser::new(b"ytest").unwrap();
         assert!(!parser_y.matches_any(b"x"));
+    }
+
+    #[test]
+    fn err_expected_includes_line_number() {
+        let parser = Parser::new(b"test").unwrap();
+        let err = parser.err_expected("some message");
+        assert_eq!(err.line(), Some(1));
+    }
+
+    #[test]
+    fn err_signal_includes_line_number() {
+        let parser = Parser::new(b"test").unwrap();
+        let err = parser.err_signal("some message");
+        assert_eq!(err.line(), Some(1));
     }
 }

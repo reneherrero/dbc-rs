@@ -58,10 +58,10 @@ pub fn validate_name<S: AsRef<str>>(name: S) -> Result<Name> {
     // Explicitly check length before conversion to ensure MAX_NAME_SIZE enforcement
     // This check works for both alloc and heapless features
     if name_str.len() > MAX_NAME_SIZE {
-        return Err(Error::Expected(Error::MAX_NAME_SIZE_EXCEEDED));
+        return Err(Error::expected(Error::MAX_NAME_SIZE_EXCEEDED));
     }
 
     // Convert to compat::String - this will also check the limit internally,
     // but we've already checked above for clarity and early error reporting
-    String::try_from(name_str).map_err(|_| Error::Expected(Error::MAX_NAME_SIZE_EXCEEDED))
+    String::try_from(name_str).map_err(|_| Error::expected(Error::MAX_NAME_SIZE_EXCEEDED))
 }

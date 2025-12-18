@@ -198,20 +198,22 @@ impl ExtendedMultiplexingBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<ExtendedMultiplexing> {
-        let message_id = self.message_id.ok_or(Error::Expected("message_id is required"))?;
+        let message_id =
+            self.message_id.ok_or_else(|| Error::expected("message_id is required"))?;
 
-        let signal_name_str = self.signal_name.ok_or(Error::Expected("signal_name is required"))?;
+        let signal_name_str =
+            self.signal_name.ok_or_else(|| Error::expected("signal_name is required"))?;
         let signal_name = validate_name(&signal_name_str)
-            .map_err(|_| Error::Expected(Error::MAX_NAME_SIZE_EXCEEDED))?;
+            .map_err(|_| Error::expected(Error::MAX_NAME_SIZE_EXCEEDED))?;
 
         let multiplexer_switch_str = self
             .multiplexer_switch
-            .ok_or(Error::Expected("multiplexer_switch is required"))?;
+            .ok_or_else(|| Error::expected("multiplexer_switch is required"))?;
         let multiplexer_switch = validate_name(&multiplexer_switch_str)
-            .map_err(|_| Error::Expected(Error::MAX_NAME_SIZE_EXCEEDED))?;
+            .map_err(|_| Error::expected(Error::MAX_NAME_SIZE_EXCEEDED))?;
 
         if self.value_ranges.is_empty() {
-            return Err(Error::Expected("at least one value range is required"));
+            return Err(Error::expected("at least one value range is required"));
         }
 
         // Convert std::vec::Vec to compat::Vec
@@ -219,7 +221,7 @@ impl ExtendedMultiplexingBuilder {
         for (min, max) in self.value_ranges {
             value_ranges
                 .push((min, max))
-                .map_err(|_| Error::Expected("too many value ranges (maximum 64)"))?;
+                .map_err(|_| Error::expected("too many value ranges (maximum 64)"))?;
         }
 
         Ok(ExtendedMultiplexing::new(

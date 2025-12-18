@@ -65,13 +65,41 @@ else
     FAILED=1
 fi
 
-# Run clippy on dbc-rs with heapless feature (x86_64)
-# Note: DBC_MAX_MESSAGES must be a power of 2 for heapless (build.rs validates this)
-echo -e "\n${YELLOW}Running clippy on dbc-rs (heapless x86_64)...${NC}"
-if DBC_MAX_MESSAGES=512 rustup run stable cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed (heapless x86_64)${NC}"
+# Check formatting using pinned toolchain (from rust-toolchain.toml)
+# This ensures consistent formatting across all workstations
+echo -e "\n${YELLOW}Checking code formatting (using pinned toolchain)...${NC}"
+if cargo fmt -- --check 2>&1; then
+    echo -e "${GREEN}✓ Code formatting check passed${NC}"
 else
-    echo -e "${RED}✗ dbc-rs clippy check failed (heapless x86_64)${NC}"
+    echo -e "${RED}✗ Code formatting check failed${NC}"
+    echo -e "${YELLOW}Run 'cargo fmt' to fix formatting issues${NC}"
+    FAILED=1
+fi
+
+# Run tests with default features (std)
+echo -e "\n${YELLOW}Running tests with default features (std)...${NC}"
+if cargo test --quiet 2>&1; then
+    echo -e "${GREEN}✓ Tests passed (std)${NC}"
+else
+    echo -e "${RED}✗ Tests failed (std)${NC}"
+    FAILED=1
+fi
+
+# Run tests with alloc feature
+echo -e "\n${YELLOW}Running tests with alloc feature...${NC}"
+if cargo test --quiet --no-default-features --features alloc -p dbc-rs 2>&1; then
+    echo -e "${GREEN}✓ Tests passed (alloc)${NC}"
+else
+    echo -e "${RED}✗ Tests failed (alloc)${NC}"
+    FAILED=1
+fi
+
+# Run tests with heapless feature (with reduced constants to avoid stack overflow)
+echo -e "\n${YELLOW}Running tests with heapless feature (release mode, reduced constants)...${NC}"
+if DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --quiet --release --no-default-features --features heapless -p dbc-rs 2>&1; then
+    echo -e "${GREEN}✓ Tests passed (heapless)${NC}"
+else
+    echo -e "${RED}✗ Tests failed (heapless)${NC}"
     FAILED=1
 fi
 
@@ -82,6 +110,15 @@ if DBC_MAX_MESSAGES=512 rustup run stable cargo clippy --no-default-features --f
     echo -e "${GREEN}✓ dbc-rs clippy check passed (heapless embedded)${NC}"
 else
     echo -e "${RED}✗ dbc-rs clippy check failed (heapless embedded)${NC}"
+    FAILED=1
+fi
+# Run clippy on dbc-rs with heapless feature (x86_64)
+# Note: DBC_MAX_MESSAGES must be a power of 2 for heapless (build.rs validates this)
+echo -e "\n${YELLOW}Running clippy on dbc-rs (heapless x86_64)...${NC}"
+if DBC_MAX_MESSAGES=512 rustup run stable cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ dbc-rs clippy check passed (heapless x86_64)${NC}"
+else
+    echo -e "${RED}✗ dbc-rs clippy check failed (heapless x86_64)${NC}"
     FAILED=1
 fi
 
@@ -103,43 +140,6 @@ else
     FAILED=1
 fi
 
-# Check formatting using pinned toolchain (from rust-toolchain.toml)
-# This ensures consistent formatting across all workstations
-echo -e "\n${YELLOW}Checking code formatting (using pinned toolchain)...${NC}"
-if cargo fmt -- --check 2>&1; then
-    echo -e "${GREEN}✓ Code formatting check passed${NC}"
-else
-    echo -e "${RED}✗ Code formatting check failed${NC}"
-    echo -e "${YELLOW}Run 'cargo fmt' to fix formatting issues${NC}"
-    FAILED=1
-fi
-
-# Run tests with default features (std)
-echo -e "\n${YELLOW}Running tests with default features (std)...${NC}"
-if cargo test 2>&1; then
-    echo -e "${GREEN}✓ Tests passed (std)${NC}"
-else
-    echo -e "${RED}✗ Tests failed (std)${NC}"
-    FAILED=1
-fi
-
-# Run tests with alloc feature
-echo -e "\n${YELLOW}Running tests with alloc feature...${NC}"
-if cargo test --no-default-features --features alloc -p dbc-rs 2>&1; then
-    echo -e "${GREEN}✓ Tests passed (alloc)${NC}"
-else
-    echo -e "${RED}✗ Tests failed (alloc)${NC}"
-    FAILED=1
-fi
-
-# Run tests with heapless feature (with reduced constants to avoid stack overflow)
-echo -e "\n${YELLOW}Running tests with heapless feature (release mode, reduced constants)...${NC}"
-if DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --release --no-default-features --features heapless -p dbc-rs 2>&1; then
-    echo -e "${GREEN}✓ Tests passed (heapless)${NC}"
-else
-    echo -e "${RED}✗ Tests failed (heapless)${NC}"
-    FAILED=1
-fi
 
 # Exit with error if any check failed
 if [ $FAILED -eq 1 ]; then

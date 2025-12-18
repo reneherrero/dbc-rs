@@ -2,6 +2,11 @@ use crate::{ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version, com
 
 type ExtendedMultiplexings = Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>;
 
+// Index for fast extended multiplexing lookup by (message_id, signal_name)
+// Maps to indices into the extended_multiplexing vec
+mod ext_mux_index;
+use ext_mux_index::ExtMuxIndex;
+
 // Module declarations
 mod messages;
 mod value_descriptions_map;
@@ -9,8 +14,8 @@ mod value_descriptions_map;
 // Include modules for additional functionality
 #[cfg(feature = "std")]
 mod builder;
-mod core;
 mod decode;
+mod impls;
 mod parse;
 #[cfg(feature = "std")]
 mod std;
@@ -57,4 +62,6 @@ pub struct Dbc {
     messages: Messages,
     value_descriptions: ValueDescriptionsMap,
     extended_multiplexing: ExtendedMultiplexings,
+    /// Index for O(1) extended multiplexing lookup by (message_id, signal_name)
+    ext_mux_index: ExtMuxIndex,
 }

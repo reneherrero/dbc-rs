@@ -72,10 +72,10 @@ impl MessageBuilder {
     }
 
     fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<SignalBuilder>)> {
-        let id = self.id.ok_or(Error::Message(Error::MESSAGE_ID_REQUIRED))?;
-        let name = self.name.ok_or(Error::Message(Error::MESSAGE_NAME_EMPTY))?;
-        let dlc = self.dlc.ok_or(Error::Message(Error::MESSAGE_DLC_REQUIRED))?;
-        let sender = self.sender.ok_or(Error::Message(Error::MESSAGE_SENDER_EMPTY))?;
+        let id = self.id.ok_or_else(|| Error::message(Error::MESSAGE_ID_REQUIRED))?;
+        let name = self.name.ok_or_else(|| Error::message(Error::MESSAGE_NAME_EMPTY))?;
+        let dlc = self.dlc.ok_or_else(|| Error::message(Error::MESSAGE_DLC_REQUIRED))?;
+        let sender = self.sender.ok_or_else(|| Error::message(Error::MESSAGE_SENDER_EMPTY))?;
         Ok((id, name, dlc, sender, self.signals))
     }
 
@@ -92,10 +92,13 @@ impl MessageBuilder {
     /// If you only need the final `Message`, call `build()` directly.
     pub fn validate(&self) -> Result<()> {
         // Validate required fields are present
-        let id = self.id.ok_or(Error::Message(Error::MESSAGE_ID_REQUIRED))?;
-        let name = self.name.as_ref().ok_or(Error::Message(Error::MESSAGE_NAME_EMPTY))?;
-        let dlc = self.dlc.ok_or(Error::Message(Error::MESSAGE_DLC_REQUIRED))?;
-        let sender = self.sender.as_ref().ok_or(Error::Message(Error::MESSAGE_SENDER_EMPTY))?;
+        let id = self.id.ok_or_else(|| Error::message(Error::MESSAGE_ID_REQUIRED))?;
+        let name = self.name.as_ref().ok_or_else(|| Error::message(Error::MESSAGE_NAME_EMPTY))?;
+        let dlc = self.dlc.ok_or_else(|| Error::message(Error::MESSAGE_DLC_REQUIRED))?;
+        let sender = self
+            .sender
+            .as_ref()
+            .ok_or_else(|| Error::message(Error::MESSAGE_SENDER_EMPTY))?;
 
         // Build all signals for validation
         let built_signals: Vec<Signal> = self

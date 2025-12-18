@@ -49,7 +49,7 @@ src/
 │   └── vec.rs              # Vec<T, N> wrapper
 ├── parser/                 # Hand-written zero-copy parser
 │   ├── mod.rs              # Parser struct definition
-│   ├── core.rs             # Core parsing methods
+│   ├── impls.rs            # Core parsing methods
 │   ├── expect.rs           # Token expectation utilities
 │   ├── keyword.rs          # DBC keyword parsing
 │   ├── parse.rs            # Parsing trait implementations
@@ -57,7 +57,7 @@ src/
 │   └── take.rs             # Token extraction
 ├── dbc/                    # Top-level DBC structure
 │   ├── mod.rs              # Dbc struct definition
-│   ├── core.rs             # Core methods (accessors)
+│   ├── impls.rs            # Core methods (accessors)
 │   ├── parse.rs            # Dbc::parse() implementation
 │   ├── decode.rs           # CAN message decoding
 │   ├── std.rs              # std only features
@@ -83,7 +83,7 @@ Each DBC entity (message, signal, nodes, etc.) follows a consistent module struc
 ```
 entity/
 ├── mod.rs          # Entity struct definition, re-exports, constants
-├── core.rs         # Accessor methods (getters)
+├── impls.rs        # Accessor methods (getters), constructors
 ├── parse.rs        # Parser::parse_entity() implementation
 ├── std.rs          # std only features
 ├── validate.rs     # Validation rules [if applicable]
@@ -232,14 +232,21 @@ decode(id, payload, is_extended)
 
 ## Error Handling
 
-Errors use a single enum with string messages for `no_std` compatibility:
+Errors use a single enum with string messages for `no_std` compatibility. Parsing errors include optional line number information:
 
 ```rust
 pub enum Error {
-    Expected(&'static str),      // Parser expected something
-    UnexpectedEof,               // Unexpected end of input
-    Validation(&'static str),    // Validation failure
-    Decoding(&'static str),      // Runtime decode error
+    UnexpectedEof { line: Option<usize> },
+    Expected { msg: &'static str, line: Option<usize> },
+    InvalidChar { char: char, line: Option<usize> },
+    MaxStrLength { max: usize, line: Option<usize> },
+    Version { msg: &'static str, line: Option<usize> },
+    Message { msg: &'static str, line: Option<usize> },
+    Signal { msg: &'static str, line: Option<usize> },
+    Nodes { msg: &'static str, line: Option<usize> },
+    Receivers { msg: &'static str, line: Option<usize> },
+    Decoding(&'static str),      // Runtime decode error (no line info)
+    Validation(&'static str),    // Post-parse validation (no line info)
 }
 ```
 

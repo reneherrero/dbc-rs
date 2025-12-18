@@ -1,4 +1,4 @@
-use super::error_impl::Error;
+use super::Error;
 
 /// Helper function to check if a length exceeds a maximum limit.
 ///
@@ -36,5 +36,28 @@ where
     match err {
         Error::Validation(msg) => variant(msg),
         _ => fallback(),
+    }
+}
+
+/// Helper function to convert `Error::Validation` to a specific `Error` variant,
+/// preserving line number information.
+///
+/// Similar to `map_val_error` but also preserves the line number from the original error
+/// in the converted error.
+#[inline]
+pub(crate) fn map_val_error_with_line<F, G>(err: Error, variant: F, fallback: G) -> Error
+where
+    F: FnOnce(&'static str) -> Error,
+    G: FnOnce() -> Error,
+{
+    let line = err.line();
+    let mapped = match err {
+        Error::Validation(msg) => variant(msg),
+        _ => fallback(),
+    };
+    if let Some(line) = line {
+        mapped.with_line(line)
+    } else {
+        mapped
     }
 }

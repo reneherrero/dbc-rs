@@ -8,7 +8,7 @@ impl<'a> Parser<'a> {
 
         // Check if we're at EOF
         if self.eof() {
-            return Err(Error::UnexpectedEof);
+            return Err(self.err_unexpected_eof());
         }
 
         // Try to match each keyword (checking longer ones first)
@@ -33,6 +33,6 @@ impl<'a> Parser<'a> {
         }
 
         // No keyword matched
-        Err(Error::Expected(Error::EXPECTED_KEYWORD))
+        Err(self.err_expected(Error::EXPECTED_KEYWORD))
     }
 }

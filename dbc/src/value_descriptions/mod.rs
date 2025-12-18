@@ -1,4 +1,4 @@
-mod core;
+mod impls;
 
 #[cfg(feature = "std")]
 mod builder;

@@ -1,4 +1,4 @@
-use super::{ExtendedMultiplexings, Messages, ValueDescriptionsMap};
+use super::{ExtMuxIndex, ExtendedMultiplexings, Messages, ValueDescriptionsMap};
 use crate::{Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version};
 
 impl Dbc {
@@ -9,6 +9,9 @@ impl Dbc {
         value_descriptions: ValueDescriptionsMap,
         extended_multiplexing: ExtendedMultiplexings,
     ) -> Self {
+        // Build index for fast extended multiplexing lookup
+        let ext_mux_index = ExtMuxIndex::build(extended_multiplexing.as_slice());
+
         // Validation should have been done prior (by builder)
         Self {
             version,
@@ -16,6 +19,7 @@ impl Dbc {
             messages,
             value_descriptions,
             extended_multiplexing,
+            ext_mux_index,
         }
     }
 

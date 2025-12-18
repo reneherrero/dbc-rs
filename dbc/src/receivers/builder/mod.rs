@@ -223,7 +223,7 @@ impl ReceiversBuilder {
             if let Some(err) = crate::error::check_max_limit(
                 self.nodes.len(),
                 MAX_NODES - 1,
-                Error::Signal(Error::SIGNAL_RECEIVERS_TOO_MANY),
+                Error::signal(Error::SIGNAL_RECEIVERS_TOO_MANY),
             ) {
                 return Err(err);
             }
@@ -234,7 +234,7 @@ impl ReceiversBuilder {
             for (i, node1) in self.nodes.iter().enumerate() {
                 for node2 in self.nodes.iter().skip(i + 1) {
                     if node1 == node2 {
-                        return Err(Error::Signal(Error::RECEIVERS_DUPLICATE_NAME));
+                        return Err(Error::signal(Error::RECEIVERS_DUPLICATE_NAME));
                     }
                 }
             }
@@ -246,15 +246,15 @@ impl ReceiversBuilder {
                 if let Some(err) = crate::error::check_max_limit(
                     node.len(),
                     MAX_NAME_SIZE,
-                    Error::Signal(Error::MAX_NAME_SIZE_EXCEEDED),
+                    Error::signal(Error::MAX_NAME_SIZE_EXCEEDED),
                 ) {
                     return Err(err);
                 }
                 let compat_str = String::try_from(node.as_str())
-                    .map_err(|_| Error::Signal(Error::MAX_NAME_SIZE_EXCEEDED))?;
+                    .map_err(|_| Error::signal(Error::MAX_NAME_SIZE_EXCEEDED))?;
                 compat_nodes
                     .push(compat_str)
-                    .map_err(|_| Error::Signal(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
+                    .map_err(|_| Error::signal(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
             }
 
             Ok(Receivers::new_nodes(compat_nodes))
@@ -317,7 +317,7 @@ mod tests {
         let result = builder.add_node(format!("Node{}", MAX_NODES)).build();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Signal(msg) => {
+            Error::Signal { msg, .. } => {
                 assert_eq!(msg, Error::SIGNAL_RECEIVERS_TOO_MANY);
             }
             _ => panic!("Expected Signal error"),

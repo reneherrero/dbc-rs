@@ -11,7 +11,7 @@ impl<'a> Parser<'a> {
         let input_len = self.input.len();
         // Check if we have enough remaining bytes
         if input_len - self.pos < expected.len() {
-            return Err(Error::Expected(Error::EXPECTED_PATTERN));
+            return Err(self.err_expected(Error::EXPECTED_PATTERN));
         }
 
         if self.starts_with(expected) {
@@ -46,7 +46,7 @@ impl<'a> Parser<'a> {
             self.pos = end_pos;
             Ok(self)
         } else {
-            Err(Error::Expected(Error::EXPECTED_PATTERN))
+            Err(self.err_expected(Error::EXPECTED_PATTERN))
         }
     }
 
@@ -65,7 +65,8 @@ impl<'a> Parser<'a> {
         expected: &[u8],
         msg: &'static str,
     ) -> crate::Result<&mut Self> {
-        self.expect(expected).map_err(|_| Error::Expected(msg))
+        let line = self.line;
+        self.expect(expected).map_err(|_| Error::expected_at(msg, line))
     }
 
     /// Expect a keyword, map to a custom error, then skip newlines and spaces.
@@ -75,7 +76,8 @@ impl<'a> Parser<'a> {
         keyword: &[u8],
         error_msg: &'static str,
     ) -> crate::Result<&mut Self> {
-        self.expect(keyword).map_err(|_| Error::Expected(error_msg))?;
+        let line = self.line;
+        self.expect(keyword).map_err(|_| Error::expected_at(error_msg, line))?;
         self.skip_newlines_and_spaces();
         Ok(self)
     }
@@ -104,7 +106,9 @@ mod tests {
         let result = parser.expect(VERSION.as_bytes());
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(_) => {}
+            Error::Expected { line, .. } => {
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::Expected"),
         }
         // Position should remain unchanged
@@ -119,7 +123,7 @@ mod tests {
         let result = parser.expect(VERSION.as_bytes());
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(_) => {}
+            Error::Expected { .. } => {}
             _ => panic!("Expected Error::Expected"),
         }
     }
@@ -132,7 +136,7 @@ mod tests {
         let result = parser.expect(VERSION.as_bytes());
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(_) => {}
+            Error::Expected { .. } => {}
             _ => panic!("Expected Error::Expected"),
         }
     }
@@ -192,5 +196,20 @@ mod tests {
         let input = b" test";
         let parser = Parser::new(input).unwrap();
         assert!(!parser.at_newline());
+    }
+
+    #[test]
+    fn expect_with_msg_includes_line_number() {
+        let input = b"test";
+        let mut parser = Parser::new(input).unwrap();
+        let result = parser.expect_with_msg(b"VERSION", "Expected VERSION keyword");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::Expected { msg, line } => {
+                assert_eq!(msg, "Expected VERSION keyword");
+                assert_eq!(line, Some(1));
+            }
+            _ => panic!("Expected Error::Expected"),
+        }
     }
 }

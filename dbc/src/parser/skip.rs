@@ -5,7 +5,7 @@ impl<'a> Parser<'a> {
     pub fn skip_whitespace(&mut self) -> crate::Result<&mut Self> {
         let input_len = self.input.len();
         if self.pos >= input_len {
-            return Err(Error::UnexpectedEof);
+            return Err(self.err_unexpected_eof());
         }
 
         if self.input[self.pos] == b' ' {
@@ -16,7 +16,7 @@ impl<'a> Parser<'a> {
             self.pos += 1; // Skip the last space
             Ok(self)
         } else {
-            Err(Error::Expected(Error::EXPECTED_WHITESPACE))
+            Err(self.err_expected(Error::EXPECTED_WHITESPACE))
         }
     }
 
@@ -99,8 +99,11 @@ mod tests {
         let result = parser.skip_whitespace();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
-            _ => panic!("Expected Error"),
+            Error::Expected { msg, line } => {
+                assert_eq!(msg, Error::EXPECTED_WHITESPACE);
+                assert_eq!(line, Some(1));
+            }
+            _ => panic!("Expected Error::Expected"),
         }
     }
 
@@ -111,8 +114,11 @@ mod tests {
         let result = parser.skip_whitespace();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
-            _ => panic!("Expected Error"),
+            Error::Expected { msg, line } => {
+                assert_eq!(msg, Error::EXPECTED_WHITESPACE);
+                assert_eq!(line, Some(1));
+            }
+            _ => panic!("Expected Error::Expected"),
         }
     }
 
@@ -123,8 +129,11 @@ mod tests {
         let result = parser.skip_whitespace();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
-            _ => panic!("Expected Error"),
+            Error::Expected { msg, line } => {
+                assert_eq!(msg, Error::EXPECTED_WHITESPACE);
+                assert_eq!(line, Some(1));
+            }
+            _ => panic!("Expected Error::Expected"),
         }
     }
 
@@ -135,8 +144,11 @@ mod tests {
         let result = parser.skip_whitespace();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
-            _ => panic!("Expected Error"),
+            Error::Expected { msg, line } => {
+                assert_eq!(msg, Error::EXPECTED_WHITESPACE);
+                assert_eq!(line, Some(1));
+            }
+            _ => panic!("Expected Error::Expected"),
         }
     }
 
@@ -147,8 +159,11 @@ mod tests {
         let result = parser.skip_whitespace();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
-            _ => panic!("Expected Error"),
+            Error::Expected { msg, line } => {
+                assert_eq!(msg, Error::EXPECTED_WHITESPACE);
+                assert_eq!(line, Some(1));
+            }
+            _ => panic!("Expected Error::Expected"),
         }
         // Input should remain unchanged
         assert_eq!(parser.remaining(), b"test");
@@ -164,8 +179,8 @@ mod tests {
         let result = parser.skip_whitespace();
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::UnexpectedEof => {}
-            _ => panic!("Expected Error"),
+            Error::UnexpectedEof { .. } => {}
+            _ => panic!("Expected Error::UnexpectedEof"),
         }
     }
 
@@ -186,8 +201,11 @@ mod tests {
         let result = parser.skip_whitespace().and_then(|p| p.skip_whitespace());
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(msg) => assert_eq!(msg, Error::EXPECTED_WHITESPACE),
-            _ => panic!("Expected Error"),
+            Error::Expected { msg, line } => {
+                assert_eq!(msg, Error::EXPECTED_WHITESPACE);
+                assert_eq!(line, Some(1));
+            }
+            _ => panic!("Expected Error::Expected"),
         }
     }
 

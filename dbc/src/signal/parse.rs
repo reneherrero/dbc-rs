@@ -7,26 +7,26 @@ impl Signal {
         let start_bit = match parser.parse_u32() {
             Ok(v) => v as u16,
             Err(_) => {
-                return Err(Error::Signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
+                return Err(parser.err_signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
             }
         };
 
         // Validate start_bit range
         if start_bit > 511 {
-            return Err(Error::Signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
+            return Err(parser.err_signal(Error::SIGNAL_PARSE_INVALID_START_BIT));
         }
 
         // Expect pipe
-        parser.expect_with_msg(b"|", "Expected pipe")?;
+        parser.expect_with_msg(b"|", "Expected '|' after start_bit")?;
 
         // Parse length
         let length = parser
             .parse_u32()
-            .map_err(|_| Error::Signal(Error::SIGNAL_PARSE_INVALID_LENGTH))?
+            .map_err(|_| parser.err_signal(Error::SIGNAL_PARSE_INVALID_LENGTH))?
             as u16;
 
         // Expect @
-        parser.expect_with_msg(b"@", "Expected @")?;
+        parser.expect_with_msg(b"@", "Expected '@' after signal length")?;
 
         // Parse byte order (0 or 1)
         // Try to expect '0' or '1' directly
@@ -35,13 +35,13 @@ impl Signal {
         } else if parser.expect(b"1").is_ok() {
             b'1'
         } else {
-            return Err(Error::Expected("Expected byte order"));
+            return Err(parser.err_expected("Expected byte order (0=big-endian, 1=little-endian)"));
         };
 
         let byte_order = match bo_byte {
             b'0' => ByteOrder::BigEndian,    // 0 = Motorola (big-endian)
             b'1' => ByteOrder::LittleEndian, // 1 = Intel (little-endian)
-            _ => return Err(Error::InvalidChar(bo_byte as char)),
+            _ => return Err(parser.err_invalid_char(bo_byte as char)),
         };
 
         // Parse sign (+ or -)
@@ -50,13 +50,15 @@ impl Signal {
         } else if parser.expect(b"-").is_ok() {
             b'-'
         } else {
-            return Err(Error::Expected("Expected sign (+ or -)"));
+            return Err(
+                parser.err_expected("Expected sign indicator ('+' for unsigned, '-' for signed)")
+            );
         };
 
         let unsigned = match sign_byte {
             b'+' => true,
             b'-' => false,
-            _ => return Err(Error::InvalidChar(sign_byte as char)),
+            _ => return Err(parser.err_invalid_char(sign_byte as char)),
         };
 
         Ok((start_bit, length, byte_order, unsigned))
@@ -64,7 +66,7 @@ impl Signal {
 
     fn parse_factor_offset<'b>(parser: &mut Parser<'b>) -> Result<Scaling> {
         // Expect opening parenthesis
-        parser.expect_with_msg(b"(", "Expected opening parenthesis")?;
+        parser.expect_with_msg(b"(", "Expected '(' to start factor/offset")?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -72,7 +74,7 @@ impl Signal {
         // Parse factor (may be empty, default to 0.0)
         let factor = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(Error::SIGNAL_PARSE_INVALID_FACTOR))?;
+            .map_err(|_| parser.err_signal(Error::SIGNAL_PARSE_INVALID_FACTOR))?;
 
         // Expect comma, then skip whitespace
         parser.expect_then_skip(b",")?;
@@ -80,20 +82,20 @@ impl Signal {
         // Parse offset (may be empty, default to 0.0)
         let offset = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_OFFSET))?;
+            .map_err(|_| parser.err_signal(Error::SIGNAL_PARSE_INVALID_OFFSET))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
 
         // Expect closing parenthesis
-        parser.expect_with_msg(b")", "Expected closing parenthesis")?;
+        parser.expect_with_msg(b")", "Expected ')' to close factor/offset")?;
 
         Ok((factor, offset))
     }
 
     fn parse_range<'b>(parser: &mut Parser<'b>) -> Result<Range> {
         // Expect opening bracket
-        parser.expect_with_msg(b"[", "Expected opening bracket")?;
+        parser.expect_with_msg(b"[", "Expected '[' to start min/max range")?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
@@ -101,7 +103,7 @@ impl Signal {
         // Parse min (may be empty, default to 0.0)
         let min = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_MIN))?;
+            .map_err(|_| parser.err_signal(Error::SIGNAL_PARSE_INVALID_MIN))?;
 
         // Expect pipe, then skip whitespace
         parser.expect_then_skip(b"|")?;
@@ -109,35 +111,33 @@ impl Signal {
         // Parse max (may be empty, default to 0.0)
         let max = parser
             .parse_f64_or_default(0.0)
-            .map_err(|_| Error::Signal(crate::error::Error::SIGNAL_PARSE_INVALID_MAX))?;
+            .map_err(|_| parser.err_signal(Error::SIGNAL_PARSE_INVALID_MAX))?;
 
         // Skip whitespace
         parser.skip_newlines_and_spaces();
 
         // Expect closing bracket
-        parser.expect_with_msg(b"]", "Expected closing bracket")?;
+        parser.expect_with_msg(b"]", "Expected ']' to close min/max range")?;
 
         Ok((min, max))
     }
 
     fn parse_unit(parser: &mut Parser) -> Result<Option<Name>> {
         // Expect opening quote
-        parser.expect_with_msg(b"\"", "Expected opening quote")?;
+        parser.expect_with_msg(b"\"", "Expected '\"' to start unit string")?;
 
         // Use take_until_quote to read the unit (allow any printable characters)
         let unit_bytes = parser.take_until_quote(false, MAX_NAME_SIZE).map_err(|e| match e {
-            Error::MaxStrLength(_) => {
-                Error::Signal(crate::error::Error::SIGNAL_PARSE_UNIT_TOO_LONG)
-            }
-            _ => Error::Expected("Expected closing quote"),
+            Error::MaxStrLength { .. } => parser.err_signal(Error::SIGNAL_PARSE_UNIT_TOO_LONG),
+            _ => parser.err_expected("Expected closing '\"' for unit string"),
         })?;
 
         // Convert bytes to string slice
-        let unit_str =
-            core::str::from_utf8(unit_bytes).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
+        let unit_str = core::str::from_utf8(unit_bytes)
+            .map_err(|_e| parser.err_expected(Error::INVALID_UTF8))?;
 
-        let unit: Name =
-            Name::try_from(unit_str).map_err(|_| Error::Version(Error::MAX_NAME_SIZE_EXCEEDED))?;
+        let unit: Name = Name::try_from(unit_str)
+            .map_err(|_| parser.err_version(Error::MAX_NAME_SIZE_EXCEEDED))?;
 
         let unit = if unit.is_empty() { None } else { Some(unit) };
         Ok(unit)
@@ -148,9 +148,8 @@ impl Signal {
         parser.expect_keyword_then_skip(crate::SG_.as_bytes(), "Expected SG_ keyword")?;
 
         // Parse signal name (identifier)
-        let name = parser.parse_identifier_with_error(|| {
-            Error::Signal(crate::error::Error::SIGNAL_NAME_EMPTY)
-        })?;
+        let name =
+            parser.parse_identifier_with_error(|| Error::signal(Error::SIGNAL_NAME_EMPTY))?;
 
         // Parse multiplexer indicator
         // According to spec: multiplexer_indicator = ' ' | 'M' | 'm' multiplexer_switch_value
@@ -187,7 +186,7 @@ impl Signal {
                     value = value
                         .checked_mul(10)
                         .and_then(|v| v.checked_add((byte - b'0') as u64))
-                        .ok_or(Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX))?;
+                        .ok_or_else(|| parser.err_signal(Error::SIGNAL_ERROR_PREFIX))?;
                     parser.advance_one();
                 } else if byte == b'M' || parser.matches_any(b" \t:") || parser.at_newline() {
                     // Stop at 'M', whitespace, or colon
@@ -213,7 +212,7 @@ impl Signal {
         }
 
         // Expect colon
-        parser.expect_with_msg(b":", "Expected colon")?;
+        parser.expect_with_msg(b":", "Expected ':' after signal name")?;
 
         // Skip whitespace after colon
         parser.skip_newlines_and_spaces();
@@ -249,9 +248,11 @@ impl Signal {
 
         // Validate before construction
         Self::validate(name, length, min, max).map_err(|e| {
-            crate::error::map_val_error(e, Error::Signal, || {
-                Error::Signal(crate::error::Error::SIGNAL_ERROR_PREFIX)
-            })
+            crate::error::map_val_error_with_line(
+                e,
+                |msg| parser.err_signal(msg),
+                || parser.err_signal(Error::SIGNAL_ERROR_PREFIX),
+            )
         })?;
 
         let name = crate::compat::validate_name(name)?;

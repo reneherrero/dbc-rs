@@ -1,7 +1,4 @@
-use crate::{
-    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_SIGNALS_PER_MESSAGE, Message,
-    Result, compat::Vec,
-};
+use crate::{Dbc, Error, MAX_SIGNALS_PER_MESSAGE, Message, Result, compat::Vec};
 #[cfg(feature = "embedded-can")]
 use embedded_can::{Frame, Id};
 
@@ -23,6 +20,67 @@ impl<'a> DecodedSignal<'a> {
     #[inline]
     pub fn new(name: &'a str, value: f64, unit: Option<&'a str>) -> Self {
         Self { name, value, unit }
+    }
+}
+
+/// Maximum number of multiplexer switches in a single message.
+/// Most CAN messages have 0-2 switches; 8 is generous.
+const MAX_SWITCHES: usize = 8;
+
+/// Pre-allocated buffer for switch values during decode.
+/// Uses fixed-size arrays to avoid heap allocation.
+struct SwitchValues<'a> {
+    /// Switch names (references to signal names, valid for decode lifetime)
+    names: [Option<&'a str>; MAX_SWITCHES],
+    /// Switch values corresponding to each name
+    values: [u64; MAX_SWITCHES],
+    /// Number of switches stored.
+    count: usize,
+}
+
+impl<'a> SwitchValues<'a> {
+    #[inline]
+    const fn new() -> Self {
+        Self {
+            names: [None; MAX_SWITCHES],
+            values: [0; MAX_SWITCHES],
+            count: 0,
+        }
+    }
+
+    /// Store a switch value. Returns Err if capacity exceeded.
+    #[inline]
+    fn push(&mut self, name: &'a str, value: u64) -> Result<()> {
+        if self.count >= MAX_SWITCHES {
+            return Err(Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS));
+        }
+        let idx = self.count;
+        self.names[idx] = Some(name);
+        self.values[idx] = value;
+        self.count += 1;
+        Ok(())
+    }
+
+    /// Find switch value by name. O(n) where n is number of switches (typically 1-2).
+    #[inline]
+    fn get_by_name(&self, name: &str) -> Option<u64> {
+        for i in 0..self.count {
+            if self.names[i] == Some(name) {
+                return Some(self.values[i]);
+            }
+        }
+        None
+    }
+
+    /// Check if any switch has the given value.
+    #[inline]
+    fn any_has_value(&self, target: u64) -> bool {
+        for i in 0..self.count {
+            if self.values[i] == target && self.names[i].is_some() {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -69,11 +127,11 @@ impl Dbc {
     /// High-performance CAN message decoding optimized for throughput.
     ///
     /// Performance optimizations:
-    /// - O(1) or O(log n) message lookup via feature-flagged index (heapless/alloc)
-    /// - Inlined hot paths
-    /// - Direct error construction (no closure allocation)
-    /// - Early validation to avoid unnecessary work
-    /// - Optimized signal decoding loop
+    /// - O(1) or O(log n) message lookup via feature-flagged index
+    /// - Single-pass signal iteration with inline switch processing
+    /// - Stack-allocated switch value storage (no heap allocation)
+    /// - Message-level extended multiplexing check to skip per-signal lookups
+    /// - Inlined hot paths with early returns
     #[inline]
     pub fn decode(
         &self,
@@ -89,44 +147,45 @@ impl Dbc {
         };
 
         // Find message by ID (performance-critical lookup)
-        // Uses optimized index when available (O(1) with heapless, O(log n) with alloc)
         let message = self
             .messages()
             .find_by_id(id)
             .ok_or(Error::Decoding(Error::MESSAGE_NOT_FOUND))?;
 
-        // Cache DLC conversion to avoid repeated casts
-        let dlc = message.dlc() as usize;
-
         // Validate payload length matches message DLC (early return before any decoding)
+        let dlc = message.dlc() as usize;
         if payload.len() < dlc {
             return Err(Error::Decoding(Error::PAYLOAD_LENGTH_MISMATCH));
         }
 
-        // Allocate Vec for decoded signals
-        // Note: heapless Vec grows as needed; alloc Vec allocates dynamically
+        // Pre-allocate result vector
         let mut decoded_signals: Vec<DecodedSignal<'_>, { MAX_SIGNALS_PER_MESSAGE }> = Vec::new();
+
+        // Stack-allocated switch values (no heap allocation)
+        let mut switch_values = SwitchValues::<'_>::new();
 
         let signals = message.signals();
 
-        // Step 1: Decode all multiplexer switch signals first
-        // Map switch signal names to their decoded values
-        // Uses decode_raw() to get both raw and physical values in a single pass
-        let mut switch_values: Vec<(&str, u64), 16> = Vec::new();
+        // Check once if this message has ANY extended multiplexing
+        // This avoids per-signal index lookups when extended mux isn't used
+        let message_has_extended_mux = self.has_extended_multiplexing_for_message(id);
+
+        // PASS 1: Decode multiplexer switches first (needed before multiplexed signals)
+        // This is necessary because multiplexed signals depend on switch values
         for signal in signals.iter() {
             if signal.is_multiplexer_switch() {
                 // decode_raw() returns (raw_value, physical_value) in one pass
-                // avoiding the overhead of extracting bits twice
                 let (raw_value, physical_value) = signal.decode_raw(payload)?;
 
-                // Multiplexer switch values must be non-negative (u64)
+                // Multiplexer switch values must be non-negative
                 if raw_value < 0 {
                     return Err(Error::Decoding(Error::MULTIPLEXER_SWITCH_NEGATIVE));
                 }
-                switch_values
-                    .push((signal.name(), raw_value as u64))
-                    .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
-                // Also add to decoded signals
+
+                // Store switch value for later multiplexing checks
+                switch_values.push(signal.name(), raw_value as u64)?;
+
+                // Add to decoded signals
                 decoded_signals
                     .push(DecodedSignal::new(
                         signal.name(),
@@ -137,70 +196,26 @@ impl Dbc {
             }
         }
 
-        // Step 2: Decode all non-switch signals based on multiplexing rules
-        // Note: extended_multiplexing_for_message() now returns an iterator (no allocation)
+        // PASS 2: Decode non-switch signals based on multiplexing rules
         for signal in signals.iter() {
-            // Skip multiplexer switches (already decoded)
+            // Skip multiplexer switches (already decoded in pass 1)
             if signal.is_multiplexer_switch() {
                 continue;
             }
 
-            // Check if signal should be decoded based on multiplexing
+            // Determine if this signal should be decoded based on multiplexing
             let should_decode = if let Some(mux_value) = signal.multiplexer_switch_value() {
                 // This is a multiplexed signal (m0, m1, etc.)
-                // Extended multiplexing: Check SG_MUL_VAL_ ranges first
-                // If extended multiplexing entries exist, they take precedence over basic m0/m1 values
-
-                // Collect extended entries for this signal (uses references, no clone)
-                let extended_entries_for_signal: Vec<
-                    &ExtendedMultiplexing,
-                    { MAX_EXTENDED_MULTIPLEXING },
-                > = self
-                    .extended_multiplexing_for_message(id)
-                    .filter(|ext_mux| ext_mux.signal_name() == signal.name())
-                    .collect();
-
-                if !extended_entries_for_signal.is_empty() {
-                    // Extended multiplexing: Check ALL switches referenced in extended entries (AND logic)
-                    // Collect unique switch names (no_std compatible, using Vec)
-                    let mut unique_switches: Vec<&str, 16> = Vec::new();
-                    for ext_mux in extended_entries_for_signal.iter() {
-                        let switch_name = ext_mux.multiplexer_switch();
-                        if !unique_switches.iter().any(|&s| s == switch_name) {
-                            unique_switches
-                                .push(switch_name)
-                                .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
-                        }
-                    }
-
-                    // ALL switches referenced by this signal must have matching values
-                    unique_switches.iter().all(|switch_name| {
-                        // Find the switch value by name
-                        let switch_val = switch_values
-                            .iter()
-                            .find(|(name, _)| *name == *switch_name)
-                            .map(|(_, val)| *val);
-
-                        if let Some(val) = switch_val {
-                            // Check if any extended entry for this switch has a matching value range
-                            extended_entries_for_signal
-                                .iter()
-                                .filter(|e| e.multiplexer_switch() == *switch_name)
-                                .any(|ext_mux| {
-                                    ext_mux
-                                        .value_ranges()
-                                        .iter()
-                                        .any(|(min, max)| val >= *min && val <= *max)
-                                })
-                        } else {
-                            // Switch not found, cannot match
-                            false
-                        }
-                    })
+                if message_has_extended_mux {
+                    // Check extended multiplexing only if message has any
+                    self.check_extended_multiplexing(id, signal.name(), &switch_values)
+                        .unwrap_or_else(|| {
+                            // No extended entries for this signal - use basic multiplexing
+                            switch_values.any_has_value(mux_value)
+                        })
                 } else {
-                    // Use basic multiplexing: Check if any switch value equals mux_value
-                    // m0 means decode when any switch value is 0, m1 means decode when any switch value is 1, etc.
-                    switch_values.iter().any(|(_, switch_val)| *switch_val == mux_value)
+                    // No extended multiplexing for this message - use basic check
+                    switch_values.any_has_value(mux_value)
                 }
             } else {
                 // Normal signal (not multiplexed) - always decode
@@ -216,6 +231,90 @@ impl Dbc {
         }
 
         Ok(decoded_signals)
+    }
+
+    /// Check extended multiplexing rules for a signal.
+    /// Returns Some(true) if signal should be decoded, Some(false) if not,
+    /// or None if no extended multiplexing entries exist for this signal.
+    #[inline]
+    fn check_extended_multiplexing(
+        &self,
+        message_id: u32,
+        signal_name: &str,
+        switch_values: &SwitchValues,
+    ) -> Option<bool> {
+        // Get extended entries for this signal
+        let indices = self.ext_mux_index.get(message_id, signal_name)?;
+        if indices.is_empty() {
+            return None;
+        }
+
+        // Collect entries without allocation by working with indices directly
+        // Check ALL switches referenced - all must match (AND logic)
+
+        // First, collect unique switch names referenced by this signal's extended entries
+        let mut unique_switches: [Option<&str>; MAX_SWITCHES] = [None; MAX_SWITCHES];
+        let mut unique_count = 0;
+
+        for &idx in indices {
+            if let Some(entry) = self.extended_multiplexing.get(idx) {
+                let switch_name = entry.multiplexer_switch();
+                // Check if already in unique_switches
+                let found =
+                    unique_switches.iter().take(unique_count).any(|&s| s == Some(switch_name));
+                if !found && unique_count < MAX_SWITCHES {
+                    unique_switches[unique_count] = Some(switch_name);
+                    unique_count += 1;
+                }
+            }
+        }
+
+        // All referenced switches must have matching values
+        for switch_opt in unique_switches.iter().take(unique_count) {
+            let switch_name = match switch_opt {
+                Some(name) => *name,
+                None => continue,
+            };
+
+            // Get the current switch value
+            let switch_val = match switch_values.get_by_name(switch_name) {
+                Some(v) => v,
+                None => return Some(false), // Switch not found, signal not active
+            };
+
+            // Check if any extended entry for this switch has a matching value range
+            let mut has_match = false;
+            for &idx in indices {
+                if let Some(entry) = self.extended_multiplexing.get(idx) {
+                    if entry.multiplexer_switch() == switch_name {
+                        for &(min, max) in entry.value_ranges() {
+                            if switch_val >= min && switch_val <= max {
+                                has_match = true;
+                                break;
+                            }
+                        }
+                        if has_match {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if !has_match {
+                return Some(false); // This switch doesn't match, signal not active
+            }
+        }
+
+        Some(true) // All switches match
+    }
+
+    /// Check if any extended multiplexing entries exist for a message.
+    /// This is a fast check to avoid per-signal lookups.
+    #[inline]
+    fn has_extended_multiplexing_for_message(&self, message_id: u32) -> bool {
+        self.extended_multiplexing
+            .iter()
+            .any(|ext_mux| ext_mux.message_id() == message_id)
     }
 
     /// Decode a CAN frame using the embedded-can [`Frame`] trait.

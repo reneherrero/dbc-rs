@@ -24,7 +24,7 @@
 
 use crate::compat::{Name, Vec};
 
-mod core;
+mod impls;
 mod parse;
 
 /// A value range (min, max) for extended multiplexing

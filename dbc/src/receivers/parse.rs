@@ -75,12 +75,12 @@ impl Receivers {
                     // Check if adding this node would exceed MAX_NODES - 1 limit
                     // Receivers can have at most MAX_NODES - 1 nodes
                     if nodes.len() >= MAX_NODES - 1 {
-                        return Err(Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY));
+                        return Err(parser.err_receivers(Error::SIGNAL_RECEIVERS_TOO_MANY));
                     }
                     let node = crate::compat::validate_name(node)?;
                     nodes
                         .push(node)
-                        .map_err(|_| Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
+                        .map_err(|_| parser.err_receivers(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
 
                     // After parsing an identifier, check what's next
                     // parse_identifier() stops at newlines/whitespace/comma without consuming them
@@ -110,7 +110,7 @@ impl Receivers {
                     // EOF - we're done
                     break;
                 }
-                Err(Error::UnexpectedEof) => break,
+                Err(Error::UnexpectedEof { .. }) => break,
                 Err(_) => {
                     // Failed to parse - if position didn't change, we're at newline or invalid char
                     if parser.pos() == pos_before {
@@ -228,8 +228,9 @@ mod tests {
         let result = Receivers::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Receivers(msg) => {
+            Error::Receivers { msg, line } => {
                 assert_eq!(msg, Error::SIGNAL_RECEIVERS_TOO_MANY);
+                assert!(line.is_some());
             }
             _ => panic!("Expected Error::Receivers"),
         }

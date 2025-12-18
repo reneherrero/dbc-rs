@@ -59,8 +59,8 @@ impl Dbc {
             let keyword_result = parser.peek_next_keyword();
             let keyword = match keyword_result {
                 Ok(kw) => kw,
-                Err(Error::UnexpectedEof) => break,
-                Err(Error::Expected(_)) => {
+                Err(Error::UnexpectedEof { .. }) => break,
+                Err(Error::Expected { .. }) => {
                     if parser.starts_with(b"//") {
                         parser.skip_to_end_of_line();
                         continue;
@@ -76,9 +76,10 @@ impl Dbc {
             match keyword {
                 NS_ => {
                     // Consume NS_ keyword
+                    let line = parser.line();
                     parser
                         .expect(crate::NS_.as_bytes())
-                        .map_err(|_| Error::Expected("Failed to consume NS_ keyword"))?;
+                        .map_err(|_| Error::expected_at("Failed to consume NS_ keyword", line))?;
                     parser.skip_newlines_and_spaces();
                     let _ = parser.expect(b":").ok();
                     loop {
@@ -115,9 +116,10 @@ impl Dbc {
                 }
                 SG_MUL_VAL_ => {
                     // Consume SG_MUL_VAL_ keyword
-                    parser
-                        .expect(SG_MUL_VAL_.as_bytes())
-                        .map_err(|_| Error::Expected("Failed to consume SG_MUL_VAL_ keyword"))?;
+                    let line = parser.line();
+                    parser.expect(SG_MUL_VAL_.as_bytes()).map_err(|_| {
+                        Error::expected_at("Failed to consume SG_MUL_VAL_ keyword", line)
+                    })?;
 
                     // Parse the extended multiplexing entry
                     if let Some(ext_mux) = ExtendedMultiplexing::parse(&mut parser) {
@@ -237,7 +239,7 @@ impl Dbc {
                 BO_ => {
                     // Check limit using MAX_MESSAGES constant
                     if message_count_actual >= MAX_MESSAGES {
-                        return Err(Error::Nodes(Error::NODES_TOO_MANY));
+                        return Err(parser.err_nodes(Error::NODES_TOO_MANY));
                     }
 
                     // Save parser position (at BO_ keyword, so Message::parse can consume it)
@@ -277,7 +279,7 @@ impl Dbc {
                         let keyword_result = parser.peek_next_keyword();
                         let keyword = match keyword_result {
                             Ok(kw) => kw,
-                            Err(Error::UnexpectedEof) => break,
+                            Err(Error::UnexpectedEof { .. }) => break,
                             Err(_) => break, // Not a keyword, no more signals
                         };
 
@@ -288,14 +290,14 @@ impl Dbc {
 
                         // Check limit before parsing
                         if signals_array.len() >= MAX_SIGNALS_PER_MESSAGE {
-                            return Err(Error::Message(Error::MESSAGE_TOO_MANY_SIGNALS));
+                            return Err(parser.err_message(Error::MESSAGE_TOO_MANY_SIGNALS));
                         }
 
                         // Parse signal - Signal::parse consumes SG_ itself
                         match Signal::parse(&mut parser) {
                             Ok(signal) => {
                                 signals_array.push(signal).map_err(|_| {
-                                    Error::Receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
+                                    parser.err_receivers(Error::SIGNAL_RECEIVERS_TOO_MANY)
                                 })?;
                                 // Receivers::parse stops at newline but doesn't consume it
                                 // Consume it so next iteration starts at the next line
@@ -322,7 +324,7 @@ impl Dbc {
 
                     messages_buffer
                         .push(message)
-                        .map_err(|_| Error::Message(Error::NODES_TOO_MANY))?;
+                        .map_err(|_| parser.err_message(Error::NODES_TOO_MANY))?;
                     message_count_actual += 1;
                     continue;
                 }
@@ -369,14 +371,14 @@ impl Dbc {
         // Validate messages (duplicate IDs, sender in nodes, etc.)
         #[cfg(feature = "std")]
         Validate::validate(&nodes, messages_slice, Some(&value_descriptions_map)).map_err(|e| {
-            crate::error::map_val_error(e, Error::Message, || {
-                Error::Message(Error::MESSAGE_ERROR_PREFIX)
+            crate::error::map_val_error(e, Error::message, || {
+                Error::message(Error::MESSAGE_ERROR_PREFIX)
             })
         })?;
         #[cfg(not(feature = "std"))]
         Validate::validate(&nodes, messages_slice).map_err(|e| {
-            crate::error::map_val_error(e, Error::Message, || {
-                Error::Message(Error::MESSAGE_ERROR_PREFIX)
+            crate::error::map_val_error(e, Error::message, || {
+                Error::message(Error::MESSAGE_ERROR_PREFIX)
             })
         })?;
 
@@ -406,7 +408,7 @@ impl Dbc {
     /// ```
     pub fn parse_bytes(data: &[u8]) -> Result<Self> {
         let content =
-            core::str::from_utf8(data).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
+            core::str::from_utf8(data).map_err(|_e| Error::expected(Error::INVALID_UTF8))?;
         Dbc::parse(content)
     }
 }
@@ -506,7 +508,7 @@ BO_ 256 EngineData2 : 8 ECM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => {
+            Error::Message { msg, .. } => {
                 assert!(msg.contains(Error::DUPLICATE_MESSAGE_ID));
             }
             _ => panic!("Expected Error::Message"),
@@ -528,7 +530,7 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse(data);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Message(msg) => {
+            Error::Message { msg, .. } => {
                 assert!(msg.contains(Error::SENDER_NOT_IN_NODES));
             }
             _ => panic!("Expected Error::Message"),
@@ -542,7 +544,7 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse("");
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::UnexpectedEof => {
+            Error::UnexpectedEof { .. } => {
                 // Empty file should result in unexpected EOF
             }
             _ => panic!("Expected Error::UnexpectedEof"),
@@ -557,7 +559,7 @@ BO_ 256 EngineData : 8 TCM
         let result = Dbc::parse_bytes(invalid_bytes);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Expected(msg) => {
+            Error::Expected { msg, .. } => {
                 assert_eq!(msg, Error::INVALID_UTF8);
             }
             _ => panic!("Expected Error::Expected with INVALID_UTF8"),
@@ -851,5 +853,22 @@ BO_ 400 MultiplexedMsg : 8 ECM
 
         assert!(!signal_1.is_multiplexer_switch());
         assert_eq!(signal_1.multiplexer_switch_value(), Some(1));
+    }
+
+    #[test]
+    fn test_error_includes_line_number() {
+        // Test that parsing errors include line numbers
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ invalid EngineData : 8 ECM
+"#;
+
+        let result = Dbc::parse(data);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        // The error should have line information
+        assert!(err.line().is_some(), "Error should include line number");
     }
 }

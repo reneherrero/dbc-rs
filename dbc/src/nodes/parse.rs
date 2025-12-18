@@ -2,19 +2,20 @@ use super::{NodeNames, Nodes};
 use crate::{
     BU_, Error, MAX_NODES, Parser, Result,
     compat::validate_name,
-    error::{check_max_limit, map_val_error},
+    error::{check_max_limit, map_val_error_with_line},
 };
 
 impl Nodes {
     #[must_use = "parse result should be checked"]
     pub(crate) fn parse(parser: &mut Parser) -> Result<Self> {
         // Nodes parsing must always start with "BU_" keyword
+        let line = parser.line();
         parser
             .expect(BU_.as_bytes())
-            .map_err(|_| Error::Expected("Expected BU_ keyword"))?;
+            .map_err(|_| Error::expected_at("Expected BU_ keyword", line))?;
 
         // Expect ":" after "BU_" (no whitespace between BU_ and :)
-        parser.expect_with_msg(b":", "Expected colon after BU_")?;
+        parser.expect_with_msg(b":", "Expected ':' after BU_")?;
 
         // Skip optional whitespace after ":"
         parser.skip_newlines_and_spaces();
@@ -33,12 +34,12 @@ impl Nodes {
                     if let Some(err) = check_max_limit(
                         nodes.len(),
                         MAX_NODES - 1,
-                        Error::Nodes(Error::NODES_TOO_MANY),
+                        parser.err_nodes(Error::NODES_TOO_MANY),
                     ) {
                         return Err(err);
                     }
                     let node_str = validate_name(node)?;
-                    nodes.push(node_str).map_err(|_| Error::Nodes(Error::NODES_TOO_MANY))?;
+                    nodes.push(node_str).map_err(|_| parser.err_nodes(Error::NODES_TOO_MANY))?;
                 }
                 Err(_) => {
                     // No more identifiers, break
@@ -55,7 +56,11 @@ impl Nodes {
 
         // Validate before construction
         Self::validate(nodes.as_slice()).map_err(|e| {
-            map_val_error(e, Error::Nodes, || Error::Nodes(Error::NODES_ERROR_PREFIX))
+            map_val_error_with_line(
+                e,
+                |msg| parser.err_nodes(msg),
+                || parser.err_nodes(Error::NODES_ERROR_PREFIX),
+            )
         })?;
         // Construct directly (validation already done)
         Ok(Nodes::new(nodes))
@@ -116,7 +121,10 @@ mod tests {
         let result = Nodes::parse(&mut parser);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::Nodes(msg) => assert!(msg == Error::NODES_DUPLICATE_NAME),
+            Error::Nodes { msg, line } => {
+                assert_eq!(msg, Error::NODES_DUPLICATE_NAME);
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::Nodes"),
         }
     }

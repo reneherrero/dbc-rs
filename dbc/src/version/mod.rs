@@ -1,4 +1,4 @@
-mod core;
+mod impls;
 mod parse;
 #[cfg(feature = "std")]
 mod std;

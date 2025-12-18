@@ -1,5 +1,4 @@
 use super::Parser;
-use crate::Error;
 
 impl<'a> Parser<'a> {
     pub fn take_until_quote(
@@ -15,7 +14,7 @@ impl<'a> Parser<'a> {
         while self.pos < input_len {
             // Check length before processing byte (optimize: check max_pos instead of calculating length)
             if self.pos >= max_pos {
-                return Err(Error::MaxStrLength(max_str_length));
+                return Err(self.err_max_str_length(max_str_length));
             }
 
             let byte = self.input[self.pos];
@@ -29,20 +28,20 @@ impl<'a> Parser<'a> {
                     return Ok(slice);
                 }
                 b'\\' | b'\t' | b'\n' | b'\r' => {
-                    return Err(Error::InvalidChar(byte as char));
+                    return Err(self.err_invalid_char(byte as char));
                 }
                 _ => {
                     if c_identifier {
                         if is_first_char {
                             // First char must be alpha or underscore
                             if !(byte.is_ascii_alphabetic() || byte == b'_') {
-                                return Err(Error::InvalidChar(byte as char));
+                                return Err(self.err_invalid_char(byte as char));
                             }
                             is_first_char = false;
                         } else {
                             // Subsequent chars must be alphanumeric or underscore
                             if !(byte.is_ascii_alphanumeric() || byte == b'_') {
-                                return Err(Error::InvalidChar(byte as char));
+                                return Err(self.err_invalid_char(byte as char));
                             }
                         }
                     } else {
@@ -53,7 +52,7 @@ impl<'a> Parser<'a> {
                         // any byte that's not a control character, quote, or backslash
                         if byte < 32 || byte == 127 {
                             // Control character or DEL - reject
-                            return Err(Error::InvalidChar(byte as char));
+                            return Err(self.err_invalid_char(byte as char));
                         }
                         // Allow all other bytes (including UTF-8 continuation bytes)
                     }
@@ -63,13 +62,14 @@ impl<'a> Parser<'a> {
         }
 
         // Reached EOF without finding quote
-        Err(Error::UnexpectedEof)
+        Err(self.err_unexpected_eof())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Error;
 
     #[test]
     fn take_until_quote_succeeds_with_quote_c_identifier_false() {
@@ -111,7 +111,10 @@ mod tests {
         let result = parser.take_until_quote(true, 256);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidChar(c) => assert_eq!(c, '1'),
+            Error::InvalidChar { char, line } => {
+                assert_eq!(char, '1');
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::InvalidChar"),
         }
     }
@@ -123,7 +126,10 @@ mod tests {
         let result = parser.take_until_quote(true, 256);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidChar(c) => assert_eq!(c, '-'),
+            Error::InvalidChar { char, line } => {
+                assert_eq!(char, '-');
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::InvalidChar"),
         }
     }
@@ -145,7 +151,10 @@ mod tests {
         let result = parser.take_until_quote(false, 256);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidChar(c) => assert_eq!(c, '\\'),
+            Error::InvalidChar { char, line } => {
+                assert_eq!(char, '\\');
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::InvalidChar"),
         }
     }
@@ -157,7 +166,10 @@ mod tests {
         let result = parser.take_until_quote(false, 256);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidChar(c) => assert_eq!(c, '\t'),
+            Error::InvalidChar { char, line } => {
+                assert_eq!(char, '\t');
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::InvalidChar"),
         }
     }
@@ -169,7 +181,10 @@ mod tests {
         let result = parser.take_until_quote(false, 256);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidChar(c) => assert_eq!(c, '\n'),
+            Error::InvalidChar { char, line } => {
+                assert_eq!(char, '\n');
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::InvalidChar"),
         }
     }
@@ -181,7 +196,10 @@ mod tests {
         let result = parser.take_until_quote(false, 256);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::InvalidChar(c) => assert_eq!(c, '\r'),
+            Error::InvalidChar { char, line } => {
+                assert_eq!(char, '\r');
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::InvalidChar"),
         }
     }
@@ -193,7 +211,9 @@ mod tests {
         let result = parser.take_until_quote(false, 256);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::UnexpectedEof => {}
+            Error::UnexpectedEof { line } => {
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::UnexpectedEof"),
         }
     }
@@ -226,7 +246,10 @@ mod tests {
         let result = parser.take_until_quote(false, 10);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::MaxStrLength(max) => assert_eq!(max, 10),
+            Error::MaxStrLength { max, line } => {
+                assert_eq!(max, 10);
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::MaxStrLength"),
         }
     }
@@ -248,7 +271,10 @@ mod tests {
         let result = parser.take_until_quote(true, 20);
         assert!(result.is_err());
         match result.unwrap_err() {
-            Error::MaxStrLength(max) => assert_eq!(max, 20),
+            Error::MaxStrLength { max, line } => {
+                assert_eq!(max, 20);
+                assert_eq!(line, Some(1));
+            }
             _ => panic!("Expected Error::MaxStrLength"),
         }
     }

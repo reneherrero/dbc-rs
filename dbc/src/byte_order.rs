@@ -18,11 +18,53 @@ pub enum ByteOrder {
 impl ByteOrder {
     /// Extract bits from data based on byte order.
     /// Inlined for hot path optimization.
+    ///
+    /// # Performance
+    ///
+    /// This method uses optimized fast paths for common cases:
+    /// - Byte-aligned little-endian 8/16/32/64-bit signals use direct memory reads
+    /// - Other cases use a generic loop-based extraction
     #[inline]
     pub(crate) fn extract_bits(self, data: &[u8], start_bit: usize, length: usize) -> u64 {
         match self {
             ByteOrder::LittleEndian => {
-                // Little-endian: extract bits sequentially from start_bit forward
+                // Fast path: byte-aligned little-endian signals (most common case)
+                let bit_offset = start_bit % 8;
+                let byte_idx = start_bit / 8;
+
+                if bit_offset == 0 {
+                    // Byte-aligned - use direct memory reads
+                    match length {
+                        8 => return data[byte_idx] as u64,
+                        16 => {
+                            // SAFETY: bounds checked by caller (end_byte < data.len())
+                            return u16::from_le_bytes([data[byte_idx], data[byte_idx + 1]]) as u64;
+                        }
+                        32 => {
+                            return u32::from_le_bytes([
+                                data[byte_idx],
+                                data[byte_idx + 1],
+                                data[byte_idx + 2],
+                                data[byte_idx + 3],
+                            ]) as u64;
+                        }
+                        64 => {
+                            return u64::from_le_bytes([
+                                data[byte_idx],
+                                data[byte_idx + 1],
+                                data[byte_idx + 2],
+                                data[byte_idx + 3],
+                                data[byte_idx + 4],
+                                data[byte_idx + 5],
+                                data[byte_idx + 6],
+                                data[byte_idx + 7],
+                            ]);
+                        }
+                        _ => {} // Fall through to generic path
+                    }
+                }
+
+                // Generic path: extract bits sequentially from start_bit forward
                 let mut value: u64 = 0;
                 let mut bits_remaining = length;
                 let mut current_bit = start_bit;
@@ -145,6 +187,30 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_bits_little_endian_8bit() {
+        // Test 8-bit value at byte boundary
+        let data = [0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let raw_value = ByteOrder::LittleEndian.extract_bits(&data, 0, 8);
+        assert_eq!(raw_value, 0x42);
+    }
+
+    #[test]
+    fn test_extract_bits_little_endian_32bit() {
+        // Test 32-bit value at byte boundary
+        let data = [0x78, 0x56, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00];
+        let raw_value = ByteOrder::LittleEndian.extract_bits(&data, 0, 32);
+        assert_eq!(raw_value, 0x12345678);
+    }
+
+    #[test]
+    fn test_extract_bits_little_endian_64bit() {
+        // Test 64-bit value at byte boundary
+        let data = [0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01];
+        let raw_value = ByteOrder::LittleEndian.extract_bits(&data, 0, 64);
+        assert_eq!(raw_value, 0x0123456789ABCDEF);
+    }
+
+    #[test]
     fn test_extract_bits_big_endian() {
         // Test big-endian extraction: For BE bit 0-15, value 0x0100 = 256
         // Big-endian at bit 0, length 16: bytes [0x01, 0x00]
@@ -190,6 +256,17 @@ mod tests {
             "Big-endian and little-endian should produce different values"
         );
         assert!(be_value <= 65535);
+    }
+
+    #[test]
+    fn test_extract_bits_non_aligned_little_endian() {
+        // Test non-byte-aligned extraction to ensure generic path still works
+        // Signal at bit 4, length 12
+        let data = [0xF0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let raw_value = ByteOrder::LittleEndian.extract_bits(&data, 4, 12);
+        // Bits 4-15: from byte 0 bits 4-7 (0xF) and byte 1 bits 0-7 (0x12)
+        // Little-endian: value should be 0x12F
+        assert_eq!(raw_value, 0x12F);
     }
 
     // Tests that require std (for DefaultHasher)
