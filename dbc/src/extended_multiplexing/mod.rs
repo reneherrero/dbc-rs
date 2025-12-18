@@ -22,10 +22,15 @@
 //!
 //! This means `Signal_A` is decoded when `Mux1` has a value between 0-5 OR 10-15.
 
-use crate::{MAX_NAME_SIZE, compat::String, compat::Vec};
+use crate::compat::{Name, Vec};
 
 mod core;
 mod parse;
+
+/// A value range (min, max) for extended multiplexing
+type ValueRange = (u64, u64);
+/// Maximum 64 ranges per extended multiplexing entry
+type ValueRanges = Vec<ValueRange, 64>;
 
 #[cfg(feature = "std")]
 mod builder;
@@ -102,7 +107,7 @@ pub use builder::ExtendedMultiplexingBuilder;
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExtendedMultiplexing {
     message_id: u32,
-    signal_name: String<{ MAX_NAME_SIZE }>,
-    multiplexer_switch: String<{ MAX_NAME_SIZE }>,
-    value_ranges: Vec<(u64, u64), 64>, // Max 64 ranges per extended multiplexing entry
+    signal_name: Name,
+    multiplexer_switch: Name,
+    value_ranges: ValueRanges,
 }

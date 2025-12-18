@@ -1,5 +1,5 @@
 use super::Version;
-use crate::{MAX_NAME_SIZE, compat::String};
+use crate::compat::Name;
 
 impl Version {
     /// Creates a new `Version` from a version string.
@@ -13,7 +13,7 @@ impl Version {
     /// # Arguments
     ///
     /// * `version` - The version string (should be validated before calling this)
-    pub(crate) fn new(version: String<{ MAX_NAME_SIZE }>) -> Self {
+    pub(crate) fn new(version: Name) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self { version }
     }

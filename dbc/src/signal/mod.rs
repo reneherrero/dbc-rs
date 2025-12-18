@@ -3,13 +3,21 @@ mod decode;
 mod parse;
 #[cfg(feature = "std")]
 mod std;
+mod validate;
 
 #[cfg(feature = "std")]
 mod builder;
 
-use crate::{ByteOrder, MAX_NAME_SIZE, Receivers, compat::String};
+use crate::{ByteOrder, Receivers, compat::Name};
 #[cfg(feature = "std")]
 pub use builder::SignalBuilder;
+
+/// Position info: (start_bit, length, byte_order, unsigned)
+type Position = (u16, u16, ByteOrder, bool);
+/// Scaling: (factor, offset)
+type Scaling = (f64, f64);
+/// Range: (min, max)
+type Range = (f64, f64);
 
 /// Represents a CAN signal within a message.
 ///
@@ -43,7 +51,7 @@ pub use builder::SignalBuilder;
 /// ```
 #[derive(Debug, Clone)]
 pub struct Signal {
-    name: String<{ MAX_NAME_SIZE }>,
+    name: Name,
     start_bit: u16,
     length: u16,
     byte_order: ByteOrder,
@@ -52,7 +60,7 @@ pub struct Signal {
     offset: f64,
     min: f64,
     max: f64,
-    unit: Option<String<{ MAX_NAME_SIZE }>>,
+    unit: Option<Name>,
     receivers: Receivers,
     /// True if this is a multiplexer switch signal (marked with 'M')
     is_multiplexer_switch: bool,

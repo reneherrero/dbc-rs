@@ -1,7 +1,7 @@
-use super::Nodes;
+use super::{NodeNames, Nodes};
 use crate::{
-    BU_, Error, MAX_NAME_SIZE, MAX_NODES, Parser, Result,
-    compat::{String, Vec, validate_name},
+    BU_, Error, MAX_NODES, Parser, Result,
+    compat::validate_name,
     error::{check_max_limit, map_val_error},
 };
 
@@ -20,7 +20,7 @@ impl Nodes {
         parser.skip_newlines_and_spaces();
 
         // Parse node names into Vec
-        let mut nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
+        let mut nodes: NodeNames = NodeNames::new();
 
         loop {
             // Skip whitespace before each node name
@@ -48,7 +48,9 @@ impl Nodes {
         }
 
         if nodes.is_empty() {
-            return Ok(Nodes { nodes: Vec::new() });
+            return Ok(Nodes {
+                nodes: NodeNames::new(),
+            });
         }
 
         // Validate before construction

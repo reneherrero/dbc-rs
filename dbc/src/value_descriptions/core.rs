@@ -1,9 +1,9 @@
 use super::ValueDescriptions;
-use std::{string::String, vec::Vec};
+use crate::compat::ValueDescEntries;
 
 impl ValueDescriptions {
     /// Create ValueDescriptions from a Vec of (value, description) pairs
-    pub(crate) fn new(entries: Vec<(u64, String)>) -> Self {
+    pub(crate) fn new(entries: ValueDescEntries) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self { entries }
     }

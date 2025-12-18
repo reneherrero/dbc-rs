@@ -79,29 +79,34 @@ impl MessageBuilder {
         Ok((id, name, dlc, sender, self.signals))
     }
 
-    /// Validates the builder configuration without building.
+    /// Validates the builder configuration without building the final `Message`.
     ///
-    /// This performs lightweight validation of the message fields:
+    /// This performs full validation of all fields:
     /// - Checks that required fields (id, name, dlc, sender) are set
     /// - Validates message-level constraints (DLC range, name not empty)
+    /// - Builds and validates all signals (overlap detection, bounds checking)
     ///
-    /// **Note:** Full signal validation (overlap detection, bounds checking)
-    /// is performed during `build()`. For complete validation, call `build()`
-    /// directly.
+    /// # Note
     ///
-    /// # Performance
-    ///
-    /// This method borrows `self` and performs no allocations, making it
-    /// suitable for pre-flight checks before expensive `build()` operations.
+    /// This method clones and builds all signals internally for validation.
+    /// If you only need the final `Message`, call `build()` directly.
     pub fn validate(&self) -> Result<()> {
         // Validate required fields are present
         let id = self.id.ok_or(Error::Message(Error::MESSAGE_ID_REQUIRED))?;
         let name = self.name.as_ref().ok_or(Error::Message(Error::MESSAGE_NAME_EMPTY))?;
         let dlc = self.dlc.ok_or(Error::Message(Error::MESSAGE_DLC_REQUIRED))?;
-        let _sender = self.sender.as_ref().ok_or(Error::Message(Error::MESSAGE_SENDER_EMPTY))?;
+        let sender = self.sender.as_ref().ok_or(Error::Message(Error::MESSAGE_SENDER_EMPTY))?;
 
-        // Validate message-level constraints
-        Message::validate_message_fields(id, name, dlc)?;
+        // Build all signals for validation
+        let built_signals: Vec<Signal> = self
+            .signals
+            .iter()
+            .cloned()
+            .map(|sig_builder| sig_builder.build())
+            .collect::<Result<Vec<_>>>()?;
+
+        // Validate message with signals
+        Message::validate(id, name, dlc, sender, &built_signals)?;
 
         Ok(())
     }
@@ -122,7 +127,7 @@ impl MessageBuilder {
             .map(|sig_builder| sig_builder.build())
             .collect::<Result<Vec<_>>>()?;
         // Validate before construction
-        Message::validate_internal(id, &name, dlc, &sender, &built_signals)?;
+        Message::validate(id, &name, dlc, &sender, &built_signals)?;
 
         // Convert to owned compat types (validation passed, so these should succeed)
         let name_str: compat::String<{ MAX_NAME_SIZE }> = compat::validate_name(&name)?;

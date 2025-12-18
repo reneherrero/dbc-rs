@@ -6,7 +6,7 @@ mod std;
 #[cfg(feature = "std")]
 mod builder;
 
-use crate::{MAX_NAME_SIZE, compat::String};
+use crate::compat::Name;
 
 /// Represents a version string from a DBC file.
 ///
@@ -49,7 +49,7 @@ use crate::{MAX_NAME_SIZE, compat::String};
 /// - `""` - Empty version string (allowed)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Version {
-    version: String<{ MAX_NAME_SIZE }>,
+    version: Name,
 }
 
 #[cfg(feature = "std")]

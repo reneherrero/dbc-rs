@@ -1,24 +1,19 @@
-#[cfg(feature = "std")]
-use super::ValueDescriptionsMap;
-use crate::{
-    Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version, compat::Vec,
-    dbc::Messages,
-};
+use super::{ExtendedMultiplexings, Messages, ValueDescriptionsMap};
+use crate::{Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version};
 
 impl Dbc {
     pub(crate) fn new(
         version: Option<Version>,
         nodes: Nodes,
         messages: Messages,
-        #[cfg(feature = "std")] value_descriptions: ValueDescriptionsMap,
-        extended_multiplexing: Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>,
+        value_descriptions: ValueDescriptionsMap,
+        extended_multiplexing: ExtendedMultiplexings,
     ) -> Self {
         // Validation should have been done prior (by builder)
         Self {
             version,
             nodes,
             messages,
-            #[cfg(feature = "std")]
             value_descriptions,
             extended_multiplexing,
         }
@@ -130,20 +125,18 @@ impl Dbc {
     /// assert_eq!(value_descriptions_list.len(), 1);
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
-    #[cfg(feature = "std")]
     #[inline]
     #[must_use = "return value should be used"]
     pub fn value_descriptions(&self) -> &ValueDescriptionsMap {
         &self.value_descriptions
     }
 
-    #[cfg(feature = "std")]
     #[must_use = "return value should be used"]
     pub fn value_descriptions_for_signal(
         &self,
         message_id: u32,
         signal_name: &str,
-    ) -> Option<&crate::value_descriptions::ValueDescriptions> {
+    ) -> Option<&ValueDescriptions> {
         self.value_descriptions.for_signal(message_id, signal_name)
     }
 

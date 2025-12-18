@@ -2,84 +2,7 @@ use super::Message;
 use crate::{ByteOrder, Error, MAX_SIGNALS_PER_MESSAGE, Result, Signal, error::check_max_limit};
 
 impl Message {
-    /// Validates message-level fields without building signals.
-    ///
-    /// This is a lightweight validation that checks:
-    /// - Message ID is within valid CAN range (including extended IDs with bit 31 set)
-    /// - Message name is not empty
-    /// - DLC is within valid range (0-64 per DBC spec Section 8.3)
-    ///
-    /// Used by `MessageBuilder::validate()` for cheap pre-flight checks.
-    #[cfg(feature = "std")]
-    pub(crate) fn validate_message_fields(id: u32, name: &str, dlc: u8) -> Result<()> {
-        if name.trim().is_empty() {
-            return Err(Error::Validation(Error::MESSAGE_NAME_EMPTY));
-        }
-
-        // Per DBC spec Section 8.3: DLC can be 0-8 for CAN 2.0, 0-64 for CAN FD
-        // DLC = 0 is valid (e.g., for control messages without data payload)
-        if dlc > 64 {
-            return Err(Error::Validation(Error::MESSAGE_DLC_TOO_LARGE));
-        }
-
-        // Validate ID is in a valid range
-        let id_valid = id <= Self::MAX_EXTENDED_ID
-            || (Self::EXTENDED_ID_FLAG..=Self::MAX_EXTENDED_ID_WITH_FLAG).contains(&id)
-            || id == Self::PSEUDO_MESSAGE_ID;
-        if !id_valid {
-            return Err(Error::Validation(Error::MESSAGE_ID_OUT_OF_RANGE));
-        }
-
-        Ok(())
-    }
-
-    #[allow(clippy::similar_names)] // physical_lsb and physical_msb are intentionally similar
-    pub(crate) fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
-        let start = start_bit;
-        let len = length;
-
-        match byte_order {
-            ByteOrder::LittleEndian => {
-                // Little-endian: start_bit is LSB, signal extends forward
-                // Range: [start_bit, start_bit + length - 1]
-                (start, start + len - 1)
-            }
-            ByteOrder::BigEndian => {
-                // Big-endian: start_bit is MSB in big-endian numbering, signal extends backward
-                // The big-endian bit numbering follows Vector convention:
-                // be_bits = [7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 23, 22, ...]
-                // This means: BE bit 0 -> physical bit 7, BE bit 7 -> physical bit 0
-                //            BE bit 8 -> physical bit 15, BE bit 15 -> physical bit 8
-                // To find the physical bit range:
-                // 1. Find the index of start_bit in the be_bits sequence
-                // 2. MSB (physical) = be_bits[idx]
-                // 3. LSB (physical) = be_bits[idx + length - 1]
-                // We can calculate this directly:
-                // For BE bit N: byte_num = N / 8, bit_in_byte = N % 8
-                // Physical bit = byte_num * 8 + (7 - bit_in_byte)
-                let byte_num = start / 8;
-                let bit_in_byte = start % 8;
-                let physical_msb = byte_num * 8 + (7 - bit_in_byte);
-
-                // Calculate LSB: move forward (length - 1) positions in the BE sequence
-                // BE bit (start + length - 1) maps to physical bit
-                let lsb_be_bit = start + len - 1;
-                let lsb_byte_num = lsb_be_bit / 8;
-                let lsb_bit_in_byte = lsb_be_bit % 8;
-                let physical_lsb = lsb_byte_num * 8 + (7 - lsb_bit_in_byte);
-
-                // Ensure lsb <= msb (they should be in that order for big-endian)
-                if physical_lsb <= physical_msb {
-                    (physical_lsb, physical_msb)
-                } else {
-                    (physical_msb, physical_lsb)
-                }
-            }
-        }
-    }
-
-    #[allow(clippy::similar_names)] // Overlap detection uses intentionally similar variable names (sig1_lsb/sig1_msb, sig2_lsb/sig2_msb)
-    pub(crate) fn validate_internal(
+    pub(crate) fn validate(
         id: u32,
         name: &str,
         dlc: u8,
@@ -183,6 +106,50 @@ impl Message {
         }
 
         Ok(())
+    }
+
+    fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
+        let start = start_bit;
+        let len = length;
+
+        match byte_order {
+            ByteOrder::LittleEndian => {
+                // Little-endian: start_bit is LSB, signal extends forward
+                // Range: [start_bit, start_bit + length - 1]
+                (start, start + len - 1)
+            }
+            ByteOrder::BigEndian => {
+                // Big-endian: start_bit is MSB in big-endian numbering, signal extends backward
+                // The big-endian bit numbering follows Vector convention:
+                // be_bits = [7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 23, 22, ...]
+                // This means: BE bit 0 -> physical bit 7, BE bit 7 -> physical bit 0
+                //            BE bit 8 -> physical bit 15, BE bit 15 -> physical bit 8
+                // To find the physical bit range:
+                // 1. Find the index of start_bit in the be_bits sequence
+                // 2. MSB (physical) = be_bits[idx]
+                // 3. LSB (physical) = be_bits[idx + length - 1]
+                // We can calculate this directly:
+                // For BE bit N: byte_num = N / 8, bit_in_byte = N % 8
+                // Physical bit = byte_num * 8 + (7 - bit_in_byte)
+                let byte_num = start / 8;
+                let bit_in_byte = start % 8;
+                let physical_msb = byte_num * 8 + (7 - bit_in_byte);
+
+                // Calculate LSB: move forward (length - 1) positions in the BE sequence
+                // BE bit (start + length - 1) maps to physical bit
+                let lsb_be_bit = start + len - 1;
+                let lsb_byte_num = lsb_be_bit / 8;
+                let lsb_bit_in_byte = lsb_be_bit % 8;
+                let physical_lsb = lsb_byte_num * 8 + (7 - lsb_bit_in_byte);
+
+                // Ensure lsb <= msb (they should be in that order for big-endian)
+                if physical_lsb <= physical_msb {
+                    (physical_lsb, physical_msb)
+                } else {
+                    (physical_msb, physical_lsb)
+                }
+            }
+        }
     }
 }
 

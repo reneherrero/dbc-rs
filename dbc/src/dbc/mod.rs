@@ -1,8 +1,9 @@
 use crate::{ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version, compat::Vec};
 
+type ExtendedMultiplexings = Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>;
+
 // Module declarations
 mod messages;
-#[cfg(feature = "std")]
 mod value_descriptions_map;
 
 // Include modules for additional functionality
@@ -12,13 +13,12 @@ mod core;
 mod decode;
 mod parse;
 #[cfg(feature = "std")]
-mod serialize;
+mod std;
 mod validate;
 
 // Re-exports
 use messages::Messages;
 
-#[cfg(feature = "std")]
 use value_descriptions_map::ValueDescriptionsMap;
 
 #[cfg(feature = "std")]
@@ -55,7 +55,6 @@ pub struct Dbc {
     version: Option<Version>,
     nodes: Nodes,
     messages: Messages,
-    #[cfg(feature = "std")]
     value_descriptions: ValueDescriptionsMap,
-    extended_multiplexing: Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>,
+    extended_multiplexing: ExtendedMultiplexings,
 }

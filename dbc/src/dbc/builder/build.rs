@@ -1,9 +1,10 @@
 use super::DbcBuilder;
 use crate::{
-    Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Message, Nodes, Result, Version,
+    Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES, MAX_NAME_SIZE, Message,
+    Nodes, Result, Version,
+    compat::{BTreeMap, String},
     dbc::{Messages, Validate},
 };
-use std::collections::BTreeMap;
 
 impl DbcBuilder {
     /// Validates the builder without constructing the `Dbc`.
@@ -36,15 +37,17 @@ impl DbcBuilder {
                 .map(|builder| builder.build())
                 .collect::<Result<std::vec::Vec<_>>>()?;
             let mut value_descriptions_map: BTreeMap<
-                (Option<u32>, String),
+                (Option<u32>, String<{ MAX_NAME_SIZE }>),
                 crate::value_descriptions::ValueDescriptions,
+                { MAX_MESSAGES },
             > = BTreeMap::new();
             for ((message_id, signal_name), vd_builder) in self.value_descriptions {
                 let vd: crate::value_descriptions::ValueDescriptions = vd_builder.build()?;
-                value_descriptions_map.insert((message_id, signal_name), vd);
+                let compat_signal_name = String::try_from(signal_name.as_str())
+                    .map_err(|_| crate::Error::Validation(crate::Error::MAX_NAME_SIZE_EXCEEDED))?;
+                let _ = value_descriptions_map.insert((message_id, compat_signal_name), vd);
             }
-            let value_descriptions =
-                crate::dbc::ValueDescriptionsMap::from_map(value_descriptions_map);
+            let value_descriptions = crate::dbc::ValueDescriptionsMap::new(value_descriptions_map);
             (version, nodes, messages, value_descriptions)
         };
 
@@ -74,14 +77,17 @@ impl DbcBuilder {
 
         // Build value descriptions
         let mut value_descriptions_map: BTreeMap<
-            (Option<u32>, String),
+            (Option<u32>, String<{ MAX_NAME_SIZE }>),
             crate::value_descriptions::ValueDescriptions,
+            { MAX_MESSAGES },
         > = BTreeMap::new();
         for ((message_id, signal_name), vd_builder) in self.value_descriptions {
             let vd: crate::value_descriptions::ValueDescriptions = vd_builder.build()?;
-            value_descriptions_map.insert((message_id, signal_name), vd);
+            let compat_signal_name = String::try_from(signal_name.as_str())
+                .map_err(|_| crate::Error::Validation(crate::Error::MAX_NAME_SIZE_EXCEEDED))?;
+            let _ = value_descriptions_map.insert((message_id, compat_signal_name), vd);
         }
-        let value_descriptions = crate::dbc::ValueDescriptionsMap::from_map(value_descriptions_map);
+        let value_descriptions = crate::dbc::ValueDescriptionsMap::new(value_descriptions_map);
 
         Ok((version, nodes, messages, value_descriptions))
     }

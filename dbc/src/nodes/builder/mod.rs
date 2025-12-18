@@ -141,11 +141,6 @@ impl NodesBuilder {
         self
     }
 
-    fn extract_and_validate_nodes(self) -> Result<Vec<String>> {
-        Nodes::validate(&self.nodes)?;
-        Ok(self.nodes)
-    }
-
     /// Validates the current builder state without building.
     ///
     /// This is useful for checking if the configuration is valid before building.
@@ -178,8 +173,8 @@ impl NodesBuilder {
     /// ```
     #[must_use = "validation result should be checked"]
     pub fn validate(self) -> Result<Self> {
-        let nodes = self.extract_and_validate_nodes()?;
-        Ok(Self { nodes })
+        self.to_compat_nodes()?;
+        Ok(self)
     }
 
     /// Builds the `Nodes` from the builder configuration.
@@ -225,16 +220,23 @@ impl NodesBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<Nodes> {
-        let nodes = self.extract_and_validate_nodes()?;
-        // Convert std::vec::Vec<String> to compat::Vec<String<MAX_NAME_SIZE>, MAX_NODES>
+        let compat_nodes = self.to_compat_nodes()?;
+        Ok(Nodes::new(compat_nodes))
+    }
+
+    /// Convert std strings to compat strings and validate
+    fn to_compat_nodes(
+        &self,
+    ) -> Result<crate::compat::Vec<crate::compat::String<{ MAX_NAME_SIZE }>, { MAX_NODES }>> {
         use crate::compat::{String, Vec};
         let mut result: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
-        for node_str in nodes {
+        for node_str in &self.nodes {
             let compat_str = String::try_from(node_str.as_str())
                 .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))?;
             result.push(compat_str).map_err(|_| Error::Validation(Error::NODES_TOO_MANY))?;
         }
-        Ok(Nodes::new(result))
+        Nodes::validate(&result)?;
+        Ok(result)
     }
 }
 

@@ -1,14 +1,8 @@
 use super::{Message, Signals};
-use crate::{MAX_NAME_SIZE, compat::String};
+use crate::compat::Name;
 
 impl Message {
-    pub(crate) fn new(
-        id: u32,
-        name: String<{ MAX_NAME_SIZE }>,
-        dlc: u8,
-        sender: String<{ MAX_NAME_SIZE }>,
-        signals: Signals,
-    ) -> Self {
+    pub(crate) fn new(id: u32, name: Name, dlc: u8, sender: Name, signals: Signals) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
             id,

@@ -8,7 +8,7 @@ mod validate;
 #[cfg(feature = "std")]
 mod builder;
 
-use crate::{MAX_NAME_SIZE, compat::String};
+use crate::compat::Name;
 #[cfg(feature = "std")]
 pub use builder::MessageBuilder;
 pub use signals::Signals;
@@ -43,9 +43,9 @@ pub use signals::Signals;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Message {
     id: u32,
-    name: String<{ MAX_NAME_SIZE }>,
+    name: Name,
     dlc: u8,
-    sender: String<{ MAX_NAME_SIZE }>,
+    sender: Name,
     signals: Signals,
 }
 

@@ -1,9 +1,8 @@
-use super::Signal;
-use crate::compat::String;
-use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result};
+use super::{Position, Range, Scaling, Signal};
+use crate::{ByteOrder, Error, MAX_NAME_SIZE, Parser, Receivers, Result, compat::Name};
 
 impl Signal {
-    fn parse_position<'b>(parser: &mut Parser<'b>) -> Result<(u16, u16, ByteOrder, bool)> {
+    fn parse_position<'b>(parser: &mut Parser<'b>) -> Result<Position> {
         // Parse start_bit
         let start_bit = match parser.parse_u32() {
             Ok(v) => v as u16,
@@ -63,7 +62,7 @@ impl Signal {
         Ok((start_bit, length, byte_order, unsigned))
     }
 
-    fn parse_factor_offset<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
+    fn parse_factor_offset<'b>(parser: &mut Parser<'b>) -> Result<Scaling> {
         // Expect opening parenthesis
         parser.expect_with_msg(b"(", "Expected opening parenthesis")?;
 
@@ -92,7 +91,7 @@ impl Signal {
         Ok((factor, offset))
     }
 
-    fn parse_range<'b>(parser: &mut Parser<'b>) -> Result<(f64, f64)> {
+    fn parse_range<'b>(parser: &mut Parser<'b>) -> Result<Range> {
         // Expect opening bracket
         parser.expect_with_msg(b"[", "Expected opening bracket")?;
 
@@ -121,7 +120,7 @@ impl Signal {
         Ok((min, max))
     }
 
-    fn parse_unit(parser: &mut Parser) -> Result<Option<String<{ MAX_NAME_SIZE }>>> {
+    fn parse_unit(parser: &mut Parser) -> Result<Option<Name>> {
         // Expect opening quote
         parser.expect_with_msg(b"\"", "Expected opening quote")?;
 
@@ -134,11 +133,11 @@ impl Signal {
         })?;
 
         // Convert bytes to string slice
-        let unit =
+        let unit_str =
             core::str::from_utf8(unit_bytes).map_err(|_e| Error::Expected(Error::INVALID_UTF8))?;
 
-        let unit: String<{ MAX_NAME_SIZE }> =
-            String::try_from(unit).map_err(|_| Error::Version(Error::MAX_NAME_SIZE_EXCEEDED))?;
+        let unit: Name =
+            Name::try_from(unit_str).map_err(|_| Error::Version(Error::MAX_NAME_SIZE_EXCEEDED))?;
 
         let unit = if unit.is_empty() { None } else { Some(unit) };
         Ok(unit)
@@ -246,6 +245,7 @@ impl Signal {
 
         // Parse receivers (may be empty/None if at end of line)
         let receivers = Receivers::parse(parser)?;
+        // TODO: Receivers need to be validated
 
         // Validate before construction
         Self::validate(name, length, min, max).map_err(|e| {

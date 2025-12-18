@@ -51,7 +51,7 @@ impl Message {
         }
 
         // Validate before construction
-        Message::validate_internal(id, name, dlc, sender, signals).map_err(|e| {
+        Message::validate(id, name, dlc, sender, signals).map_err(|e| {
             crate::error::map_val_error(e, crate::error::Error::Message, || {
                 crate::error::Error::Message(crate::error::Error::MESSAGE_ERROR_PREFIX)
             })

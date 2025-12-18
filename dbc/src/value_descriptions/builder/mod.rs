@@ -1,4 +1,8 @@
-use crate::{Error, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions, error::check_max_limit};
+use crate::{
+    Error, MAX_NAME_SIZE, MAX_VALUE_DESCRIPTIONS, Result, ValueDescriptions, compat,
+    error::check_max_limit,
+};
+use std::{string::String, vec::Vec};
 
 /// Builder for creating `ValueDescriptions` programmatically.
 ///
@@ -105,7 +109,20 @@ impl ValueDescriptionsBuilder {
             return Err(err);
         }
 
-        Ok(ValueDescriptions::new(self.entries))
+        // Convert std types to compat types
+        let mut compat_entries: compat::Vec<
+            (u64, compat::String<{ MAX_NAME_SIZE }>),
+            { MAX_VALUE_DESCRIPTIONS },
+        > = compat::Vec::new();
+        for (value, desc) in self.entries {
+            let compat_desc = compat::String::try_from(desc.as_str())
+                .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))?;
+            compat_entries
+                .push((value, compat_desc))
+                .map_err(|_| Error::Validation(Error::VALUE_DESCRIPTIONS_TOO_MANY))?;
+        }
+
+        Ok(ValueDescriptions::new(compat_entries))
     }
 }
 

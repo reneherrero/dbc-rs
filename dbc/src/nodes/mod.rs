@@ -2,16 +2,19 @@ mod core;
 mod parse;
 #[cfg(feature = "std")]
 mod std;
+mod validate;
 
 #[cfg(feature = "std")]
 mod builder;
 
 use crate::{
-    MAX_NAME_SIZE, MAX_NODES,
-    compat::{String, Vec},
+    MAX_NODES,
+    compat::{Name, Vec},
 };
 #[cfg(feature = "std")]
 pub use builder::NodesBuilder;
+
+type NodeNames = Vec<Name, { MAX_NODES }>;
 
 /// Represents a collection of node (ECU) names from a DBC file.
 ///
@@ -72,5 +75,5 @@ pub use builder::NodesBuilder;
 /// - Maximum 32 characters per node name by default
 #[derive(Debug, Default, PartialEq, Eq, Hash, Clone)]
 pub struct Nodes {
-    nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }>,
+    nodes: NodeNames,
 }

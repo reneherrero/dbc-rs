@@ -1,24 +1,36 @@
-use crate::ValueDescriptions;
-use std::{
-    collections::{BTreeMap, btree_map::Iter},
-    string::String,
+use crate::{
+    MAX_MESSAGES, ValueDescriptions,
+    compat::{BTreeMap, Name},
 };
+
+/// Maximum number of value description entries in the map
+/// (one entry per signal that has value descriptions)
+const MAX_VALUE_DESCRIPTION_ENTRIES: usize = MAX_MESSAGES;
+
+type Key = (Option<u32>, Name);
+type Map = BTreeMap<Key, ValueDescriptions, { MAX_VALUE_DESCRIPTION_ENTRIES }>;
 
 /// Encapsulates the value descriptions map for a DBC
 ///
 /// Value descriptions map signal values to human-readable text descriptions.
 /// They can be message-specific (keyed by message_id and signal_name) or global
 /// (keyed by None and signal_name, applying to all signals with that name).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValueDescriptionsMap {
-    value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptions>,
+    value_descriptions: Map,
+}
+
+impl Default for ValueDescriptionsMap {
+    fn default() -> Self {
+        Self {
+            value_descriptions: Map::new(),
+        }
+    }
 }
 
 impl ValueDescriptionsMap {
-    /// Create ValueDescriptionsMap from a BTreeMap
-    pub(crate) fn from_map(
-        value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptions>,
-    ) -> Self {
+    /// Create ValueDescriptionsMap from a Map
+    pub(crate) fn new(value_descriptions: Map) -> Self {
         Self { value_descriptions }
     }
 
@@ -45,9 +57,9 @@ impl ValueDescriptionsMap {
     #[inline]
     #[must_use = "iterator is lazy and does nothing unless consumed"]
     pub fn iter(&self) -> impl Iterator<Item = ((Option<u32>, &str), &ValueDescriptions)> + '_ {
-        ValueDescriptionsIter {
-            entries: self.value_descriptions.iter(),
-        }
+        self.value_descriptions
+            .iter()
+            .map(|((msg_id, name), vd)| ((*msg_id, name.as_str()), vd))
     }
 
     /// Get the number of value description entries
@@ -125,8 +137,7 @@ impl ValueDescriptionsMap {
         // First try to find a specific entry for this message_id
         // Then fall back to a global entry (None message_id) that applies to all messages
         // Priority: message-specific > global
-        // Note: We can't use get() directly because signal_name is &str but key uses &'a str
-        // So we iterate and match by string content
+        // Note: We iterate and match by string content
         self.value_descriptions
             .iter()
             .find(|((id, name), _)| {
@@ -144,19 +155,5 @@ impl ValueDescriptionsMap {
                     .find(|((id, name), _)| id.is_none() && name.as_str() == signal_name)
                     .map(|(_, v)| v)
             })
-    }
-}
-
-/// Iterator over value descriptions in a ValueDescriptionsMap
-struct ValueDescriptionsIter<'a> {
-    entries: Iter<'a, (Option<u32>, String), ValueDescriptions>,
-}
-
-impl<'a> Iterator for ValueDescriptionsIter<'a> {
-    type Item = ((Option<u32>, &'a str), &'a ValueDescriptions);
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        self.entries.next().map(|(k, v)| ((k.0, k.1.as_str()), v))
     }
 }

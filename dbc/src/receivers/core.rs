@@ -1,15 +1,12 @@
-use super::Receivers;
-use crate::{
-    MAX_NAME_SIZE, MAX_NODES,
-    compat::{String, Vec},
-};
+use super::{ReceiverNames, Receivers};
+use crate::compat::Name;
 
 impl Receivers {
     pub(crate) fn new_none() -> Self {
         Receivers::None
     }
 
-    pub(crate) fn new_nodes(nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }>) -> Self {
+    pub(crate) fn new_nodes(nodes: ReceiverNames) -> Self {
         // Validation should have been done prior (by builder or parse)
         Receivers::Nodes(nodes)
     }
@@ -217,7 +214,7 @@ impl Receivers {
 }
 
 struct ReceiversIter<'a> {
-    nodes: Option<&'a [String<{ MAX_NAME_SIZE }>]>,
+    nodes: Option<&'a [Name]>,
     pos: usize,
 }
 

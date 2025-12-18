@@ -88,7 +88,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    #[cfg(feature = "std")]
     pub fn parse_i64(&mut self) -> crate::Result<i64> {
         let start_pos = self.pos;
         let mut has_sign = false;

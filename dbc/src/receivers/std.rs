@@ -33,7 +33,7 @@ impl Receivers {
     #[must_use = "return value should be used"]
     pub fn to_dbc_string(&self) -> String {
         match self {
-            Receivers::Nodes(nodes) if nodes.is_empty() => crate::VECTOR__XXX.to_string(),
+            Receivers::Nodes(nodes) if nodes.is_empty() => crate::VECTOR_XXX.to_string(),
             Receivers::Nodes(nodes) => {
                 let mut result = String::with_capacity(nodes.len() * 10);
                 for (i, node) in nodes.iter().enumerate() {
@@ -44,7 +44,7 @@ impl Receivers {
                 }
                 result
             }
-            Receivers::None => crate::VECTOR__XXX.to_string(),
+            Receivers::None => crate::VECTOR_XXX.to_string(),
         }
     }
 }

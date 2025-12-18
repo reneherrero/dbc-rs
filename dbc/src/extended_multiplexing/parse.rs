@@ -1,8 +1,5 @@
-use super::ExtendedMultiplexing;
-use crate::{
-    Parser,
-    compat::{Vec, validate_name},
-};
+use super::{ExtendedMultiplexing, ValueRanges};
+use crate::{Parser, compat::validate_name};
 
 impl ExtendedMultiplexing {
     /// Parse an SG_MUL_VAL_ entry
@@ -30,7 +27,7 @@ impl ExtendedMultiplexing {
         parser.skip_newlines_and_spaces();
 
         // Parse value ranges
-        let mut value_ranges: Vec<(u64, u64), 64> = Vec::new();
+        let mut value_ranges: ValueRanges = ValueRanges::new();
 
         // Parse value ranges (at least one required)
         loop {

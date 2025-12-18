@@ -1,36 +1,9 @@
-use super::Nodes;
-use crate::{
-    Error, MAX_NAME_SIZE, MAX_NODES, Result,
-    compat::{String, Vec},
-    error::check_max_limit,
-};
+use super::{NodeNames, Nodes};
 
 impl Nodes {
-    pub(crate) fn new(nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }>) -> Self {
+    pub(crate) fn new(nodes: NodeNames) -> Self {
         // Validation should have been done prior (by builder)
         Self { nodes }
-    }
-
-    // Shared validation function
-    pub(crate) fn validate(nodes: &[impl AsRef<str>]) -> Result<()> {
-        // Check for too many nodes (DoS protection)
-        if let Some(err) = check_max_limit(
-            nodes.len(),
-            MAX_NODES,
-            Error::Validation(Error::NODES_TOO_MANY),
-        ) {
-            return Err(err);
-        }
-
-        // Check for duplicate node names (case-sensitive)
-        for (i, node1) in nodes.iter().enumerate() {
-            for node2 in nodes.iter().skip(i + 1) {
-                if node1.as_ref() == node2.as_ref() {
-                    return Err(Error::Validation(Error::NODES_DUPLICATE_NAME));
-                }
-            }
-        }
-        Ok(())
     }
 
     /// Returns an iterator over the node names.

@@ -1,13 +1,9 @@
 use crate::{
     Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES,
-    MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, Version,
-    compat::Vec,
-    dbc::{Messages, Validate},
+    MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, ValueDescriptions, Version,
+    compat::{Name, ValueDescEntries, Vec},
+    dbc::{Messages, Validate, ValueDescriptionsMap},
 };
-#[cfg(feature = "std")]
-use crate::{ValueDescriptions, dbc::ValueDescriptionsMap};
-#[cfg(feature = "std")]
-use std::collections::BTreeMap;
 
 impl Dbc {
     /// Parse a DBC file from a string slice
@@ -44,22 +40,13 @@ impl Dbc {
         let mut version: Option<Version> = None;
         let mut nodes: Option<Nodes> = None;
 
-        // Store value descriptions during parsing: (message_id, signal_name, value, description)
-        #[cfg(feature = "std")]
-        type ValueDescriptionsBufferEntry = (
-            Option<u32>,
-            std::string::String,
-            std::vec::Vec<(u64, std::string::String)>,
-        );
-        #[cfg(feature = "std")]
-        let mut value_descriptions_buffer: std::vec::Vec<ValueDescriptionsBufferEntry> =
-            std::vec::Vec::new();
+        // Type aliases for parsing buffers
+        type ValueDescBufferEntry = (Option<u32>, Name, ValueDescEntries);
+        type ValueDescBuffer = Vec<ValueDescBufferEntry, { MAX_MESSAGES }>;
+        type ExtMuxBuffer = Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>;
 
-        // Store extended multiplexing entries during parsing
-        let mut extended_multiplexing_buffer: Vec<
-            ExtendedMultiplexing,
-            { MAX_EXTENDED_MULTIPLEXING },
-        > = Vec::new();
+        let mut value_descriptions_buffer: ValueDescBuffer = ValueDescBuffer::new();
+        let mut extended_multiplexing_buffer: ExtMuxBuffer = ExtMuxBuffer::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -145,93 +132,92 @@ impl Dbc {
                     continue;
                 }
                 VAL_ => {
-                    #[cfg(feature = "std")]
-                    {
-                        // Consume VAL_ keyword
-                        let _ = parser.expect(crate::VAL_.as_bytes()).ok();
-                        // Parse VAL_ statement: VAL_ message_id signal_name value1 "desc1" value2 "desc2" ... ;
-                        // Note: message_id of -1 (0xFFFFFFFF) means the value descriptions apply to
-                        // all signals with this name in ANY message (global value descriptions)
-                        parser.skip_newlines_and_spaces();
-                        let message_id = match parser.parse_i64() {
-                            Ok(id) => {
-                                // -1 (0xFFFFFFFF) is the magic number for global value descriptions
-                                if id == -1 {
-                                    None
-                                } else if id >= 0 && id <= u32::MAX as i64 {
-                                    Some(id as u32)
-                                } else {
-                                    parser.skip_to_end_of_line();
-                                    continue;
-                                }
+                    // Consume VAL_ keyword
+                    let _ = parser.expect(crate::VAL_.as_bytes()).ok();
+                    // Parse VAL_ statement: VAL_ message_id signal_name value1 "desc1" value2 "desc2" ... ;
+                    // Note: message_id of -1 (0xFFFFFFFF) means the value descriptions apply to
+                    // all signals with this name in ANY message (global value descriptions)
+                    parser.skip_newlines_and_spaces();
+                    let message_id = match parser.parse_i64() {
+                        Ok(id) => {
+                            // -1 (0xFFFFFFFF) is the magic number for global value descriptions
+                            if id == -1 {
+                                None
+                            } else if id >= 0 && id <= u32::MAX as i64 {
+                                Some(id as u32)
+                            } else {
+                                parser.skip_to_end_of_line();
+                                continue;
                             }
+                        }
+                        Err(_) => {
+                            parser.skip_to_end_of_line();
+                            continue;
+                        }
+                    };
+                    parser.skip_newlines_and_spaces();
+                    let signal_name = match parser.parse_identifier() {
+                        Ok(name) => match Name::try_from(name) {
+                            Ok(s) => s,
                             Err(_) => {
                                 parser.skip_to_end_of_line();
                                 continue;
                             }
-                        };
+                        },
+                        Err(_) => {
+                            parser.skip_to_end_of_line();
+                            continue;
+                        }
+                    };
+                    // Parse value-description pairs
+                    let mut entries: ValueDescEntries = ValueDescEntries::new();
+                    loop {
                         parser.skip_newlines_and_spaces();
-                        let signal_name = match parser.parse_identifier() {
-                            Ok(name) => name.to_string(),
+                        // Check for semicolon (end of VAL_ statement)
+                        if parser.starts_with(b";") {
+                            parser.expect(b";").ok();
+                            break;
+                        }
+                        // Parse value (as i64 first to handle negative values like -1, then convert to u64)
+                        // Note: -1 (0xFFFFFFFF) is the magic number for global value descriptions in message_id,
+                        // but values in VAL_ can also be negative
+                        let value = match parser.parse_i64() {
+                            Ok(v) => {
+                                // Handle -1 specially: convert to 0xFFFFFFFF (u32::MAX) instead of large u64
+                                if v == -1 { 0xFFFF_FFFFu64 } else { v as u64 }
+                            }
                             Err(_) => {
                                 parser.skip_to_end_of_line();
-                                continue;
-                            }
-                        };
-                        // Parse value-description pairs
-                        let mut entries: std::vec::Vec<(u64, std::string::String)> =
-                            std::vec::Vec::new();
-                        loop {
-                            parser.skip_newlines_and_spaces();
-                            // Check for semicolon (end of VAL_ statement)
-                            if parser.starts_with(b";") {
-                                parser.expect(b";").ok();
                                 break;
                             }
-                            // Parse value (as i64 first to handle negative values like -1, then convert to u64)
-                            // Note: -1 (0xFFFFFFFF) is the magic number for global value descriptions in message_id,
-                            // but values in VAL_ can also be negative
-                            let value = match parser.parse_i64() {
-                                Ok(v) => {
-                                    // Handle -1 specially: convert to 0xFFFFFFFF (u32::MAX) instead of large u64
-                                    if v == -1 { 0xFFFF_FFFFu64 } else { v as u64 }
-                                }
-                                Err(_) => {
-                                    parser.skip_to_end_of_line();
-                                    break;
-                                }
-                            };
-                            parser.skip_newlines_and_spaces();
-                            // Parse description string (expect quote, then take until quote)
-                            if parser.expect(b"\"").is_err() {
+                        };
+                        parser.skip_newlines_and_spaces();
+                        // Parse description string (expect quote, then take until quote)
+                        if parser.expect(b"\"").is_err() {
+                            parser.skip_to_end_of_line();
+                            break;
+                        }
+                        let description_bytes = match parser.take_until_quote(false, 1024) {
+                            Ok(bytes) => bytes,
+                            Err(_) => {
                                 parser.skip_to_end_of_line();
                                 break;
                             }
-                            let description_bytes = match parser.take_until_quote(false, 1024) {
-                                Ok(bytes) => bytes,
-                                Err(_) => {
-                                    parser.skip_to_end_of_line();
-                                    break;
-                                }
-                            };
-                            let description = match core::str::from_utf8(description_bytes) {
-                                Ok(s) => s.to_string(),
-                                Err(_) => {
-                                    parser.skip_to_end_of_line();
-                                    break;
-                                }
-                            };
-                            entries.push((value, description));
-                        }
-                        if !entries.is_empty() {
-                            value_descriptions_buffer.push((message_id, signal_name, entries));
-                        }
+                        };
+                        let description = match core::str::from_utf8(description_bytes)
+                            .ok()
+                            .and_then(|s| Name::try_from(s).ok())
+                        {
+                            Some(desc) => desc,
+                            None => {
+                                parser.skip_to_end_of_line();
+                                break;
+                            }
+                        };
+                        let _ = entries.push((value, description));
                     }
-                    #[cfg(not(feature = "std"))]
-                    {
-                        // In no_std mode, consume VAL_ keyword and skip the rest
-                        let _ = parser.expect(crate::VAL_.as_bytes()).ok();
-                        parser.skip_to_end_of_line();
+                    if !entries.is_empty() {
+                        let _ = value_descriptions_buffer.push((message_id, signal_name, entries));
                     }
                     continue;
                 }
@@ -363,16 +349,18 @@ impl Dbc {
         });
 
         // Build value descriptions map for storage in Dbc
-        #[cfg(feature = "std")]
         let value_descriptions_map = {
-            let mut map: BTreeMap<(Option<u32>, std::string::String), ValueDescriptions> =
-                BTreeMap::new();
-            for (message_id, signal_name, entries) in value_descriptions_buffer {
-                let key = (message_id, signal_name);
-                let value_descriptions = ValueDescriptions::new(entries);
-                map.insert(key, value_descriptions);
+            let mut map: crate::compat::BTreeMap<
+                (Option<u32>, Name),
+                ValueDescriptions,
+                { MAX_MESSAGES },
+            > = crate::compat::BTreeMap::new();
+            for (message_id, signal_name, entries) in value_descriptions_buffer.iter() {
+                let key = (*message_id, signal_name.clone());
+                let value_descriptions = ValueDescriptions::new(entries.clone());
+                let _ = map.insert(key, value_descriptions);
             }
-            ValueDescriptionsMap::from_map(map)
+            ValueDescriptionsMap::new(map)
         };
 
         // Convert messages buffer to slice for validation and construction
@@ -399,7 +387,6 @@ impl Dbc {
             version,
             nodes,
             messages,
-            #[cfg(feature = "std")]
             value_descriptions_map,
             extended_multiplexing_buffer,
         ))

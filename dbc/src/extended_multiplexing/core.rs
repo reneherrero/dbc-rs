@@ -1,12 +1,12 @@
-use super::ExtendedMultiplexing;
-use crate::{MAX_NAME_SIZE, compat::String, compat::Vec};
+use super::{ExtendedMultiplexing, ValueRanges};
+use crate::compat::Name;
 
 impl ExtendedMultiplexing {
     pub(crate) fn new(
         message_id: u32,
-        signal_name: String<{ MAX_NAME_SIZE }>,
-        multiplexer_switch: String<{ MAX_NAME_SIZE }>,
-        value_ranges: Vec<(u64, u64), 64>,
+        signal_name: Name,
+        multiplexer_switch: Name,
+        value_ranges: ValueRanges,
     ) -> Self {
         Self {
             message_id,

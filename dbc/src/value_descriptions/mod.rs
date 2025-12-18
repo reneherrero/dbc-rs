@@ -3,9 +3,9 @@ mod core;
 #[cfg(feature = "std")]
 mod builder;
 
+use crate::compat::ValueDescEntries;
 #[cfg(feature = "std")]
 pub use builder::ValueDescriptionsBuilder;
-use std::{string::String, vec::Vec};
 
 /// Value descriptions for a signal.
 ///
@@ -44,5 +44,5 @@ use std::{string::String, vec::Vec};
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ValueDescriptions {
-    entries: Vec<(u64, String)>,
+    entries: ValueDescEntries,
 }

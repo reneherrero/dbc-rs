@@ -1,6 +1,6 @@
 #[cfg(feature = "std")]
 use crate::dbc::ValueDescriptionsMap;
-use crate::{Error, Message, Nodes, Result, VECTOR__XXX};
+use crate::{Error, Message, Nodes, Result, VECTOR_XXX};
 
 /// Validation functions for DBC structures
 pub(crate) struct Validate;
@@ -73,7 +73,7 @@ impl Validate {
         if !nodes.is_empty() {
             for msg in messages {
                 let sender = msg.sender();
-                if sender != VECTOR__XXX && !nodes.contains(sender) {
+                if sender != VECTOR_XXX && !nodes.contains(sender) {
                     return Err(Error::Validation(Error::SENDER_NOT_IN_NODES));
                 }
             }

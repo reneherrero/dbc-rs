@@ -51,6 +51,12 @@ impl<const N: usize> String<N> {
         self.0.as_str()
     }
 
+    /// Returns a byte slice of this `String`'s contents.
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+
     /// Returns the length of this `String`, in bytes.
     #[inline]
     pub fn len(&self) -> usize {
@@ -61,6 +67,24 @@ impl<const N: usize> String<N> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// Appends a given string slice onto the end of this `String`.
+    ///
+    /// Returns `Ok(())` if successful, or `Err` if capacity would be exceeded.
+    #[inline]
+    pub fn push_str(&mut self, s: &str) -> Result<()> {
+        #[cfg(feature = "alloc")]
+        {
+            self.0.push_str(s);
+            Ok(())
+        }
+        #[cfg(not(feature = "alloc"))]
+        {
+            self.0
+                .push_str(s)
+                .map_err(|_| Error::Validation(crate::error::Error::MAX_NAME_SIZE_EXCEEDED))
+        }
     }
 }
 
@@ -144,3 +168,24 @@ impl<const N: usize> PartialEq<str> for String<N> {
 }
 
 impl<const N: usize> Eq for String<N> {}
+
+impl<const N: usize> PartialOrd for String<N> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<const N: usize> Ord for String<N> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl<const N: usize> fmt::Write for String<N> {
+    #[inline]
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.push_str(s).map_err(|_| fmt::Error)
+    }
+}

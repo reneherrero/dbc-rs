@@ -7,11 +7,13 @@ mod builder;
 mod std;
 
 use crate::{
-    MAX_NAME_SIZE, MAX_NODES,
-    compat::{String, Vec},
+    MAX_NODES,
+    compat::{Name, Vec},
 };
 #[cfg(feature = "std")]
 pub use builder::ReceiversBuilder;
+
+type ReceiverNames = Vec<Name, { MAX_NODES - 1 }>;
 
 /// Represents the receiver nodes for a signal in a DBC file.
 ///
@@ -61,7 +63,7 @@ pub use builder::ReceiversBuilder;
 #[allow(clippy::large_enum_variant)]
 pub enum Receivers {
     /// Specific receiver nodes - vector of node names.
-    Nodes(Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }>),
+    Nodes(ReceiverNames),
     /// No explicit receivers specified (serializes as `Vector__XXX`).
     None,
 }

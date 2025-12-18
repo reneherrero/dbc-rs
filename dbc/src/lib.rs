@@ -46,7 +46,6 @@ mod nodes;
 mod parser;
 mod receivers;
 mod signal;
-#[cfg(feature = "std")]
 mod value_descriptions;
 mod version;
 
@@ -58,8 +57,7 @@ pub use message::{Message, Signals};
 pub use nodes::Nodes;
 pub use receivers::Receivers;
 pub use signal::Signal;
-#[cfg(feature = "std")]
-pub use value_descriptions::{ValueDescriptions, ValueDescriptionsBuilder};
+pub use value_descriptions::ValueDescriptions;
 pub use version::Version;
 
 /// Builders
@@ -75,6 +73,8 @@ pub use nodes::NodesBuilder;
 pub use receivers::ReceiversBuilder;
 #[cfg(feature = "std")]
 pub use signal::SignalBuilder;
+#[cfg(feature = "std")]
+pub use value_descriptions::ValueDescriptionsBuilder;
 #[cfg(feature = "std")]
 pub use version::VersionBuilder;
 
@@ -115,10 +115,8 @@ pub(crate) const EV_: &str = "EV_";
 pub(crate) const BO_TX_BU_: &str = "BO_TX_BU_";
 
 // Additional DBC keywords
-#[allow(clippy::upper_case_acronyms)]
-pub(crate) const VECTOR__INDEPENDENT_SIG_MSG: &str = "VECTOR__INDEPENDENT_SIG_MSG";
-#[allow(clippy::upper_case_acronyms)]
-pub(crate) const VECTOR__XXX: &str = "Vector__XXX";
+pub(crate) const VECTOR_INDEPENDENT_SIG_MSG: &str = "VECTOR__INDEPENDENT_SIG_MSG";
+pub(crate) const VECTOR_XXX: &str = "Vector__XXX";
 pub(crate) const BA_DEF_DEF_REL_: &str = "BA_DEF_DEF_REL_";
 pub(crate) const BA_DEF_SGTYPE_: &str = "BA_DEF_SGTYPE_";
 pub(crate) const SIGTYPE_VALTYPE_: &str = "SIGTYPE_VALTYPE_";
@@ -140,8 +138,8 @@ pub(crate) const FILTER: &str = "FILTER";
 
 #[cfg_attr(not(feature = "std"), allow(dead_code))]
 const DBC_KEYWORDS: &[&str] = &[
-    VECTOR__INDEPENDENT_SIG_MSG,
-    VECTOR__XXX,
+    VECTOR_INDEPENDENT_SIG_MSG,
+    VECTOR_XXX,
     BA_DEF_DEF_REL_,
     BA_DEF_SGTYPE_,
     SIGTYPE_VALTYPE_,
