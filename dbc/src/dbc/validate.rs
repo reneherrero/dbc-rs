@@ -1,61 +1,33 @@
-#[cfg(feature = "std")]
-use crate::dbc::ValueDescriptionsMap;
-use crate::{Error, Message, Nodes, Result, VECTOR_XXX};
+use super::ValueDescriptionsMap;
+use crate::{Error, ExtendedMultiplexing, Message, Nodes, Result, VECTOR_XXX};
 
 /// Validation functions for DBC structures
 pub(crate) struct Validate;
 
 impl Validate {
-    // Validate function for std feature (with value_descriptions)
-    #[cfg(feature = "std")]
+    /// Validates DBC structures including messages, value descriptions, and extended multiplexing.
     pub fn validate(
         nodes: &Nodes,
         messages: &[Message],
         value_descriptions: Option<&ValueDescriptionsMap>,
+        extended_multiplexing: Option<&[ExtendedMultiplexing]>,
     ) -> Result<()> {
         Self::validate_common(nodes, messages)?;
 
         // Validate value descriptions if provided
         if let Some(value_descriptions) = value_descriptions {
-            // Validate that all value descriptions reference existing messages and signals
-            for ((message_id_opt, signal_name), _) in value_descriptions.iter() {
-                // Check if message exists (for message-specific value descriptions)
-                if let Some(message_id) = message_id_opt {
-                    let message_exists = messages.iter().any(|msg| msg.id() == message_id);
-                    if !message_exists {
-                        return Err(Error::Validation(
-                            Error::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND,
-                        ));
-                    }
+            Self::validate_value_descriptions(messages, value_descriptions)?;
+        }
 
-                    // Check if signal exists in the message
-                    let signal_exists = messages.iter().any(|msg| {
-                        msg.id() == message_id && msg.signals().find(signal_name).is_some()
-                    });
-                    if !signal_exists {
-                        return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
-                    }
-                } else {
-                    // For global value descriptions (message_id is None), check if signal exists in any message
-                    let signal_exists =
-                        messages.iter().any(|msg| msg.signals().find(signal_name).is_some());
-                    if !signal_exists {
-                        return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
-                    }
-                }
-            }
+        // Validate extended multiplexing if provided
+        if let Some(ext_mux_entries) = extended_multiplexing {
+            Self::validate_extended_multiplexing(messages, ext_mux_entries)?;
         }
 
         Ok(())
     }
 
-    // Validate function for no_std mode (without value_descriptions)
-    #[cfg(not(feature = "std"))]
-    pub fn validate(nodes: &Nodes, messages: &[Message]) -> Result<()> {
-        Self::validate_common(nodes, messages)
-    }
-
-    // Common validation logic shared by both versions
+    // Common validation logic
     fn validate_common(nodes: &Nodes, messages: &[Message]) -> Result<()> {
         // Check for duplicate message IDs
         for (i, msg1) in messages.iter().enumerate() {
@@ -75,6 +47,78 @@ impl Validate {
                 let sender = msg.sender();
                 if sender != VECTOR_XXX && !nodes.contains(sender) {
                     return Err(Error::Validation(Error::SENDER_NOT_IN_NODES));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validates value descriptions reference existing messages and signals
+    fn validate_value_descriptions(
+        messages: &[Message],
+        value_descriptions: &ValueDescriptionsMap,
+    ) -> Result<()> {
+        for ((message_id_opt, signal_name), _) in value_descriptions.iter() {
+            // Check if message exists (for message-specific value descriptions)
+            if let Some(message_id) = message_id_opt {
+                let message_exists = messages.iter().any(|msg| msg.id() == message_id);
+                if !message_exists {
+                    return Err(Error::Validation(
+                        Error::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND,
+                    ));
+                }
+
+                // Check if signal exists in the message
+                let signal_exists = messages
+                    .iter()
+                    .any(|msg| msg.id() == message_id && msg.signals().find(signal_name).is_some());
+                if !signal_exists {
+                    return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
+                }
+            } else {
+                // For global value descriptions (message_id is None), check if signal exists in any message
+                let signal_exists =
+                    messages.iter().any(|msg| msg.signals().find(signal_name).is_some());
+                if !signal_exists {
+                    return Err(Error::Validation(Error::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validates extended multiplexing entries against the messages
+    fn validate_extended_multiplexing(
+        messages: &[Message],
+        ext_mux_entries: &[ExtendedMultiplexing],
+    ) -> Result<()> {
+        for ext_mux in ext_mux_entries {
+            let message_id = ext_mux.message_id();
+            let signal_name = ext_mux.signal_name();
+            let multiplexer_switch = ext_mux.multiplexer_switch();
+
+            // Find the message
+            let message = messages
+                .iter()
+                .find(|msg| msg.id() == message_id)
+                .ok_or(Error::Validation(Error::EXT_MUX_MESSAGE_NOT_FOUND))?;
+
+            // Check that the signal exists in the message
+            if message.signals().find(signal_name).is_none() {
+                return Err(Error::Validation(Error::EXT_MUX_SIGNAL_NOT_FOUND));
+            }
+
+            // Check that the multiplexer switch exists in the message
+            if message.signals().find(multiplexer_switch).is_none() {
+                return Err(Error::Validation(Error::EXT_MUX_SWITCH_NOT_FOUND));
+            }
+
+            // Validate value ranges (min <= max)
+            for (min, max) in ext_mux.value_ranges() {
+                if min > max {
+                    return Err(Error::Validation(Error::EXT_MUX_INVALID_RANGE));
                 }
             }
         }

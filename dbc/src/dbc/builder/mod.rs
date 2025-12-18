@@ -1,4 +1,7 @@
-use crate::{MessageBuilder, NodesBuilder, ValueDescriptionsBuilder, VersionBuilder};
+use crate::{
+    ExtendedMultiplexingBuilder, MessageBuilder, NodesBuilder, ValueDescriptionsBuilder,
+    VersionBuilder,
+};
 use std::collections::BTreeMap;
 
 /// Builder for constructing `Dbc` instances programmatically.
@@ -40,6 +43,7 @@ pub struct DbcBuilder {
     nodes: NodesBuilder,
     messages: Vec<MessageBuilder>,
     value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder>,
+    extended_multiplexing: Vec<ExtendedMultiplexingBuilder>,
 }
 
 // Include modules for additional functionality

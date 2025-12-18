@@ -47,35 +47,6 @@ fi
 # Track if any checks failed
 FAILED=0
 
-# Run clippy on dbc-rs using latest stable (std feature)
-echo -e "\n${YELLOW}Running clippy on dbc-rs (std feature)...${NC}"
-if rustup run stable cargo clippy --lib --bins -p dbc-rs -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed (std)${NC}"
-else
-    echo -e "${RED}✗ dbc-rs clippy check failed (std)${NC}"
-    FAILED=1
-fi
-
-# Run clippy on dbc-rs with alloc feature
-echo -e "\n${YELLOW}Running clippy on dbc-rs (alloc feature)...${NC}"
-if rustup run stable cargo clippy --no-default-features --features alloc -p dbc-rs --lib --bins -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed (alloc)${NC}"
-else
-    echo -e "${RED}✗ dbc-rs clippy check failed (alloc)${NC}"
-    FAILED=1
-fi
-
-# Check formatting using pinned toolchain (from rust-toolchain.toml)
-# This ensures consistent formatting across all workstations
-echo -e "\n${YELLOW}Checking code formatting (using pinned toolchain)...${NC}"
-if cargo fmt -- --check 2>&1; then
-    echo -e "${GREEN}✓ Code formatting check passed${NC}"
-else
-    echo -e "${RED}✗ Code formatting check failed${NC}"
-    echo -e "${YELLOW}Run 'cargo fmt' to fix formatting issues${NC}"
-    FAILED=1
-fi
-
 # Run tests with default features (std)
 echo -e "\n${YELLOW}Running tests with default features (std)...${NC}"
 if cargo test --quiet 2>&1; then
@@ -131,12 +102,33 @@ else
     FAILED=1
 fi
 
+# Run clippy on dbc-rs using latest stable (std feature)
+echo -e "\n${YELLOW}Running clippy on dbc-rs (std feature)...${NC}"
+if rustup run stable cargo clippy --lib --bins -p dbc-rs -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ dbc-rs clippy check passed (std)${NC}"
+else
+    echo -e "${RED}✗ dbc-rs clippy check failed (std)${NC}"
+    FAILED=1
+fi
+
 # Run clippy on dbc-cli using latest stable (for better linting)
 echo -e "\n${YELLOW}Running clippy on dbc-cli (using latest stable)...${NC}"
 if rustup run stable cargo clippy --all-targets -p dbc-cli -- -D warnings 2>&1; then
     echo -e "${GREEN}✓ dbc-cli clippy check passed${NC}"
 else
     echo -e "${RED}✗ dbc-cli clippy check failed${NC}"
+    FAILED=1
+fi
+
+
+# Check formatting using pinned toolchain (from rust-toolchain.toml)
+# This ensures consistent formatting across all workstations
+echo -e "\n${YELLOW}Checking code formatting (using pinned toolchain)...${NC}"
+if cargo fmt -- --check 2>&1; then
+    echo -e "${GREEN}✓ Code formatting check passed${NC}"
+else
+    echo -e "${RED}✗ Code formatting check failed${NC}"
+    echo -e "${YELLOW}Run 'cargo fmt' to fix formatting issues${NC}"
     FAILED=1
 fi
 

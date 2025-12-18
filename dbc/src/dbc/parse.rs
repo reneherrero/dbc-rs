@@ -367,16 +367,17 @@ impl Dbc {
 
         // Convert messages buffer to slice for validation and construction
         let messages_slice: &[Message] = messages_buffer.as_slice();
+        let extended_multiplexing_slice: &[ExtendedMultiplexing] =
+            extended_multiplexing_buffer.as_slice();
 
         // Validate messages (duplicate IDs, sender in nodes, etc.)
-        #[cfg(feature = "std")]
-        Validate::validate(&nodes, messages_slice, Some(&value_descriptions_map)).map_err(|e| {
-            crate::error::map_val_error(e, Error::message, || {
-                Error::message(Error::MESSAGE_ERROR_PREFIX)
-            })
-        })?;
-        #[cfg(not(feature = "std"))]
-        Validate::validate(&nodes, messages_slice).map_err(|e| {
+        Validate::validate(
+            &nodes,
+            messages_slice,
+            Some(&value_descriptions_map),
+            Some(extended_multiplexing_slice),
+        )
+        .map_err(|e| {
             crate::error::map_val_error(e, Error::message, || {
                 Error::message(Error::MESSAGE_ERROR_PREFIX)
             })

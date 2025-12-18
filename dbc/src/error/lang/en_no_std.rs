@@ -60,3 +60,17 @@ pub const MESSAGE_INVALID_DLC: &str = "Invalid DLC value";
 pub const MESSAGE_NOT_FOUND: &str = "Message ID not found in database";
 pub const PAYLOAD_LENGTH_MISMATCH: &str = "Payload length does not match message DLC";
 pub const MULTIPLEXER_SWITCH_NEGATIVE: &str = "Multiplexer switch value cannot be negative";
+
+// Value description error messages
+pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &str =
+    "Value description references non-existent message";
+pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &str =
+    "Value description references non-existent signal";
+pub const VALUE_DESCRIPTIONS_TOO_MANY: &str = "Too many value descriptions: maximum allowed is 64";
+
+// Extended multiplexing error messages
+pub const EXT_MUX_MESSAGE_NOT_FOUND: &str = "Extended multiplexing references non-existent message";
+pub const EXT_MUX_SIGNAL_NOT_FOUND: &str = "Extended multiplexing references non-existent signal";
+pub const EXT_MUX_SWITCH_NOT_FOUND: &str =
+    "Extended multiplexing references non-existent multiplexer switch signal";
+pub const EXT_MUX_INVALID_RANGE: &str = "Extended multiplexing has invalid value range (min > max)";

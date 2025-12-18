@@ -144,6 +144,37 @@ impl Dbc {
         self.value_descriptions.for_signal(message_id, signal_name)
     }
 
+    /// Get all extended multiplexing entries
+    ///
+    /// Returns a reference to all extended multiplexing (SG_MUL_VAL_) entries
+    /// in the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 500 MuxMessage : 8 ECM
+    ///  SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
+    ///  SG_ Signal_A m0 : 16|16@1+ (0.1,0) [0|100] ""
+    ///
+    /// SG_MUL_VAL_ 500 Signal_A Mux1 0-5 ;
+    /// "#)?;
+    ///
+    /// let ext_mux = dbc.extended_multiplexing();
+    /// assert_eq!(ext_mux.len(), 1);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn extended_multiplexing(&self) -> &[ExtendedMultiplexing] {
+        self.extended_multiplexing.as_slice()
+    }
+
     /// Get extended multiplexing entries for a specific message
     ///
     /// Extended multiplexing (SG_MUL_VAL_) entries define which multiplexer switch values

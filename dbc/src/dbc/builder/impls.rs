@@ -1,7 +1,7 @@
 use super::DbcBuilder;
 use crate::{
-    Dbc, MessageBuilder, NodesBuilder, Receivers, ReceiversBuilder, SignalBuilder,
-    ValueDescriptionsBuilder, VersionBuilder,
+    Dbc, ExtendedMultiplexingBuilder, MessageBuilder, NodesBuilder, Receivers, ReceiversBuilder,
+    SignalBuilder, ValueDescriptionsBuilder, VersionBuilder,
 };
 use std::collections::BTreeMap;
 
@@ -133,11 +133,31 @@ impl DbcBuilder {
             value_descriptions.insert((message_id, signal_name.to_string()), builder);
         }
 
+        // Convert extended multiplexing entries to builders
+        let extended_multiplexing: Vec<ExtendedMultiplexingBuilder> = dbc
+            .extended_multiplexing()
+            .iter()
+            .map(|ext_mux| {
+                let mut builder = ExtendedMultiplexingBuilder::new()
+                    .message_id(ext_mux.message_id())
+                    .signal_name(ext_mux.signal_name())
+                    .multiplexer_switch(ext_mux.multiplexer_switch());
+
+                // Add all value ranges
+                for (min, max) in ext_mux.value_ranges() {
+                    builder = builder.add_value_range(*min, *max);
+                }
+
+                builder
+            })
+            .collect();
+
         Self {
             version,
             nodes,
             messages,
             value_descriptions,
+            extended_multiplexing,
         }
     }
 }
@@ -145,7 +165,7 @@ impl DbcBuilder {
 #[cfg(test)]
 mod tests {
     use super::DbcBuilder;
-    use crate::{Dbc, MessageBuilder};
+    use crate::{Dbc, ExtendedMultiplexingBuilder, MessageBuilder};
 
     #[test]
     fn test_dbc_builder_from_dbc() {
@@ -203,5 +223,52 @@ BU_:
         assert!(modified_dbc.nodes().is_empty());
         // New message is added
         assert_eq!(modified_dbc.messages().len(), 1);
+    }
+
+    #[test]
+    fn test_dbc_builder_from_dbc_with_extended_multiplexing() {
+        // Parse a DBC with extended multiplexing
+        let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 500 MuxMessage : 8 ECM
+ SG_ Mux1 M : 0|8@1+ (1,0) [0|255] ""
+ SG_ SignalA m0 : 16|16@1+ (0.1,0) [0|100] ""
+
+SG_MUL_VAL_ 500 SignalA Mux1 0-5,10-15 ;
+"#;
+        let original_dbc = Dbc::parse(dbc_content).unwrap();
+
+        // Verify original has extended multiplexing
+        assert_eq!(original_dbc.extended_multiplexing().len(), 1);
+
+        // Create builder from existing DBC and modify it
+        let modified_dbc = DbcBuilder::from_dbc(&original_dbc)
+            .add_extended_multiplexing(
+                ExtendedMultiplexingBuilder::new()
+                    .message_id(500)
+                    .signal_name("SignalA")
+                    .multiplexer_switch("Mux1")
+                    .add_value_range(20, 25),
+            )
+            .build()
+            .unwrap();
+
+        // Verify extended multiplexing is preserved and new one added
+        assert_eq!(modified_dbc.extended_multiplexing().len(), 2);
+
+        // Check original entry
+        let original_entry = &modified_dbc.extended_multiplexing()[0];
+        assert_eq!(original_entry.signal_name(), "SignalA");
+        assert_eq!(original_entry.value_ranges().len(), 2);
+        assert_eq!(original_entry.value_ranges()[0], (0, 5));
+        assert_eq!(original_entry.value_ranges()[1], (10, 15));
+
+        // Check new entry
+        let new_entry = &modified_dbc.extended_multiplexing()[1];
+        assert_eq!(new_entry.signal_name(), "SignalA");
+        assert_eq!(new_entry.value_ranges().len(), 1);
+        assert_eq!(new_entry.value_ranges()[0], (20, 25));
     }
 }

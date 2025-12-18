@@ -135,14 +135,19 @@ impl Error {
     pub const MULTIPLEXER_SWITCH_NEGATIVE: &'static str = lang::MULTIPLEXER_SWITCH_NEGATIVE;
     #[cfg(feature = "std")]
     pub const RECEIVERS_DUPLICATE_NAME: &'static str = lang::RECEIVERS_DUPLICATE_NAME;
-    #[cfg(feature = "std")]
+
+    // Value description error constants (no_std)
     pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &'static str =
         lang::VALUE_DESCRIPTION_MESSAGE_NOT_FOUND;
-    #[cfg(feature = "std")]
     pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &'static str =
         lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND;
-    #[cfg(feature = "std")]
     pub const VALUE_DESCRIPTIONS_TOO_MANY: &'static str = lang::VALUE_DESCRIPTIONS_TOO_MANY;
+
+    // Extended multiplexing error constants (no_std)
+    pub const EXT_MUX_MESSAGE_NOT_FOUND: &'static str = lang::EXT_MUX_MESSAGE_NOT_FOUND;
+    pub const EXT_MUX_SIGNAL_NOT_FOUND: &'static str = lang::EXT_MUX_SIGNAL_NOT_FOUND;
+    pub const EXT_MUX_SWITCH_NOT_FOUND: &'static str = lang::EXT_MUX_SWITCH_NOT_FOUND;
+    pub const EXT_MUX_INVALID_RANGE: &'static str = lang::EXT_MUX_INVALID_RANGE;
 }
 
 /// Result type alias for operations that can return an `Error`.

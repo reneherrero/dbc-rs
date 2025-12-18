@@ -1,5 +1,8 @@
 use super::DbcBuilder;
-use crate::{MessageBuilder, NodesBuilder, VersionBuilder};
+use crate::{
+    ExtendedMultiplexingBuilder, MessageBuilder, NodesBuilder, ValueDescriptionsBuilder,
+    VersionBuilder,
+};
 
 impl DbcBuilder {
     /// Sets the version for the DBC file.
@@ -93,6 +96,166 @@ impl DbcBuilder {
     #[must_use = "builder method returns modified builder"]
     pub fn clear_messages(mut self) -> Self {
         self.messages.clear();
+        self
+    }
+
+    /// Adds value descriptions for a signal in a message.
+    ///
+    /// Value descriptions (VAL_) map numeric signal values to human-readable text.
+    ///
+    /// # Arguments
+    ///
+    /// * `message_id` - The CAN message ID containing the signal
+    /// * `signal_name` - The name of the signal
+    /// * `value_descriptions` - The value descriptions builder
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, ValueDescriptionsBuilder};
+    ///
+    /// let value_desc = ValueDescriptionsBuilder::new()
+    ///     .add_entry(0, "Park")
+    ///     .add_entry(1, "Drive");
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .add_value_description(256, "Gear", value_desc);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn add_value_description(
+        mut self,
+        message_id: u32,
+        signal_name: impl AsRef<str>,
+        value_descriptions: ValueDescriptionsBuilder,
+    ) -> Self {
+        self.value_descriptions.insert(
+            (Some(message_id), signal_name.as_ref().to_string()),
+            value_descriptions,
+        );
+        self
+    }
+
+    /// Adds global value descriptions for a signal (applies to all messages with this signal).
+    ///
+    /// Global value descriptions (VAL_ with message_id -1) apply to signals with the given
+    /// name in any message.
+    ///
+    /// # Arguments
+    ///
+    /// * `signal_name` - The name of the signal
+    /// * `value_descriptions` - The value descriptions builder
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, ValueDescriptionsBuilder};
+    ///
+    /// let value_desc = ValueDescriptionsBuilder::new()
+    ///     .add_entry(0, "Off")
+    ///     .add_entry(1, "On");
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .add_global_value_description("Status", value_desc);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn add_global_value_description(
+        mut self,
+        signal_name: impl AsRef<str>,
+        value_descriptions: ValueDescriptionsBuilder,
+    ) -> Self {
+        self.value_descriptions
+            .insert((None, signal_name.as_ref().to_string()), value_descriptions);
+        self
+    }
+
+    /// Clears all value descriptions from the builder.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DbcBuilder;
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .clear_value_descriptions();
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn clear_value_descriptions(mut self) -> Self {
+        self.value_descriptions.clear();
+        self
+    }
+
+    /// Adds an extended multiplexing entry to the DBC file.
+    ///
+    /// Extended multiplexing (SG_MUL_VAL_) entries define which multiplexer switch
+    /// values activate specific multiplexed signals, allowing for range-based activation.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, ExtendedMultiplexingBuilder};
+    ///
+    /// let ext_mux = ExtendedMultiplexingBuilder::new()
+    ///     .message_id(500)
+    ///     .signal_name("Signal_A")
+    ///     .multiplexer_switch("Mux1")
+    ///     .add_value_range(0, 5);
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .add_extended_multiplexing(ext_mux);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn add_extended_multiplexing(mut self, ext_mux: ExtendedMultiplexingBuilder) -> Self {
+        self.extended_multiplexing.push(ext_mux);
+        self
+    }
+
+    /// Adds multiple extended multiplexing entries to the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, ExtendedMultiplexingBuilder};
+    ///
+    /// let ext_mux1 = ExtendedMultiplexingBuilder::new()
+    ///     .message_id(500)
+    ///     .signal_name("Signal_A")
+    ///     .multiplexer_switch("Mux1")
+    ///     .add_value_range(0, 5);
+    /// let ext_mux2 = ExtendedMultiplexingBuilder::new()
+    ///     .message_id(500)
+    ///     .signal_name("Signal_B")
+    ///     .multiplexer_switch("Mux1")
+    ///     .add_value_range(10, 15);
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .add_extended_multiplexings(vec![ext_mux1, ext_mux2]);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn add_extended_multiplexings(
+        mut self,
+        ext_muxes: impl IntoIterator<Item = ExtendedMultiplexingBuilder>,
+    ) -> Self {
+        self.extended_multiplexing.extend(ext_muxes);
+        self
+    }
+
+    /// Clears all extended multiplexing entries from the builder.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DbcBuilder;
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .clear_extended_multiplexing();
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn clear_extended_multiplexing(mut self) -> Self {
+        self.extended_multiplexing.clear();
         self
     }
 }
