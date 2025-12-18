@@ -49,4 +49,3 @@ pub struct DbcBuilder {
 // Include modules for additional functionality
 mod build;
 mod impls;
-mod methods;

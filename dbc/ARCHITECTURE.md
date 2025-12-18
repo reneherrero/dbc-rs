@@ -88,13 +88,16 @@ entity/
 ├── std.rs          # std only features
 ├── validate.rs     # Validation rules [if applicable]
 └── builder/        # EntityBuilder [std only]
-    └── mod.rs
+    ├── mod.rs      # Builder struct definition
+    ├── impls.rs    # Constructor (new), Default impl, and builder methods
+    └── build.rs    # build() method and validation
 ```
 
 This pattern provides:
 - **Separation of concerns** - Each file has a single responsibility
 - **Feature isolation** - `std`-only code lives in dedicated files
 - **Consistent navigation** - Same structure across all entities
+- **Clear builder phases** - Construction/configuration in impls.rs, finalization in build.rs
 
 ## Compatibility Layer (`compat/`)
 

@@ -49,8 +49,13 @@ mod signal;
 mod value_descriptions;
 mod version;
 
+// Builder infrastructure
+// Note: Macros are available in all configurations since they're compile-time only
+// and have no runtime dependencies. Builders themselves are std-only.
+mod macros;
+
 pub use byte_order::ByteOrder;
-pub use dbc::Dbc;
+pub use dbc::{Dbc, DecodedSignal};
 pub use error::{Error, Result};
 pub use extended_multiplexing::ExtendedMultiplexing;
 pub use message::{Message, Signals};

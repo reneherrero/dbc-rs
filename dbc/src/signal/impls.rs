@@ -41,66 +41,214 @@ impl Signal {
         }
     }
 
+    /// Returns the signal name.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (1,0) [0|0] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.name(), "SIGNAL_NAME");
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
 
+    /// Returns the start bit position of the signal in the CAN message payload.
+    ///
+    /// The start bit indicates where the signal begins in the message data.
+    /// For little-endian signals, this is the LSB position. For big-endian signals, this is the MSB position.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 16|8@1+ (1,0) [0|0] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.start_bit(), 16);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn start_bit(&self) -> u16 {
         self.start_bit
     }
 
+    /// Returns the length of the signal in bits.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|16@1+ (1,0) [0|0] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.length(), 16);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn length(&self) -> u16 {
         self.length
     }
 
+    /// Returns the byte order (endianness) of the signal.
+    ///
+    /// Returns either [`ByteOrder::LittleEndian`] (Intel format, `@1+`) or [`ByteOrder::BigEndian`] (Motorola format, `@0+`).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::{Dbc, ByteOrder};
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (1,0) [0|0] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.byte_order(), ByteOrder::LittleEndian);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn byte_order(&self) -> ByteOrder {
         self.byte_order
     }
 
+    /// Returns `true` if the signal is unsigned, `false` if signed.
+    ///
+    /// In DBC format, `+` indicates unsigned and `-` indicates signed.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (1,0) [0|0] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.is_unsigned(), true);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn is_unsigned(&self) -> bool {
         self.unsigned
     }
 
+    /// Returns the scaling factor applied to convert raw signal values to physical values.
+    ///
+    /// The physical value is calculated as: `physical_value = raw_value * factor + offset`
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (0.5,0) [0|0] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.factor(), 0.5);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn factor(&self) -> f64 {
         self.factor
     }
 
+    /// Returns the offset applied to convert raw signal values to physical values.
+    ///
+    /// The physical value is calculated as: `physical_value = raw_value * factor + offset`
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (1,-40) [0|0] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.offset(), -40.0);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn offset(&self) -> f64 {
         self.offset
     }
 
+    /// Returns the minimum physical value for this signal.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (1,0) [-40|85] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.min(), -40.0);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn min(&self) -> f64 {
         self.min
     }
 
+    /// Returns the maximum physical value for this signal.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (1,0) [-40|85] \"\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.max(), 85.0);
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn max(&self) -> f64 {
         self.max
     }
 
+    /// Returns the unit of measurement for this signal, if specified.
+    ///
+    /// Returns `None` if no unit was defined in the DBC file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU\n SG_ SIGNAL_NAME : 0|8@1+ (1,0) [0|0] \"km/h\" ECU\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.unit(), Some("km/h"));
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn unit(&self) -> Option<&str> {
         self.unit.as_ref().map(|u| u.as_ref())
     }
 
+    /// Returns the receivers (ECU nodes) that subscribe to this signal.
+    ///
+    /// Returns a reference to a [`Receivers`] enum which can be either a list of node names or `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # use dbc_rs::Dbc;
+    /// # let dbc_content = "VERSION \"1.0\"\nBO_ 500 MSG_NAME: 8 ECU1\n SG_ SIGNAL_NAME : 0|8@1+ (1,0) [0|0] \"\" ECU2,ECU3\n";
+    /// # let dbc = Dbc::parse(dbc_content).unwrap();
+    /// let message = dbc.messages().find("MSG_NAME").unwrap();
+    /// let signal = message.signals().find("SIGNAL_NAME").unwrap();
+    /// assert_eq!(signal.receivers().len(), 2);
+    /// assert!(signal.receivers().contains("ECU2"));
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn receivers(&self) -> &Receivers {

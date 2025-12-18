@@ -67,6 +67,7 @@ pub const VALUE_DESCRIPTION_MESSAGE_NOT_FOUND: &str =
 pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &str =
     "Value description references non-existent signal";
 pub const VALUE_DESCRIPTIONS_TOO_MANY: &str = "Too many value descriptions: maximum allowed is 64";
+pub const VALUE_DESCRIPTIONS_EMPTY: &str = "Value descriptions cannot be empty";
 
 // Extended multiplexing error messages
 pub const EXT_MUX_MESSAGE_NOT_FOUND: &str = "Extended multiplexing references non-existent message";

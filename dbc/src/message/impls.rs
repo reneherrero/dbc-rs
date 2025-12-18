@@ -97,7 +97,30 @@ impl Message {
         self.sender.as_str()
     }
 
-    /// Get a reference to the signals collection
+    /// Returns a reference to the signals collection for this message.
+    ///
+    /// The [`Signals`] collection provides methods to iterate, search, and access signals by index.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" ECM
+    ///  SG_ Torque : 16|16@1+ (0.1,0) [0|500] "Nm" ECM
+    /// "#)?;
+    ///
+    /// let message = dbc.messages().find("Engine").unwrap();
+    /// let signals = message.signals();
+    /// assert_eq!(signals.len(), 2);
+    /// assert!(signals.find("RPM").is_some());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
     #[inline]
     #[must_use = "return value should be used"]
     pub fn signals(&self) -> &Signals {

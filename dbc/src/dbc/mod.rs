@@ -22,14 +22,12 @@ mod std;
 mod validate;
 
 // Re-exports
-use messages::Messages;
-
-use value_descriptions_map::ValueDescriptionsMap;
-
 #[cfg(feature = "std")]
 pub use builder::DbcBuilder;
-
+pub use decode::DecodedSignal;
+use messages::Messages;
 use validate::Validate;
+use value_descriptions_map::ValueDescriptionsMap;
 
 /// Represents a complete DBC (CAN database) file.
 ///

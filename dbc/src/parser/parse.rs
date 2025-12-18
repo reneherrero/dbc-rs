@@ -284,3 +284,287 @@ impl<'a> Parser<'a> {
         self.parse_u8().map_err(|_| map_error().with_line(line))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_u8_valid() {
+        let mut parser = Parser::new(b"123 ").unwrap();
+        assert_eq!(parser.parse_u8().unwrap(), 123);
+    }
+
+    #[test]
+    fn test_parse_u8_zero() {
+        let mut parser = Parser::new(b"0 ").unwrap();
+        assert_eq!(parser.parse_u8().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_parse_u8_max() {
+        let mut parser = Parser::new(b"255 ").unwrap();
+        assert_eq!(parser.parse_u8().unwrap(), 255);
+    }
+
+    #[test]
+    fn test_parse_u8_overflow() {
+        let mut parser = Parser::new(b"256 ").unwrap();
+        assert!(parser.parse_u8().is_err());
+    }
+
+    #[test]
+    fn test_parse_u8_empty() {
+        let mut parser = Parser::new(b" ").unwrap();
+        assert!(parser.parse_u8().is_err());
+    }
+
+    #[test]
+    fn test_parse_u8_invalid_char() {
+        let mut parser = Parser::new(b"12a ").unwrap();
+        assert!(parser.parse_u8().is_err());
+    }
+
+    #[test]
+    fn test_parse_u32_valid() {
+        let mut parser = Parser::new(b"12345 ").unwrap();
+        assert_eq!(parser.parse_u32().unwrap(), 12345);
+    }
+
+    #[test]
+    fn test_parse_u32_zero() {
+        let mut parser = Parser::new(b"0 ").unwrap();
+        assert_eq!(parser.parse_u32().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_parse_u32_max() {
+        let mut parser = Parser::new(b"4294967295 ").unwrap();
+        assert_eq!(parser.parse_u32().unwrap(), u32::MAX);
+    }
+
+    #[test]
+    fn test_parse_u32_with_colon_delimiter() {
+        let mut parser = Parser::new(b"256:").unwrap();
+        assert_eq!(parser.parse_u32().unwrap(), 256);
+    }
+
+    #[test]
+    fn test_parse_u32_with_pipe_delimiter() {
+        let mut parser = Parser::new(b"16|").unwrap();
+        assert_eq!(parser.parse_u32().unwrap(), 16);
+    }
+
+    #[test]
+    fn test_parse_u32_empty() {
+        let mut parser = Parser::new(b" ").unwrap();
+        assert!(parser.parse_u32().is_err());
+    }
+
+    #[test]
+    fn test_parse_u64_valid() {
+        let mut parser = Parser::new(b"18446744073709551615 ").unwrap();
+        assert_eq!(parser.parse_u64().unwrap(), u64::MAX);
+    }
+
+    #[test]
+    fn test_parse_i64_positive() {
+        let mut parser = Parser::new(b"12345 ").unwrap();
+        assert_eq!(parser.parse_i64().unwrap(), 12345);
+    }
+
+    #[test]
+    fn test_parse_i64_negative() {
+        let mut parser = Parser::new(b"-12345 ").unwrap();
+        assert_eq!(parser.parse_i64().unwrap(), -12345);
+    }
+
+    #[test]
+    fn test_parse_i64_zero() {
+        let mut parser = Parser::new(b"0 ").unwrap();
+        assert_eq!(parser.parse_i64().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_parse_i64_with_semicolon() {
+        let mut parser = Parser::new(b"-1;").unwrap();
+        assert_eq!(parser.parse_i64().unwrap(), -1);
+    }
+
+    #[test]
+    fn test_parse_i64_empty() {
+        let mut parser = Parser::new(b" ").unwrap();
+        assert!(parser.parse_i64().is_err());
+    }
+
+    #[test]
+    fn test_parse_i64_sign_only() {
+        let mut parser = Parser::new(b"- ").unwrap();
+        assert!(parser.parse_i64().is_err());
+    }
+
+    #[test]
+    fn test_parse_f64_integer() {
+        let mut parser = Parser::new(b"123 ").unwrap();
+        assert_eq!(parser.parse_f64().unwrap(), 123.0);
+    }
+
+    #[test]
+    fn test_parse_f64_decimal() {
+        let mut parser = Parser::new(b"123.456 ").unwrap();
+        assert!((parser.parse_f64().unwrap() - 123.456).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_f64_negative() {
+        let mut parser = Parser::new(b"-123.456 ").unwrap();
+        assert!((parser.parse_f64().unwrap() - (-123.456)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_f64_positive_sign() {
+        let mut parser = Parser::new(b"+123.456 ").unwrap();
+        assert!((parser.parse_f64().unwrap() - 123.456).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_f64_scientific() {
+        let mut parser = Parser::new(b"1.5e10 ").unwrap();
+        assert!((parser.parse_f64().unwrap() - 1.5e10).abs() < 1e5);
+    }
+
+    #[test]
+    fn test_parse_f64_scientific_negative_exponent() {
+        let mut parser = Parser::new(b"1.5E-5 ").unwrap();
+        assert!((parser.parse_f64().unwrap() - 1.5e-5).abs() < 1e-15);
+    }
+
+    #[test]
+    fn test_parse_f64_scientific_positive_exponent() {
+        let mut parser = Parser::new(b"1.5e+3 ").unwrap();
+        assert!((parser.parse_f64().unwrap() - 1500.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_f64_empty() {
+        let mut parser = Parser::new(b" ").unwrap();
+        assert!(parser.parse_f64().is_err());
+    }
+
+    #[test]
+    fn test_parse_f64_with_comma_delimiter() {
+        let mut parser = Parser::new(b"123.5,").unwrap();
+        assert!((parser.parse_f64().unwrap() - 123.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_f64_with_paren_delimiter() {
+        let mut parser = Parser::new(b"1.0)").unwrap();
+        assert!((parser.parse_f64().unwrap() - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_f64_with_bracket_delimiter() {
+        let mut parser = Parser::new(b"0.25]").unwrap();
+        assert!((parser.parse_f64().unwrap() - 0.25).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_identifier_simple() {
+        let mut parser = Parser::new(b"TestSignal ").unwrap();
+        assert_eq!(parser.parse_identifier().unwrap(), "TestSignal");
+    }
+
+    #[test]
+    fn test_parse_identifier_underscore_start() {
+        let mut parser = Parser::new(b"_PrivateSignal ").unwrap();
+        assert_eq!(parser.parse_identifier().unwrap(), "_PrivateSignal");
+    }
+
+    #[test]
+    fn test_parse_identifier_with_numbers() {
+        let mut parser = Parser::new(b"Signal_123 ").unwrap();
+        assert_eq!(parser.parse_identifier().unwrap(), "Signal_123");
+    }
+
+    #[test]
+    fn test_parse_identifier_with_colon_delimiter() {
+        let mut parser = Parser::new(b"Signal:").unwrap();
+        assert_eq!(parser.parse_identifier().unwrap(), "Signal");
+    }
+
+    #[test]
+    fn test_parse_identifier_with_comma_delimiter() {
+        let mut parser = Parser::new(b"Receiver1,Receiver2").unwrap();
+        assert_eq!(parser.parse_identifier().unwrap(), "Receiver1");
+    }
+
+    #[test]
+    fn test_parse_identifier_number_start() {
+        let mut parser = Parser::new(b"123Signal ").unwrap();
+        assert!(parser.parse_identifier().is_err());
+    }
+
+    #[test]
+    fn test_parse_identifier_empty() {
+        let mut parser = Parser::new(b" ").unwrap();
+        assert!(parser.parse_identifier().is_err());
+    }
+
+    #[test]
+    fn test_parse_f64_or_default_with_value() {
+        let mut parser = Parser::new(b"123.5 ").unwrap();
+        assert!((parser.parse_f64_or_default(0.0).unwrap() - 123.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_f64_or_default_empty() {
+        let mut parser = Parser::new(b" ").unwrap();
+        assert_eq!(parser.parse_f64_or_default(42.0).unwrap(), 42.0);
+    }
+
+    #[test]
+    fn test_parse_identifier_with_error() {
+        let mut parser = Parser::new(b"ValidName ").unwrap();
+        let result = parser.parse_identifier_with_error(|| Error::signal(Error::SIGNAL_NAME_EMPTY));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "ValidName");
+    }
+
+    #[test]
+    fn test_parse_identifier_with_error_invalid() {
+        let mut parser = Parser::new(b"123Invalid ").unwrap();
+        let result = parser.parse_identifier_with_error(|| Error::signal(Error::SIGNAL_NAME_EMPTY));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_u32_with_error() {
+        let mut parser = Parser::new(b"256 ").unwrap();
+        let result = parser.parse_u32_with_error(|| Error::message(Error::MESSAGE_INVALID_ID));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 256);
+    }
+
+    #[test]
+    fn test_parse_u32_with_error_invalid() {
+        let mut parser = Parser::new(b"abc ").unwrap();
+        let result = parser.parse_u32_with_error(|| Error::message(Error::MESSAGE_INVALID_ID));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_u8_with_error() {
+        let mut parser = Parser::new(b"8 ").unwrap();
+        let result = parser.parse_u8_with_error(|| Error::message(Error::MESSAGE_INVALID_DLC));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 8);
+    }
+
+    #[test]
+    fn test_parse_u8_with_error_invalid() {
+        let mut parser = Parser::new(b"abc ").unwrap();
+        let result = parser.parse_u8_with_error(|| Error::message(Error::MESSAGE_INVALID_DLC));
+        assert!(result.is_err());
+    }
+}

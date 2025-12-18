@@ -142,6 +142,7 @@ impl Error {
     pub const VALUE_DESCRIPTION_SIGNAL_NOT_FOUND: &'static str =
         lang::VALUE_DESCRIPTION_SIGNAL_NOT_FOUND;
     pub const VALUE_DESCRIPTIONS_TOO_MANY: &'static str = lang::VALUE_DESCRIPTIONS_TOO_MANY;
+    pub const VALUE_DESCRIPTIONS_EMPTY: &'static str = lang::VALUE_DESCRIPTIONS_EMPTY;
 
     // Extended multiplexing error constants (no_std)
     pub const EXT_MUX_MESSAGE_NOT_FOUND: &'static str = lang::EXT_MUX_MESSAGE_NOT_FOUND;

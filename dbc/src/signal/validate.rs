@@ -33,3 +33,75 @@ impl Signal {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_valid_signal() {
+        let result = Signal::validate("ValidSignal", 8, 0.0, 255.0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_empty_name() {
+        let result = Signal::validate("", 8, 0.0, 255.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_whitespace_name() {
+        let result = Signal::validate("   ", 8, 0.0, 255.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_zero_length() {
+        let result = Signal::validate("Signal", 0, 0.0, 255.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_length_one() {
+        let result = Signal::validate("Signal", 1, 0.0, 1.0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_length_max() {
+        // CAN FD maximum is 512 bits
+        let result = Signal::validate("Signal", 512, 0.0, 1000.0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_length_too_large() {
+        let result = Signal::validate("Signal", 513, 0.0, 1000.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_min_equals_max() {
+        let result = Signal::validate("Signal", 8, 100.0, 100.0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_min_greater_than_max() {
+        let result = Signal::validate("Signal", 8, 200.0, 100.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_negative_range() {
+        let result = Signal::validate("Signal", 8, -100.0, -50.0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_spanning_zero_range() {
+        let result = Signal::validate("Signal", 16, -1000.0, 1000.0);
+        assert!(result.is_ok());
+    }
+}

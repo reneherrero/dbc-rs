@@ -16,7 +16,24 @@ pub struct DecodedSignal<'a> {
 }
 
 impl<'a> DecodedSignal<'a> {
-    /// Creates a new `DecodedSignal`.
+    /// Creates a new `DecodedSignal` with the given name, value, and unit.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The signal name
+    /// * `value` - The decoded physical value (after applying factor and offset)
+    /// * `unit` - The optional unit of measurement (e.g., "rpm", "km/h")
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DecodedSignal;
+    ///
+    /// let signal = DecodedSignal::new("EngineSpeed", 2500.0, Some("rpm"));
+    /// assert_eq!(signal.name, "EngineSpeed");
+    /// assert_eq!(signal.value, 2500.0);
+    /// assert_eq!(signal.unit, Some("rpm"));
+    /// ```
     #[inline]
     pub fn new(name: &'a str, value: f64, unit: Option<&'a str>) -> Self {
         Self { name, value, unit }
