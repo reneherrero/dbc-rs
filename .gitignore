@@ -3,6 +3,7 @@
 Cargo.lock
 *.pdb
 rust_out
+.claude/
 
 # Coverage artifacts
 llvm-cov-# Rust build artifacts

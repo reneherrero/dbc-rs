@@ -4,7 +4,7 @@ use embedded_can::{Frame, Id};
 
 /// A decoded signal from a CAN message.
 ///
-/// Contains the signal name, its decoded physical value, and the optional unit.
+/// Contains the signal name, its decoded physical value, unit, and optional value description.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DecodedSignal<'a> {
     /// The name of the signal as defined in the DBC file.
@@ -13,30 +13,44 @@ pub struct DecodedSignal<'a> {
     pub value: f64,
     /// The unit of the signal (e.g., "rpm", "°C"), if defined.
     pub unit: Option<&'a str>,
+    /// The value description text if defined in the DBC file (e.g., "Park", "Drive").
+    /// This maps the raw signal value to a human-readable description.
+    pub description: Option<&'a str>,
 }
 
 impl<'a> DecodedSignal<'a> {
-    /// Creates a new `DecodedSignal` with the given name, value, and unit.
+    /// Creates a new `DecodedSignal` with the given name, value, unit, and description.
     ///
     /// # Arguments
     ///
     /// * `name` - The signal name
     /// * `value` - The decoded physical value (after applying factor and offset)
     /// * `unit` - The optional unit of measurement (e.g., "rpm", "km/h")
+    /// * `description` - The optional value description text (e.g., "Park", "Drive")
     ///
     /// # Examples
     ///
     /// ```rust,no_run
     /// use dbc_rs::DecodedSignal;
     ///
-    /// let signal = DecodedSignal::new("EngineSpeed", 2500.0, Some("rpm"));
-    /// assert_eq!(signal.name, "EngineSpeed");
-    /// assert_eq!(signal.value, 2500.0);
-    /// assert_eq!(signal.unit, Some("rpm"));
+    /// let signal = DecodedSignal::new("Gear", 3.0, Some(""), Some("Drive"));
+    /// assert_eq!(signal.name, "Gear");
+    /// assert_eq!(signal.value, 3.0);
+    /// assert_eq!(signal.description, Some("Drive"));
     /// ```
     #[inline]
-    pub fn new(name: &'a str, value: f64, unit: Option<&'a str>) -> Self {
-        Self { name, value, unit }
+    pub fn new(
+        name: &'a str,
+        value: f64,
+        unit: Option<&'a str>,
+        description: Option<&'a str>,
+    ) -> Self {
+        Self {
+            name,
+            value,
+            unit,
+            description,
+        }
     }
 }
 
@@ -184,8 +198,14 @@ impl Dbc {
         let signals = message.signals();
 
         // Check once if this message has ANY extended multiplexing
-        // This avoids per-signal index lookups when extended mux isn't used
-        let message_has_extended_mux = self.has_extended_multiplexing_for_message(id);
+        // Fast path: skip if DBC has no extended multiplexing at all (O(1) check)
+        // Slow path: check if this specific message has entries (O(m) where m = unique message IDs)
+        let message_has_extended_mux = !self.extended_multiplexing.is_empty()
+            && self.has_extended_multiplexing_for_message(id);
+
+        // Check once if DBC has ANY value descriptions - skip all lookups if empty (common case)
+        // This avoids O(n) linear scans per signal when no value descriptions exist
+        let has_any_value_descriptions = !self.value_descriptions.is_empty();
 
         // PASS 1: Decode multiplexer switches first (needed before multiplexed signals)
         // This is necessary because multiplexed signals depend on switch values
@@ -202,12 +222,21 @@ impl Dbc {
                 // Store switch value for later multiplexing checks
                 switch_values.push(signal.name(), raw_value as u64)?;
 
+                // Lookup value description only if any exist (skip O(n) scan otherwise)
+                let description = if has_any_value_descriptions {
+                    self.value_descriptions_for_signal(id, signal.name())
+                        .and_then(|vd| vd.get(raw_value as u64))
+                } else {
+                    None
+                };
+
                 // Add to decoded signals
                 decoded_signals
                     .push(DecodedSignal::new(
                         signal.name(),
                         physical_value,
                         signal.unit(),
+                        description,
                     ))
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
             }
@@ -240,9 +269,24 @@ impl Dbc {
             };
 
             if should_decode {
-                let value = signal.decode(payload)?;
+                // decode_raw() returns (raw_value, physical_value) in one pass
+                let (raw_value, physical_value) = signal.decode_raw(payload)?;
+
+                // Lookup value description only if any exist (skip O(n) scan otherwise)
+                let description = if has_any_value_descriptions {
+                    self.value_descriptions_for_signal(id, signal.name())
+                        .and_then(|vd| vd.get(raw_value as u64))
+                } else {
+                    None
+                };
+
                 decoded_signals
-                    .push(DecodedSignal::new(signal.name(), value, signal.unit()))
+                    .push(DecodedSignal::new(
+                        signal.name(),
+                        physical_value,
+                        signal.unit(),
+                        description,
+                    ))
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
             }
         }
@@ -326,7 +370,7 @@ impl Dbc {
     }
 
     /// Check if any extended multiplexing entries exist for a message.
-    /// This is a fast check to avoid per-signal lookups.
+    /// O(n) scan over extended multiplexing entries.
     #[inline]
     fn has_extended_multiplexing_for_message(&self, message_id: u32) -> bool {
         self.extended_multiplexing
@@ -1049,6 +1093,133 @@ BO_ 2147483904 ExtendedMsg : 8 ECM
         assert_eq!(decoded_ext.len(), 1);
         assert_eq!(decoded_ext[0].name, "ExtSignal");
         assert_eq!(decoded_ext[0].value, 200.0); // factor 2
+    }
+
+    #[test]
+    fn test_decode_with_value_descriptions() {
+        // Test that value descriptions are included in decoded signals
+        // Reference: SPECIFICATIONS.md Section 18.2 and 18.3
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 200 GearboxData : 4 ECM
+ SG_ GearActual : 0|8@1+ (1,0) [0|5] "" *
+
+VAL_ 200 GearActual 0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive" 4 "Sport" 5 "Manual" ;
+"#,
+        )
+        .unwrap();
+
+        // Test Gear = 0 (Park)
+        let payload = [0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(200, &payload, false).unwrap();
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].name, "GearActual");
+        assert_eq!(decoded[0].value, 0.0);
+        assert_eq!(decoded[0].description, Some("Park"));
+
+        // Test Gear = 3 (Drive)
+        let payload = [0x03, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(200, &payload, false).unwrap();
+        assert_eq!(decoded[0].value, 3.0);
+        assert_eq!(decoded[0].description, Some("Drive"));
+
+        // Test Gear = 5 (Manual)
+        let payload = [0x05, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(200, &payload, false).unwrap();
+        assert_eq!(decoded[0].value, 5.0);
+        assert_eq!(decoded[0].description, Some("Manual"));
+    }
+
+    #[test]
+    fn test_decode_without_value_descriptions() {
+        // Test that signals without value descriptions have None
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+"#,
+        )
+        .unwrap();
+
+        let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(256, &payload, false).unwrap();
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].name, "RPM");
+        assert_eq!(decoded[0].value, 2000.0);
+        assert_eq!(decoded[0].unit, Some("rpm"));
+        assert_eq!(decoded[0].description, None);
+    }
+
+    #[test]
+    fn test_decode_value_description_not_found() {
+        // Test that values not in the description table return None
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 200 GearboxData : 4 ECM
+ SG_ GearActual : 0|8@1+ (1,0) [0|255] "" *
+
+VAL_ 200 GearActual 0 "Park" 1 "Reverse" 2 "Neutral" ;
+"#,
+        )
+        .unwrap();
+
+        // Test Gear = 10 (not in description table)
+        let payload = [0x0A, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(200, &payload, false).unwrap();
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].value, 10.0);
+        assert_eq!(decoded[0].description, None); // Value 10 not in table
+    }
+
+    #[test]
+    fn test_decode_multiplexer_with_value_descriptions() {
+        // Test that multiplexer switch signals also get value descriptions
+        // Reference: SPECIFICATIONS.md Section 18.3
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 300 MultiplexedSensors : 8 ECM
+ SG_ SensorID M : 0|8@1+ (1,0) [0|3] "" *
+ SG_ Temperature m0 : 8|16@1- (0.1,-40) [-40|125] "°C" *
+ SG_ Pressure m1 : 8|16@1+ (0.01,0) [0|655.35] "kPa" *
+
+VAL_ 300 SensorID 0 "Temperature Sensor" 1 "Pressure Sensor" 2 "Humidity Sensor" 3 "Voltage Sensor" ;
+"#,
+        )
+        .unwrap();
+
+        // Test with SensorID = 0 (Temperature Sensor)
+        // Temperature raw = 500 => physical = 500 * 0.1 + (-40) = 10.0 °C
+        let payload = [0x00, 0xF4, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(300, &payload, false).unwrap();
+
+        // Find the SensorID signal
+        let sensor_id = decoded.iter().find(|s| s.name == "SensorID").unwrap();
+        assert_eq!(sensor_id.value, 0.0);
+        assert_eq!(sensor_id.description, Some("Temperature Sensor"));
+
+        // Temperature should be decoded (m0 matches SensorID=0)
+        let temp = decoded.iter().find(|s| s.name == "Temperature").unwrap();
+        assert!(temp.description.is_none()); // No value descriptions for Temperature
+
+        // Test with SensorID = 1 (Pressure Sensor)
+        let payload = [0x01, 0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(300, &payload, false).unwrap();
+
+        let sensor_id = decoded.iter().find(|s| s.name == "SensorID").unwrap();
+        assert_eq!(sensor_id.value, 1.0);
+        assert_eq!(sensor_id.description, Some("Pressure Sensor"));
     }
 
     #[cfg(feature = "embedded-can")]

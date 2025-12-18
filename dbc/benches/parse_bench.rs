@@ -272,6 +272,157 @@ BO_ 256 Engine : 8 ECM
     });
 }
 
+fn bench_decode_with_value_descriptions(c: &mut Criterion) {
+    // DBC with value descriptions - tests the value description lookup overhead
+    let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 200 GearboxData : 8 ECM
+ SG_ GearActual : 0|8@1+ (1,0) [0|7] ""
+ SG_ GearRequest : 8|8@1+ (1,0) [0|7] ""
+ SG_ ShiftInProgress : 16|1@1+ (1,0) [0|1] ""
+ SG_ TransTemp : 24|8@1+ (1,-40) [-40|215] "°C"
+
+VAL_ 200 GearActual 0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive" 4 "Sport" 5 "Manual" 6 "Low" 7 "Invalid" ;
+VAL_ 200 GearRequest 0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive" 4 "Sport" 5 "Manual" 6 "Low" 7 "Invalid" ;
+VAL_ 200 ShiftInProgress 0 "No" 1 "Yes" ;
+"#;
+
+    let dbc = Dbc::parse(dbc_content).unwrap();
+    // GearActual=3 (Drive), GearRequest=3 (Drive), ShiftInProgress=0 (No), TransTemp=80°C
+    let payload = [0x03, 0x03, 0x00, 0x78, 0x00, 0x00, 0x00, 0x00];
+
+    c.bench_function("decode_with_value_descriptions", |b| {
+        b.iter(|| dbc.decode(black_box(200), black_box(&payload), false))
+    });
+}
+
+fn bench_decode_without_value_descriptions(c: &mut Criterion) {
+    // Same structure as above but WITHOUT value descriptions - for comparison
+    let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 200 GearboxData : 8 ECM
+ SG_ GearActual : 0|8@1+ (1,0) [0|7] ""
+ SG_ GearRequest : 8|8@1+ (1,0) [0|7] ""
+ SG_ ShiftInProgress : 16|1@1+ (1,0) [0|1] ""
+ SG_ TransTemp : 24|8@1+ (1,-40) [-40|215] "°C"
+"#;
+
+    let dbc = Dbc::parse(dbc_content).unwrap();
+    let payload = [0x03, 0x03, 0x00, 0x78, 0x00, 0x00, 0x00, 0x00];
+
+    c.bench_function("decode_without_value_descriptions", |b| {
+        b.iter(|| dbc.decode(black_box(200), black_box(&payload), false))
+    });
+}
+
+fn bench_decode_multiplexed(c: &mut Criterion) {
+    // DBC with basic multiplexing (m0, m1, etc.)
+    let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 300 MultiplexedSensors : 8 ECM
+ SG_ SensorID M : 0|8@1+ (1,0) [0|3] ""
+ SG_ Temperature m0 : 8|16@1- (0.1,-40) [-40|125] "°C"
+ SG_ Pressure m1 : 8|16@1+ (0.01,0) [0|655.35] "kPa"
+ SG_ Humidity m2 : 8|16@1+ (0.01,0) [0|100] "%"
+ SG_ Voltage m3 : 8|16@1+ (0.001,0) [0|65.535] "V"
+ SG_ CommonStatus : 56|8@1+ (1,0) [0|255] ""
+"#;
+
+    let dbc = Dbc::parse(dbc_content).unwrap();
+    // SensorID=0 (Temperature), Temperature=500 (10.0°C), CommonStatus=0xFF
+    let payload = [0x00, 0xF4, 0x01, 0x00, 0x00, 0x00, 0x00, 0xFF];
+
+    c.bench_function("decode_multiplexed", |b| {
+        b.iter(|| dbc.decode(black_box(300), black_box(&payload), false))
+    });
+}
+
+fn bench_decode_multiplexed_throughput(c: &mut Criterion) {
+    // Test throughput when cycling through different multiplexer values
+    let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 300 MultiplexedSensors : 8 ECM
+ SG_ SensorID M : 0|8@1+ (1,0) [0|3] ""
+ SG_ Temperature m0 : 8|16@1- (0.1,-40) [-40|125] "°C"
+ SG_ Pressure m1 : 8|16@1+ (0.01,0) [0|655.35] "kPa"
+ SG_ Humidity m2 : 8|16@1+ (0.01,0) [0|100] "%"
+ SG_ Voltage m3 : 8|16@1+ (0.001,0) [0|65.535] "V"
+"#;
+
+    let dbc = Dbc::parse(dbc_content).unwrap();
+    let payloads = [
+        [0x00, 0xF4, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], // SensorID=0
+        [0x01, 0x10, 0x27, 0x00, 0x00, 0x00, 0x00, 0x00], // SensorID=1
+        [0x02, 0x88, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00], // SensorID=2
+        [0x03, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00], // SensorID=3
+    ];
+
+    c.bench_function("decode_multiplexed_throughput", |b| {
+        b.iter(|| {
+            for payload in &payloads {
+                black_box(dbc.decode(300, payload, false).unwrap());
+            }
+        })
+    });
+}
+
+fn bench_decode_extended_multiplexing(c: &mut Criterion) {
+    // DBC with extended multiplexing (SG_MUL_VAL_)
+    let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 400 ExtMuxMessage : 8 ECM
+ SG_ Mode M : 0|8@1+ (1,0) [0|255] ""
+ SG_ SubMode M : 8|8@1+ (1,0) [0|255] ""
+ SG_ DataA m0 : 16|16@1+ (1,0) [0|65535] ""
+ SG_ DataB m0 : 32|16@1+ (1,0) [0|65535] ""
+
+SG_MUL_VAL_ 400 DataA Mode 0-10 ;
+SG_MUL_VAL_ 400 DataA SubMode 0-5 ;
+SG_MUL_VAL_ 400 DataB Mode 0-10 ;
+SG_MUL_VAL_ 400 DataB SubMode 6-10 ;
+"#;
+
+    let dbc = Dbc::parse(dbc_content).unwrap();
+    // Mode=5, SubMode=3 -> DataA should decode, DataB should not
+    let payload = [0x05, 0x03, 0x00, 0x10, 0x00, 0x20, 0x00, 0x00];
+
+    c.bench_function("decode_extended_multiplexing", |b| {
+        b.iter(|| dbc.decode(black_box(400), black_box(&payload), false))
+    });
+}
+
+fn bench_decode_signed_signals(c: &mut Criterion) {
+    // DBC with signed signals - tests sign extension code path
+    let dbc_content = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 SignedData : 8 ECM
+ SG_ SignedTemp : 0|8@1- (1,-40) [-40|87] "°C"
+ SG_ SignedAccel : 8|16@1- (0.01,0) [-327.68|327.67] "m/s²"
+ SG_ SignedAngle : 24|16@1- (0.1,0) [-3276.8|3276.7] "°"
+ SG_ SignedSmall : 40|4@1- (1,0) [-8|7] ""
+"#;
+
+    let dbc = Dbc::parse(dbc_content).unwrap();
+    // SignedTemp=-5 (0xFB), SignedAccel=-100 (0xFF9C), SignedAngle=450.0 (0x1194), SignedSmall=-3 (0xD)
+    let payload = [0xFB, 0x9C, 0xFF, 0x94, 0x11, 0x0D, 0x00, 0x00];
+
+    c.bench_function("decode_signed_signals", |b| {
+        b.iter(|| dbc.decode(black_box(256), black_box(&payload), false))
+    });
+}
+
 #[cfg(not(feature = "std"))]
 criterion_group!(
     benches,
@@ -285,7 +436,13 @@ criterion_group!(
     bench_decode_message_lookup_last,
     bench_decode_high_throughput,
     bench_decode_big_endian,
-    bench_decode_little_endian
+    bench_decode_little_endian,
+    bench_decode_with_value_descriptions,
+    bench_decode_without_value_descriptions,
+    bench_decode_multiplexed,
+    bench_decode_multiplexed_throughput,
+    bench_decode_extended_multiplexing,
+    bench_decode_signed_signals
 );
 
 #[cfg(feature = "std")]
@@ -302,7 +459,13 @@ criterion_group!(
     bench_decode_message_lookup_last,
     bench_decode_high_throughput,
     bench_decode_big_endian,
-    bench_decode_little_endian
+    bench_decode_little_endian,
+    bench_decode_with_value_descriptions,
+    bench_decode_without_value_descriptions,
+    bench_decode_multiplexed,
+    bench_decode_multiplexed_throughput,
+    bench_decode_extended_multiplexing,
+    bench_decode_signed_signals
 );
 
 criterion_main!(benches);
