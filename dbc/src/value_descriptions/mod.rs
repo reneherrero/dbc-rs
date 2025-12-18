@@ -3,6 +3,8 @@ mod core;
 #[cfg(feature = "std")]
 mod builder;
 
+#[cfg(feature = "std")]
+pub use builder::ValueDescriptionsBuilder;
 use std::{string::String, vec::Vec};
 
 /// Value descriptions for a signal.
@@ -44,6 +46,3 @@ use std::{string::String, vec::Vec};
 pub struct ValueDescriptions {
     entries: Vec<(u64, String)>,
 }
-
-#[cfg(feature = "std")]
-pub use builder::ValueDescriptionsBuilder;

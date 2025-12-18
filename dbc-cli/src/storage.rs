@@ -210,8 +210,10 @@ pub fn decode_message(input: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Decode message using high-performance decode method
+    // TODO: Add CLI flag to support extended CAN IDs
+    let is_extended = can_id > 0x7FF; // Simple heuristic: IDs > 11-bit are extended
     let decoded_signals = dbc
-        .decode(can_id, &data)
+        .decode(can_id, &data, is_extended)
         .map_err(|e| format!("Failed to decode message: {}", e))?;
 
     // Get message info for header display (message exists if decode succeeded)
@@ -222,9 +224,9 @@ pub fn decode_message(input: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("Message: {} (ID: 0x{:X})", message.name(), can_id);
 
     // Display decoded signals with units
-    for (signal_name, value, unit) in decoded_signals.iter() {
-        let unit_str = unit.map(|u| format!(" {}", u)).unwrap_or_default();
-        println!("  {}: {}{}", signal_name, value, unit_str);
+    for signal in decoded_signals.iter() {
+        let unit_str = signal.unit.map(|u| format!(" {}", u)).unwrap_or_default();
+        println!("  {}: {}{}", signal.name, signal.value, unit_str);
     }
 
     Ok(())

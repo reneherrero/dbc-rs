@@ -105,7 +105,7 @@ BO_ 256 Engine : 8 ECM
     let payload = [0x40, 0x1F, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00];
 
     c.bench_function("decode_simple", |b| {
-        b.iter(|| dbc.decode(black_box(256), black_box(&payload)))
+        b.iter(|| dbc.decode(black_box(256), black_box(&payload), false))
     });
 }
 
@@ -129,7 +129,7 @@ BO_ 256 EngineData : 8 ECM
     let payload = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 
     c.bench_function("decode_multiple_signals", |b| {
-        b.iter(|| dbc.decode(black_box(256), black_box(&payload)))
+        b.iter(|| dbc.decode(black_box(256), black_box(&payload), false))
     });
 }
 
@@ -152,7 +152,7 @@ BU_: ECM
     let payload = [0x42; 8]; // All bytes set to 0x42
 
     c.bench_function("decode_message_lookup_first", |b| {
-        b.iter(|| dbc.decode(black_box(256), black_box(&payload)))
+        b.iter(|| dbc.decode(black_box(256), black_box(&payload), false))
     });
 }
 
@@ -176,7 +176,7 @@ BU_: ECM
     let middle_id = 256 + 50; // Middle message
 
     c.bench_function("decode_message_lookup_middle", |b| {
-        b.iter(|| dbc.decode(black_box(middle_id), black_box(&payload)))
+        b.iter(|| dbc.decode(black_box(middle_id), black_box(&payload), false))
     });
 }
 
@@ -200,7 +200,7 @@ BU_: ECM
     let last_id = 256 + 99; // Last message
 
     c.bench_function("decode_message_lookup_last", |b| {
-        b.iter(|| dbc.decode(black_box(last_id), black_box(&payload)))
+        b.iter(|| dbc.decode(black_box(last_id), black_box(&payload), false))
     });
 }
 
@@ -227,7 +227,7 @@ BU_: ECM
         b.iter(|| {
             // Decode all 50 messages in sequence
             for i in 0..50 {
-                black_box(dbc.decode(256 + i, &payload).unwrap());
+                black_box(dbc.decode(256 + i, &payload, false).unwrap());
             }
         })
     });
@@ -248,7 +248,7 @@ BO_ 256 Engine : 8 ECM
     let payload = [0x01, 0x00, 0x03, 0xE8, 0x00, 0x00, 0x00, 0x00];
 
     c.bench_function("decode_big_endian", |b| {
-        b.iter(|| dbc.decode(black_box(256), black_box(&payload)))
+        b.iter(|| dbc.decode(black_box(256), black_box(&payload), false))
     });
 }
 
@@ -268,7 +268,7 @@ BO_ 256 Engine : 8 ECM
     let payload = [0x40, 0x1F, 0x5A, 0x32, 0x00, 0x00, 0x00, 0x00];
 
     c.bench_function("decode_little_endian", |b| {
-        b.iter(|| dbc.decode(black_box(256), black_box(&payload)))
+        b.iter(|| dbc.decode(black_box(256), black_box(&payload), false))
     });
 }
 

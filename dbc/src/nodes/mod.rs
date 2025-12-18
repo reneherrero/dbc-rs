@@ -1,7 +1,7 @@
 mod core;
 mod parse;
 #[cfg(feature = "std")]
-mod serialize;
+mod std;
 
 #[cfg(feature = "std")]
 mod builder;

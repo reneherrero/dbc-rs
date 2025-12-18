@@ -2,7 +2,6 @@ use super::ExtendedMultiplexing;
 use crate::{MAX_NAME_SIZE, compat::String, compat::Vec};
 
 impl ExtendedMultiplexing {
-    #[allow(dead_code)] // Used by builder/parser
     pub(crate) fn new(
         message_id: u32,
         signal_name: String<{ MAX_NAME_SIZE }>,

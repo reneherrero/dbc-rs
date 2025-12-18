@@ -1,7 +1,30 @@
 use crate::{
-    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_SIGNALS_PER_MESSAGE, Result,
-    compat::Vec,
+    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_SIGNALS_PER_MESSAGE, Message,
+    Result, compat::Vec,
 };
+#[cfg(feature = "embedded-can")]
+use embedded_can::{Frame, Id};
+
+/// A decoded signal from a CAN message.
+///
+/// Contains the signal name, its decoded physical value, and the optional unit.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DecodedSignal<'a> {
+    /// The name of the signal as defined in the DBC file.
+    pub name: &'a str,
+    /// The decoded physical value after applying factor and offset.
+    pub value: f64,
+    /// The unit of the signal (e.g., "rpm", "°C"), if defined.
+    pub unit: Option<&'a str>,
+}
+
+impl<'a> DecodedSignal<'a> {
+    /// Creates a new `DecodedSignal`.
+    #[inline]
+    pub fn new(name: &'a str, value: f64, unit: Option<&'a str>) -> Self {
+        Self { name, value, unit }
+    }
+}
 
 /// Decoding functionality for DBC structures
 impl Dbc {
@@ -12,12 +35,13 @@ impl Dbc {
     ///
     /// # Arguments
     ///
-    /// * `id` - The CAN message ID to look up
+    /// * `id` - The raw CAN message ID (without extended flag)
     /// * `payload` - The CAN message payload bytes (up to 64 bytes for CAN FD)
+    /// * `is_extended` - Whether this is an extended (29-bit) CAN ID
     ///
     /// # Returns
     ///
-    /// * `Ok(Vec<...>)` - A vector of (signal_name, physical_value) pairs
+    /// * `Ok(Vec<DecodedSignal>)` - A vector of decoded signals with name, value, and unit
     /// * `Err(Error)` - If the message ID is not found, payload length doesn't match DLC, or signal decoding fails
     ///
     /// # Examples
@@ -35,11 +59,11 @@ impl Dbc {
     ///
     /// // Decode a CAN message with RPM value of 2000 (raw: 8000 = 0x1F40)
     /// let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-    /// let decoded = dbc.decode(256, &payload)?;
+    /// let decoded = dbc.decode(256, &payload, false)?; // false = standard CAN ID
     /// assert_eq!(decoded.len(), 1);
-    /// assert_eq!(decoded[0].0, "RPM");
-    /// assert_eq!(decoded[0].1, 2000.0);
-    /// assert_eq!(decoded[0].2, Some("rpm"));
+    /// assert_eq!(decoded[0].name, "RPM");
+    /// assert_eq!(decoded[0].value, 2000.0);
+    /// assert_eq!(decoded[0].unit, Some("rpm"));
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     /// High-performance CAN message decoding optimized for throughput.
@@ -55,7 +79,15 @@ impl Dbc {
         &self,
         id: u32,
         payload: &[u8],
-    ) -> Result<Vec<(&str, f64, Option<&str>), { MAX_SIGNALS_PER_MESSAGE }>> {
+        is_extended: bool,
+    ) -> Result<Vec<DecodedSignal<'_>, { MAX_SIGNALS_PER_MESSAGE }>> {
+        // If it's an extended ID, add the extended ID flag
+        let id = if is_extended {
+            id | Message::EXTENDED_ID_FLAG
+        } else {
+            id
+        };
+
         // Find message by ID (performance-critical lookup)
         // Uses optimized index when available (O(1) with heapless, O(log n) with alloc)
         let message = self
@@ -71,10 +103,9 @@ impl Dbc {
             return Err(Error::Decoding(Error::PAYLOAD_LENGTH_MISMATCH));
         }
 
-        // Allocate Vec for decoded signals (name, value, unit)
+        // Allocate Vec for decoded signals
         // Note: heapless Vec grows as needed; alloc Vec allocates dynamically
-        let mut decoded_signals: Vec<(&str, f64, Option<&str>), { MAX_SIGNALS_PER_MESSAGE }> =
-            Vec::new();
+        let mut decoded_signals: Vec<DecodedSignal<'_>, { MAX_SIGNALS_PER_MESSAGE }> = Vec::new();
 
         let signals = message.signals();
 
@@ -97,7 +128,11 @@ impl Dbc {
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
                 // Also add to decoded signals
                 decoded_signals
-                    .push((signal.name(), physical_value, signal.unit()))
+                    .push(DecodedSignal::new(
+                        signal.name(),
+                        physical_value,
+                        signal.unit(),
+                    ))
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
             }
         }
@@ -175,12 +210,71 @@ impl Dbc {
             if should_decode {
                 let value = signal.decode(payload)?;
                 decoded_signals
-                    .push((signal.name(), value, signal.unit()))
+                    .push(DecodedSignal::new(signal.name(), value, signal.unit()))
                     .map_err(|_| Error::Decoding(Error::MESSAGE_TOO_MANY_SIGNALS))?;
             }
         }
 
         Ok(decoded_signals)
+    }
+
+    /// Decode a CAN frame using the embedded-can [`Frame`] trait.
+    ///
+    /// This is a convenience method that automatically extracts the CAN ID and payload
+    /// from any type implementing the embedded-can [`Frame`] trait, and determines
+    /// whether the ID is standard (11-bit) or extended (29-bit).
+    ///
+    /// # Arguments
+    ///
+    /// * `frame` - Any type implementing the embedded-can [`Frame`] trait
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Vec<DecodedSignal>)` - A vector of decoded signals with name, value, and unit
+    /// * `Err(Error)` - If the message ID is not found, payload length doesn't match DLC, or signal decoding fails
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use dbc_rs::Dbc;
+    /// use embedded_can::{Frame, Id, StandardId};
+    ///
+    /// // Assuming you have a CAN frame from your hardware driver
+    /// let frame = MyCanFrame::new(StandardId::new(256).unwrap(), &[0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+    /// "#)?;
+    ///
+    /// let decoded = dbc.decode_frame(frame)?;
+    /// assert_eq!(decoded[0].name, "RPM");
+    /// assert_eq!(decoded[0].value, 2000.0);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    ///
+    /// # Feature
+    ///
+    /// This method is only available when the `embedded-can` feature is enabled:
+    ///
+    /// ```toml
+    /// [dependencies]
+    /// dbc-rs = { version = "1", features = ["embedded-can"] }
+    /// ```
+    #[cfg(feature = "embedded-can")]
+    #[inline]
+    pub fn decode_frame<T: Frame>(
+        &self,
+        frame: T,
+    ) -> Result<Vec<DecodedSignal<'_>, { MAX_SIGNALS_PER_MESSAGE }>> {
+        let payload = frame.data();
+        match frame.id() {
+            Id::Standard(id) => self.decode(id.as_raw() as u32, payload, false),
+            Id::Extended(id) => self.decode(id.as_raw(), payload, true),
+        }
     }
 }
 
@@ -203,11 +297,11 @@ BO_ 256 Engine : 8 ECM
 
         // Decode a CAN message with RPM value of 2000 (raw: 8000 = 0x1F40)
         let payload = [0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let decoded = dbc.decode(256, &payload).unwrap();
+        let decoded = dbc.decode(256, &payload, false).unwrap();
         assert_eq!(decoded.len(), 1);
-        assert_eq!(decoded[0].0, "RPM");
-        assert_eq!(decoded[0].1, 2000.0);
-        assert_eq!(decoded[0].2, Some("rpm"));
+        assert_eq!(decoded[0].name, "RPM");
+        assert_eq!(decoded[0].value, 2000.0);
+        assert_eq!(decoded[0].unit, Some("rpm"));
     }
 
     #[test]
@@ -223,7 +317,7 @@ BO_ 256 Engine : 8 ECM
         .unwrap();
 
         let payload = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let result = dbc.decode(512, &payload);
+        let result = dbc.decode(512, &payload, false);
         assert!(result.is_err());
     }
 
@@ -243,15 +337,15 @@ BO_ 256 Engine : 8 ECM
         // Decode a CAN message with RPM = 2000 (raw: 8000 = 0x1F40) and Temp = 50°C (raw: 90)
         // Little-endian: RPM at bits 0-15, Temp at bits 16-23
         let payload = [0x40, 0x1F, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let decoded = dbc.decode(256, &payload).unwrap();
+        let decoded = dbc.decode(256, &payload, false).unwrap();
 
         assert_eq!(decoded.len(), 2);
-        assert_eq!(decoded[0].0, "RPM");
-        assert_eq!(decoded[0].1, 2000.0);
-        assert_eq!(decoded[0].2, Some("rpm"));
-        assert_eq!(decoded[1].0, "Temp");
-        assert_eq!(decoded[1].1, 50.0);
-        assert_eq!(decoded[1].2, Some("°C"));
+        assert_eq!(decoded[0].name, "RPM");
+        assert_eq!(decoded[0].value, 2000.0);
+        assert_eq!(decoded[0].unit, Some("rpm"));
+        assert_eq!(decoded[1].name, "Temp");
+        assert_eq!(decoded[1].value, 50.0);
+        assert_eq!(decoded[1].unit, Some("°C"));
     }
 
     #[test]
@@ -269,7 +363,7 @@ BO_ 256 Engine : 8 ECM
 
         // Try to decode with payload shorter than DLC (DLC is 8, payload is 4)
         let payload = [0x40, 0x1F, 0x00, 0x00];
-        let result = dbc.decode(256, &payload);
+        let result = dbc.decode(256, &payload, false);
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Decoding(msg) => {
@@ -295,14 +389,14 @@ BO_ 256 Engine : 8 ECM
         // For big-endian at bit 0-15, the bytes are arranged as [0x01, 0x00]
         // Testing with a simple value that's easier to verify
         let payload = [0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let decoded = dbc.decode(256, &payload).unwrap();
+        let decoded = dbc.decode(256, &payload, false).unwrap();
 
         assert_eq!(decoded.len(), 1);
-        assert_eq!(decoded[0].0, "RPM");
+        assert_eq!(decoded[0].name, "RPM");
         // The exact value depends on big-endian bit extraction implementation
         // We just verify that decoding doesn't crash and returns a value
-        assert!(decoded[0].1 >= 0.0);
-        assert_eq!(decoded[0].2, Some("rpm"));
+        assert!(decoded[0].value >= 0.0);
+        assert_eq!(decoded[0].unit, Some("rpm"));
     }
 
     #[test]
@@ -325,11 +419,10 @@ BO_ 256 Engine : 8 ECM
         let payload = [0x00, 0x64, 0x00, 0x00, 0x00, 0x32, 0x00, 0x00];
         // MuxId=0, Signal0=100 (raw: 1000 = 0x03E8, but little-endian: 0xE8, 0x03), NormalSignal=50
         // Payload: [MuxId=0, Signal0_low=0x64, Signal0_high=0x00, padding, NormalSignal=0x32, ...]
-        let decoded = dbc.decode(256, &payload).unwrap();
+        let decoded = dbc.decode(256, &payload, false).unwrap();
 
         // Helper to find value by signal name
-        let find_signal =
-            |name: &str| decoded.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let find_signal = |name: &str| decoded.iter().find(|s| s.name == name).map(|s| s.value);
 
         // MuxId should always be decoded
         assert!(find_signal("MuxId").is_some());
@@ -360,11 +453,10 @@ BO_ 256 Engine : 8 ECM
         let payload = [0x01, 0x00, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00];
         // MuxId=1 (at byte 0), Signal1 at bits 24-39 (bytes 3-4, little-endian)
         // Signal1 value: 100 (raw: 100, little-endian bytes: 0x64, 0x00)
-        let decoded = dbc.decode(256, &payload).unwrap();
+        let decoded = dbc.decode(256, &payload, false).unwrap();
 
         // Helper to find value by signal name
-        let find_signal =
-            |name: &str| decoded.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let find_signal = |name: &str| decoded.iter().find(|s| s.name == name).map(|s| s.value);
 
         // MuxId should always be decoded
         assert_eq!(find_signal("MuxId"), Some(1.0));
@@ -402,11 +494,10 @@ BO_ 256 MixedByteOrder : 8 ECM
             0xCD, // Byte 5: AnotherBigEndian
             0x00, 0x00, // Padding
         ];
-        let decoded = dbc.decode(256, &payload).unwrap();
+        let decoded = dbc.decode(256, &payload, false).unwrap();
 
         // Helper to find value by signal name
-        let find_signal =
-            |name: &str| decoded.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let find_signal = |name: &str| decoded.iter().find(|s| s.name == name).map(|s| s.value);
 
         // Verify little-endian 16-bit signal: bytes [0x34, 0x12] = 0x1234 = 4660
         assert_eq!(find_signal("LittleEndianSignal"), Some(4660.0)); // 0x1234
@@ -452,10 +543,9 @@ SG_MUL_VAL_ 500 Signal_A Mux1 5-10 ;
         // Mux1=5 (byte 0), Signal_A at bits 16-31 (bytes 2-3, little-endian)
         // Signal_A=100 (raw: 1000 = 0x03E8, little-endian bytes: 0xE8, 0x03)
         let payload = [0x05, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00];
-        let decoded = dbc.decode(500, &payload).unwrap();
+        let decoded = dbc.decode(500, &payload, false).unwrap();
 
-        let find_signal =
-            |name: &str| decoded.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let find_signal = |name: &str| decoded.iter().find(|s| s.name == name).map(|s| s.value);
 
         assert_eq!(find_signal("Mux1"), Some(5.0));
         // Extended multiplexing: Signal_A should decode when Mux1 is in range 5-10
@@ -472,9 +562,8 @@ SG_MUL_VAL_ 500 Signal_A Mux1 5-10 ;
 
         // Test with Mux1 = 15: Should NOT decode Signal_A (outside range 5-10)
         let payload2 = [0x0F, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let decoded2 = dbc.decode(500, &payload2).unwrap();
-        let find_signal2 =
-            |name: &str| decoded2.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded2 = dbc.decode(500, &payload2, false).unwrap();
+        let find_signal2 = |name: &str| decoded2.iter().find(|s| s.name == name).map(|s| s.value);
 
         assert_eq!(find_signal2("Mux1"), Some(15.0));
         assert!(find_signal2("Signal_A").is_none());
@@ -499,32 +588,32 @@ SG_MUL_VAL_ 501 Signal_B Mux1 0-5,10-15,20-25 ;
         // Test with Mux1 = 3: Should decode (within range 0-5)
         // Signal_B at bits 16-31, value 4096 (raw, little-endian: 0x00, 0x10)
         let payload1 = [0x03, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00];
-        let decoded1 = dbc.decode(501, &payload1).unwrap();
-        let find1 = |name: &str| decoded1.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded1 = dbc.decode(501, &payload1, false).unwrap();
+        let find1 = |name: &str| decoded1.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find1("Mux1"), Some(3.0));
         assert!(find1("Signal_B").is_some());
 
         // Test with Mux1 = 12: Should decode (within range 10-15)
         // Signal_B at bits 16-31, value 8192 (raw, little-endian: 0x00, 0x20)
         let payload2 = [0x0C, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00];
-        let decoded2 = dbc.decode(501, &payload2).unwrap();
-        let find2 = |name: &str| decoded2.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded2 = dbc.decode(501, &payload2, false).unwrap();
+        let find2 = |name: &str| decoded2.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find2("Mux1"), Some(12.0));
         assert!(find2("Signal_B").is_some());
 
         // Test with Mux1 = 22: Should decode (within range 20-25)
         // Signal_B at bits 16-31, value 12288 (raw, little-endian: 0x00, 0x30)
         let payload3 = [0x16, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00];
-        let decoded3 = dbc.decode(501, &payload3).unwrap();
-        let find3 = |name: &str| decoded3.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded3 = dbc.decode(501, &payload3, false).unwrap();
+        let find3 = |name: &str| decoded3.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find3("Mux1"), Some(22.0));
         assert!(find3("Signal_B").is_some());
 
         // Test with Mux1 = 8: Should NOT decode (not in any range)
         // Signal_B at bits 16-31, value 16384 (raw, little-endian: 0x00, 0x40)
         let payload4 = [0x08, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00];
-        let decoded4 = dbc.decode(501, &payload4).unwrap();
-        let find4 = |name: &str| decoded4.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded4 = dbc.decode(501, &payload4, false).unwrap();
+        let find4 = |name: &str| decoded4.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find4("Mux1"), Some(8.0));
         assert!(find4("Signal_B").is_none());
     }
@@ -552,24 +641,24 @@ SG_MUL_VAL_ 502 Signal_C Mux2 20-25 ;
         // Test with Mux1=7 and Mux2=22: Should decode (both switches match their ranges)
         // Mux1=7 (byte 0), Mux2=22 (byte 1), Signal_C at bits 16-31 (bytes 2-3, little-endian)
         let payload1 = [0x07, 0x16, 0x00, 0x50, 0x00, 0x00, 0x00, 0x00];
-        let decoded1 = dbc.decode(502, &payload1).unwrap();
-        let find1 = |name: &str| decoded1.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded1 = dbc.decode(502, &payload1, false).unwrap();
+        let find1 = |name: &str| decoded1.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find1("Mux1"), Some(7.0));
         assert_eq!(find1("Mux2"), Some(22.0));
         assert!(find1("Signal_C").is_some());
 
         // Test with Mux1=7 and Mux2=30: Should NOT decode (Mux2 outside range)
         let payload2 = [0x07, 0x1E, 0x00, 0x60, 0x00, 0x00, 0x00, 0x00];
-        let decoded2 = dbc.decode(502, &payload2).unwrap();
-        let find2 = |name: &str| decoded2.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded2 = dbc.decode(502, &payload2, false).unwrap();
+        let find2 = |name: &str| decoded2.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find2("Mux1"), Some(7.0));
         assert_eq!(find2("Mux2"), Some(30.0));
         assert!(find2("Signal_C").is_none());
 
         // Test with Mux1=15 and Mux2=22: Should NOT decode (Mux1 outside range)
         let payload3 = [0x0F, 0x16, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00];
-        let decoded3 = dbc.decode(502, &payload3).unwrap();
-        let find3 = |name: &str| decoded3.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded3 = dbc.decode(502, &payload3, false).unwrap();
+        let find3 = |name: &str| decoded3.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find3("Mux1"), Some(15.0));
         assert_eq!(find3("Mux2"), Some(22.0));
         assert!(find3("Signal_C").is_none());
@@ -597,15 +686,15 @@ SG_MUL_VAL_ 503 Signal_D Mux1 10-15 ;
         // Even though basic multiplexing would match (m0 means decode when switch=0),
         // extended multiplexing takes precedence and requires Mux1 to be 10-15
         let payload1 = [0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00];
-        let decoded1 = dbc.decode(503, &payload1).unwrap();
-        let find1 = |name: &str| decoded1.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded1 = dbc.decode(503, &payload1, false).unwrap();
+        let find1 = |name: &str| decoded1.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find1("Mux1"), Some(0.0));
         assert!(find1("Signal_D").is_none());
 
         // Test with Mux1 = 12: Should decode (within extended range 10-15)
         let payload2 = [0x0C, 0x00, 0x00, 0x90, 0x00, 0x00, 0x00, 0x00];
-        let decoded2 = dbc.decode(503, &payload2).unwrap();
-        let find2 = |name: &str| decoded2.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded2 = dbc.decode(503, &payload2, false).unwrap();
+        let find2 = |name: &str| decoded2.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find2("Mux1"), Some(12.0));
         assert!(find2("Signal_D").is_some());
     }
@@ -635,8 +724,8 @@ SG_MUL_VAL_ 504 Signal_E Mux2 10-15 ;
         // Mux2 is both multiplexed (m65 - active when Mux1=65) and a multiplexer (M)
         let payload = [0x41, 0x0C, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00];
         // Mux1=65 (0x41), Mux2=12 (0x0C), Signal_E at bits 16-31
-        let decoded = dbc.decode(504, &payload).unwrap();
-        let find = |name: &str| decoded.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded = dbc.decode(504, &payload, false).unwrap();
+        let find = |name: &str| decoded.iter().find(|s| s.name == name).map(|s| s.value);
 
         assert_eq!(find("Mux1"), Some(65.0));
         assert_eq!(find("Mux2"), Some(12.0));
@@ -644,8 +733,8 @@ SG_MUL_VAL_ 504 Signal_E Mux2 10-15 ;
 
         // Test with Mux1=64 and Mux2=12: Should NOT decode (Mux1 not 65)
         let payload2 = [0x40, 0x0C, 0x00, 0xB0, 0x00, 0x00, 0x00, 0x00];
-        let decoded2 = dbc.decode(504, &payload2).unwrap();
-        let find2 = |name: &str| decoded2.iter().find(|(n, _, _)| *n == name).map(|(_, v, _)| *v);
+        let decoded2 = dbc.decode(504, &payload2, false).unwrap();
+        let find2 = |name: &str| decoded2.iter().find(|s| s.name == name).map(|s| s.value);
         assert_eq!(find2("Mux1"), Some(64.0));
         assert_eq!(find2("Mux2"), Some(12.0));
         assert!(find2("Signal_E").is_none());
@@ -672,7 +761,7 @@ BO_ 256 MuxMessage : 8 ECM
         // -5 in 8-bit two's complement is 0xFB
         // Little-endian: MuxSwitch at bits 0-7, SignalA at bits 8-15
         let payload = [0xFB, 0x42, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let result = dbc.decode(256, &payload);
+        let result = dbc.decode(256, &payload, false);
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::Decoding(msg) => {
@@ -742,7 +831,7 @@ SG_MUL_VAL_ 600 Signal_X Mux17 0-255 ;
         // Try to decode - should fail with MESSAGE_TOO_MANY_SIGNALS error
         // because we have 17 unique switches (exceeding the limit of 16)
         let payload = [0x00; 18];
-        let result = dbc.decode(600, &payload);
+        let result = dbc.decode(600, &payload, false);
         assert!(
             result.is_err(),
             "Decode should fail when there are more than 16 unique switches"
@@ -760,6 +849,265 @@ SG_MUL_VAL_ 600 Signal_X Mux17 0-255 ;
                 "Expected Error::Decoding with MESSAGE_TOO_MANY_SIGNALS, got: {:?}",
                 e
             ),
+        }
+    }
+
+    #[test]
+    fn test_decode_extended_can_id() {
+        // Test decoding with extended CAN ID (29-bit)
+        // In DBC files, extended IDs have bit 31 set (0x80000000)
+        // 0x80000000 + 0x400 = 2147484672
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 2147484672 ExtendedMsg : 8 ECM
+ SG_ Speed : 0|16@1+ (0.1,0) [0|6553.5] "km/h" *
+"#,
+        )
+        .unwrap();
+        // 2147484672 = 0x80000400 = extended ID 0x400 (1024)
+
+        let payload = [0xE8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        // Speed = 1000 * 0.1 = 100.0 km/h
+
+        // Decode using raw CAN ID (0x400) with is_extended=true
+        let decoded = dbc.decode(0x400, &payload, true).unwrap();
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].name, "Speed");
+        assert_eq!(decoded[0].value, 100.0);
+        assert_eq!(decoded[0].unit, Some("km/h"));
+    }
+
+    #[test]
+    fn test_decode_extended_can_id_not_found_without_flag() {
+        // Verify that extended CAN messages are NOT found when is_extended=false
+        // 0x80000000 + 0x400 = 2147484672
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 2147484672 ExtendedMsg : 8 ECM
+ SG_ Speed : 0|16@1+ (0.1,0) [0|6553.5] "km/h" *
+"#,
+        )
+        .unwrap();
+
+        let payload = [0xE8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+
+        // Without is_extended=true, the message should NOT be found
+        let result = dbc.decode(0x400, &payload, false);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_standard_vs_extended_same_base_id() {
+        // Test that standard and extended messages with same base ID are distinct
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 StandardMsg : 8 ECM
+ SG_ StdSignal : 0|8@1+ (1,0) [0|255] "" *
+
+BO_ 2147483904 ExtendedMsg : 8 ECM
+ SG_ ExtSignal : 0|8@1+ (2,0) [0|510] "" *
+"#,
+        )
+        .unwrap();
+        // 2147483904 = 0x80000100 = extended ID 0x100 (256)
+
+        let payload = [0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]; // raw = 100
+
+        // Decode standard message (ID 256, is_extended=false)
+        let decoded_std = dbc.decode(256, &payload, false).unwrap();
+        assert_eq!(decoded_std.len(), 1);
+        assert_eq!(decoded_std[0].name, "StdSignal");
+        assert_eq!(decoded_std[0].value, 100.0); // factor 1
+
+        // Decode extended message (ID 256, is_extended=true)
+        let decoded_ext = dbc.decode(256, &payload, true).unwrap();
+        assert_eq!(decoded_ext.len(), 1);
+        assert_eq!(decoded_ext[0].name, "ExtSignal");
+        assert_eq!(decoded_ext[0].value, 200.0); // factor 2
+    }
+
+    #[cfg(feature = "embedded-can")]
+    mod embedded_can_tests {
+        use super::*;
+        use embedded_can::{ExtendedId, Frame, Id, StandardId};
+
+        /// A simple test frame for embedded-can tests
+        struct TestFrame {
+            id: Id,
+            data: [u8; 8],
+            dlc: usize,
+        }
+
+        impl TestFrame {
+            fn new_standard(id: u16, data: &[u8]) -> Self {
+                let mut frame_data = [0u8; 8];
+                let dlc = data.len().min(8);
+                frame_data[..dlc].copy_from_slice(&data[..dlc]);
+                Self {
+                    id: Id::Standard(StandardId::new(id).unwrap()),
+                    data: frame_data,
+                    dlc,
+                }
+            }
+
+            fn new_extended(id: u32, data: &[u8]) -> Self {
+                let mut frame_data = [0u8; 8];
+                let dlc = data.len().min(8);
+                frame_data[..dlc].copy_from_slice(&data[..dlc]);
+                Self {
+                    id: Id::Extended(ExtendedId::new(id).unwrap()),
+                    data: frame_data,
+                    dlc,
+                }
+            }
+        }
+
+        impl Frame for TestFrame {
+            fn new(id: impl Into<Id>, data: &[u8]) -> Option<Self> {
+                let mut frame_data = [0u8; 8];
+                let dlc = data.len().min(8);
+                frame_data[..dlc].copy_from_slice(&data[..dlc]);
+                Some(Self {
+                    id: id.into(),
+                    data: frame_data,
+                    dlc,
+                })
+            }
+
+            fn new_remote(_id: impl Into<Id>, _dlc: usize) -> Option<Self> {
+                None // Not used in tests
+            }
+
+            fn is_extended(&self) -> bool {
+                matches!(self.id, Id::Extended(_))
+            }
+
+            fn is_remote_frame(&self) -> bool {
+                false
+            }
+
+            fn id(&self) -> Id {
+                self.id
+            }
+
+            fn dlc(&self) -> usize {
+                self.dlc
+            }
+
+            fn data(&self) -> &[u8] {
+                &self.data[..self.dlc]
+            }
+        }
+
+        #[test]
+        fn test_decode_frame_standard() {
+            let dbc = Dbc::parse(
+                r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm" *
+"#,
+            )
+            .unwrap();
+
+            // Create a standard CAN frame
+            let frame =
+                TestFrame::new_standard(256, &[0x40, 0x1F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+            let decoded = dbc.decode_frame(frame).unwrap();
+            assert_eq!(decoded.len(), 1);
+            assert_eq!(decoded[0].name, "RPM");
+            assert_eq!(decoded[0].value, 2000.0);
+            assert_eq!(decoded[0].unit, Some("rpm"));
+        }
+
+        #[test]
+        fn test_decode_frame_extended() {
+            // 0x80000000 + 0x400 = 2147484672
+            let dbc = Dbc::parse(
+                r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 2147484672 ExtendedMsg : 8 ECM
+ SG_ Speed : 0|16@1+ (0.1,0) [0|6553.5] "km/h" *
+"#,
+            )
+            .unwrap();
+            // 2147484672 = 0x80000400 = extended ID 0x400
+
+            // Create an extended CAN frame with raw ID 0x400
+            let frame =
+                TestFrame::new_extended(0x400, &[0xE8, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+            let decoded = dbc.decode_frame(frame).unwrap();
+            assert_eq!(decoded.len(), 1);
+            assert_eq!(decoded[0].name, "Speed");
+            assert_eq!(decoded[0].value, 100.0);
+            assert_eq!(decoded[0].unit, Some("km/h"));
+        }
+
+        #[test]
+        fn test_decode_frame_standard_vs_extended() {
+            // Test that decode_frame correctly distinguishes standard vs extended frames
+            let dbc = Dbc::parse(
+                r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 StandardMsg : 8 ECM
+ SG_ StdSignal : 0|8@1+ (1,0) [0|255] "" *
+
+BO_ 2147483904 ExtendedMsg : 8 ECM
+ SG_ ExtSignal : 0|8@1+ (2,0) [0|510] "" *
+"#,
+            )
+            .unwrap();
+            // 2147483904 = 0x80000100 = extended ID 0x100 (256)
+
+            let payload = [0x64, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]; // raw = 100
+
+            // Standard frame with ID 256
+            let std_frame = TestFrame::new_standard(256, &payload);
+            let decoded_std = dbc.decode_frame(std_frame).unwrap();
+            assert_eq!(decoded_std[0].name, "StdSignal");
+            assert_eq!(decoded_std[0].value, 100.0);
+
+            // Extended frame with ID 256
+            let ext_frame = TestFrame::new_extended(256, &payload);
+            let decoded_ext = dbc.decode_frame(ext_frame).unwrap();
+            assert_eq!(decoded_ext[0].name, "ExtSignal");
+            assert_eq!(decoded_ext[0].value, 200.0);
+        }
+
+        #[test]
+        fn test_decode_frame_message_not_found() {
+            let dbc = Dbc::parse(
+                r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+"#,
+            )
+            .unwrap();
+
+            // Try to decode a frame with unknown ID
+            let frame =
+                TestFrame::new_standard(512, &[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+            let result = dbc.decode_frame(frame);
+            assert!(result.is_err());
         }
     }
 }

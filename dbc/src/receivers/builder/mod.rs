@@ -241,7 +241,7 @@ impl ReceiversBuilder {
 
             // Make sure the node names are not too long and convert to compat::String
             use crate::compat::{String, Vec};
-            let mut compat_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
+            let mut compat_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }> = Vec::new();
             for node in &self.nodes {
                 if let Some(err) = crate::error::check_max_limit(
                     node.len(),
@@ -257,7 +257,7 @@ impl ReceiversBuilder {
                     .map_err(|_| Error::Signal(Error::SIGNAL_RECEIVERS_TOO_MANY))?;
             }
 
-            Ok(Receivers::new_nodes(compat_nodes.as_slice()))
+            Ok(Receivers::new_nodes(compat_nodes))
         }
     }
 }

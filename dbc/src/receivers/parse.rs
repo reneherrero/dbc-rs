@@ -128,7 +128,7 @@ impl Receivers {
         if nodes.is_empty() {
             Ok(Self::new_none())
         } else {
-            Ok(Self::new_nodes(&nodes))
+            Ok(Self::new_nodes(nodes))
         }
     }
 }

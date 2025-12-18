@@ -1,14 +1,13 @@
 use super::{Message, Signals};
-use crate::{Signal, compat::String};
+use crate::{MAX_NAME_SIZE, compat::String};
 
 impl Message {
-    #[cfg(feature = "std")]
     pub(crate) fn new(
         id: u32,
-        name: String<{ crate::MAX_NAME_SIZE }>,
+        name: String<{ MAX_NAME_SIZE }>,
         dlc: u8,
-        sender: String<{ crate::MAX_NAME_SIZE }>,
-        signals: impl Into<Signals>,
+        sender: String<{ MAX_NAME_SIZE }>,
+        signals: Signals,
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
@@ -16,30 +15,7 @@ impl Message {
             name,
             dlc,
             sender,
-            signals: signals.into(),
-        }
-    }
-
-    pub(crate) fn new_from_signals(
-        id: u32,
-        name: &str,
-        dlc: u8,
-        sender: &str,
-        signals: &[Signal],
-    ) -> Self {
-        // Validation should have been done prior (by builder or parse)
-        let name_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(name)
-            .map_err(|_| crate::Error::Validation(crate::Error::MAX_NAME_SIZE_EXCEEDED))
-            .unwrap();
-        let sender_str: String<{ crate::MAX_NAME_SIZE }> = String::try_from(sender)
-            .map_err(|_| crate::Error::Validation(crate::Error::MAX_NAME_SIZE_EXCEEDED))
-            .unwrap();
-        Self {
-            id,
-            name: name_str,
-            dlc,
-            sender: sender_str,
-            signals: Signals::from_slice(signals),
+            signals,
         }
     }
 

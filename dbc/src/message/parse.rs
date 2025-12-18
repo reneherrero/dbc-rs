@@ -1,5 +1,5 @@
-use super::Message;
-use crate::{Error, Parser, Result, Signal};
+use super::{Message, Signals};
+use crate::{Error, MAX_NAME_SIZE, Parser, Result, Signal, compat};
 
 impl Message {
     pub(crate) fn parse(parser: &mut Parser, signals: &[Signal]) -> Result<Self> {
@@ -56,8 +56,19 @@ impl Message {
                 crate::error::Error::Message(crate::error::Error::MESSAGE_ERROR_PREFIX)
             })
         })?;
-        // Construct directly (validation already done)
-        Ok(Message::new_from_signals(id, name, dlc, sender, signals))
+
+        // Convert to owned types (validation already done, so unwrap is safe)
+        let name_str: compat::String<{ MAX_NAME_SIZE }> = compat::validate_name(name)?;
+        let sender_str: compat::String<{ MAX_NAME_SIZE }> = compat::validate_name(sender)?;
+        let signals_collection = Signals::from_slice(signals);
+
+        Ok(Message::new(
+            id,
+            name_str,
+            dlc,
+            sender_str,
+            signals_collection,
+        ))
     }
 }
 

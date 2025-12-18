@@ -1,4 +1,6 @@
 use crate::{Error, MAX_MESSAGES, Message, Result, compat::Vec};
+#[cfg(feature = "heapless")]
+use heapless::index_map::FnvIndexMap;
 
 /// Encapsulates the messages array and count for a DBC
 ///
@@ -9,7 +11,7 @@ pub struct Messages {
     messages: Vec<Message, { MAX_MESSAGES }>,
     // Optional index for fast ID lookup (feature-flagged)
     #[cfg(feature = "heapless")]
-    id_index: Option<heapless::FnvIndexMap<u32, usize, { MAX_MESSAGES }>>,
+    id_index: Option<FnvIndexMap<u32, usize, { MAX_MESSAGES }>>,
     #[cfg(all(feature = "alloc", not(feature = "heapless")))]
     sorted_indices: Option<alloc::vec::Vec<(u32, usize)>>, // (id, index) pairs sorted by id
 }
@@ -45,8 +47,8 @@ impl Messages {
     #[cfg(feature = "heapless")]
     fn build_heapless_index(
         messages: &[Message],
-    ) -> Option<heapless::FnvIndexMap<u32, usize, { MAX_MESSAGES }>> {
-        let mut index = heapless::FnvIndexMap::new();
+    ) -> Option<FnvIndexMap<u32, usize, { MAX_MESSAGES }>> {
+        let mut index = FnvIndexMap::new();
         for (idx, msg) in messages.iter().enumerate() {
             if index.insert(msg.id(), idx).is_err() {
                 // If we can't insert (capacity full or duplicate), return None

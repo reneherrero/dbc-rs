@@ -1,17 +1,11 @@
 use super::ValueDescriptions;
 use std::{string::String, vec::Vec};
 
-use crate::MAX_VALUE_DESCRIPTIONS;
-
 impl ValueDescriptions {
-    /// Create ValueDescriptions from a slice of (value, description) pairs
-    pub(crate) fn from_slice(entries: &[(u64, String)]) -> Self {
-        let count = entries.len().min(MAX_VALUE_DESCRIPTIONS);
-        let vec_entries: Vec<(u64, String)> =
-            entries.iter().take(count).map(|(value, desc)| (*value, desc.clone())).collect();
-        Self {
-            entries: vec_entries,
-        }
+    /// Create ValueDescriptions from a Vec of (value, description) pairs
+    pub(crate) fn new(entries: Vec<(u64, String)>) -> Self {
+        // Validation should have been done prior (by builder or parse)
+        Self { entries }
     }
 
     /// Get the description for a numeric value

@@ -74,8 +74,8 @@ pub use builder::ExtendedMultiplexingBuilder;
 ///
 /// // Decode - Signal_A will only be decoded when Mux1 is 5-10
 /// let payload = [0x07, 0x00, 0xE8, 0x03, 0x00, 0x00, 0x00, 0x00]; // Mux1=7
-/// let decoded = dbc.decode(500, &payload)?;
-/// assert!(decoded.iter().any(|(name, _, _)| *name == "Signal_A"));
+/// let decoded = dbc.decode(500, &payload, false)?;
+/// assert!(decoded.iter().any(|s| s.name == "Signal_A"));
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
 ///

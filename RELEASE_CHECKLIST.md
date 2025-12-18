@@ -75,7 +75,7 @@ This checklist ensures all steps are completed before publishing a new release o
   # Embedded target (requires DBC_MAX_MESSAGES reduction, must be power of 2 for heapless)
   DBC_MAX_MESSAGES=512 cargo build --release --no-default-features --features heapless --target thumbv7em-none-eabihf --package dbc-rs
   ```
-  Note: For embedded targets, the default of 8192 may cause stack overflow with heapless Vec. Override with `DBC_MAX_MESSAGES` (must be a power of 2 for heapless, recommended: 256-512). build.rs validates that all heapless values are powers of 2.
+  Note: See [dbc/ARCHITECTURE.md](dbc/ARCHITECTURE.md#build-time-configuration) for all configurable limits. Values must be powers of 2 for heapless.
 
 - [ ] **Builds successfully on MSRV (1.85.0)**
   ```bash

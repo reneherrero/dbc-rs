@@ -1,4 +1,6 @@
-use crate::{Error, Message, Result, Signal, SignalBuilder};
+use crate::{
+    Error, MAX_NAME_SIZE, Message, Result, Signal, SignalBuilder, compat, message::Signals,
+};
 use std::string::String;
 
 #[derive(Debug)]
@@ -121,14 +123,18 @@ impl MessageBuilder {
             .collect::<Result<Vec<_>>>()?;
         // Validate before construction
         Message::validate_internal(id, &name, dlc, &sender, &built_signals)?;
-        // Convert name and sender to String<{ MAX_NAME_SIZE }>
+
+        // Convert to owned compat types (validation passed, so these should succeed)
+        let name_str: compat::String<{ MAX_NAME_SIZE }> = compat::validate_name(&name)?;
+        let sender_str: compat::String<{ MAX_NAME_SIZE }> = compat::validate_name(&sender)?;
+        let signals_collection = Signals::from_slice(&built_signals);
 
         Ok(Message::new(
             id,
-            name.into(),
+            name_str,
             dlc,
-            sender.into(),
-            built_signals,
+            sender_str,
+            signals_collection,
         ))
     }
 }

@@ -60,15 +60,15 @@ let dbc = Dbc::parse(dbc_content)?;
 let can_id = 0x100;  // Engine data message ID
 let can_payload = [0x40, 0x1F, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00];
 
-// Decode all signals in the message at once
-let decoded = dbc.decode(can_id, &can_payload)?;
+// Decode all signals in the message at once (false = standard 11-bit ID)
+let decoded = dbc.decode(can_id, &can_payload, false)?;
 
 // Process decoded signals with proper units
-for (signal_name, value, unit) in decoded {
-    match signal_name {
-        "RPM" => println!("Engine RPM: {:.0} {}", value, unit.unwrap_or("")),
-        "EngineTemp" => println!("Temperature: {:.1}{}", value, unit.unwrap_or("")),
-        _ => println!("{}: {:.2} {}", signal_name, value, unit.unwrap_or("")),
+for signal in decoded {
+    match signal.name {
+        "RPM" => println!("Engine RPM: {:.0} {}", signal.value, signal.unit.unwrap_or("")),
+        "EngineTemp" => println!("Temperature: {:.1}{}", signal.value, signal.unit.unwrap_or("")),
+        _ => println!("{}: {:.2} {}", signal.name, signal.value, signal.unit.unwrap_or("")),
     }
 }
 ```
@@ -249,11 +249,11 @@ dbc-rs takes security seriously. The library has undergone comprehensive securit
 
 ## Documentation
 
-- **[Library Documentation](https://docs.rs/dbc-rs)** - Complete API reference
-- **[dbc/README.md](./dbc/README.md)** - Comprehensive library guide with feature flags, examples, and build configuration
+- **[API Reference](https://docs.rs/dbc-rs)** - Complete API documentation
+- **[dbc/README.md](./dbc/README.md)** - Library usage, feature flags, examples
+- **[dbc/ARCHITECTURE.md](./dbc/ARCHITECTURE.md)** - Internal design, module structure, build configuration
 - **[dbc-cli/README.md](./dbc-cli/README.md)** - CLI tool documentation
-- **[RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md)** - Release procedures and verification steps
-- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contribution guidelines and development setup
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Contribution guidelines
 
 ## Contributing
 

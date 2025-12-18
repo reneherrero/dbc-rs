@@ -9,12 +9,9 @@ impl Receivers {
         Receivers::None
     }
 
-    pub(crate) fn new_nodes(nodes: &[String<{ MAX_NAME_SIZE }>]) -> Self {
+    pub(crate) fn new_nodes(nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }>) -> Self {
         // Validation should have been done prior (by builder or parse)
-        // Receivers can have at most MAX_NODES - 1 nodes
-        let vec_nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES - 1 }> =
-            nodes.iter().take(MAX_NODES - 1).cloned().collect();
-        Receivers::Nodes(vec_nodes)
+        Receivers::Nodes(nodes)
     }
 
     /// Returns an iterator over the receiver node names.

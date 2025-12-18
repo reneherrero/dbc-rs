@@ -15,13 +15,7 @@ A clean, zero-dependency DBC (CAN Database) file parser and editor for Rust.
 - ✅ **Full editing & writing** - Modify and save DBC files
 - ✅ **Well tested** - Tested with real-world DBC files
 
-## Design Principles
-
-- **Immutability**: All data structures are immutable after creation
-- **Validation**: Input validation at construction time
-- **no_std First**: Designed for `no_std`, optional `std` feature
-- **Zero Dependencies**: No dependencies with `alloc`/`std` features
-- **Result-based errors**: All fallible operations return `Result<T>`
+For design principles, module structure, and internal details, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Quick Start
 
@@ -39,15 +33,16 @@ if let Some(engine_msg) = dbc.messages().iter().find(|m| m.id() == 256) {
 
 ## Feature Flags
 
-**⚠️ Important:** You **MUST** enable either `alloc` OR `heapless` (or use `std` which includes `alloc`).
+**⚠️ Important:** You **MUST** enable exactly one of: `std`, `alloc`, or `heapless`. See [ARCHITECTURE.md](ARCHITECTURE.md#feature-flags) for details.
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| `alloc` | ❌ | Heap-allocated collections via `alloc` crate. Requires global allocator. **Zero dependencies.** |
-| `heapless` | ❌ | Stack-allocated, bounded collections (no allocator). **One dependency: `heapless`.** |
-| `std` | ✅ | Includes `alloc` + std library (builders, I/O, formatting). **Zero dependencies.** |
+| `std` | ✅ | Full std library support (includes `alloc`). Zero dependencies. |
+| `alloc` | ❌ | Heap allocation without std. Requires global allocator. Zero dependencies. |
+| `heapless` | ❌ | Stack allocation, no allocator needed. One dependency: [`heapless`](https://crates.io/crates/heapless). |
+| `embedded-can` | ❌ | `decode_frame()` via [`embedded-can`](https://crates.io/crates/embedded-can) `Frame` trait. |
 
-**Examples:**
+**Cargo.toml examples:**
 ```toml
 # Default: std enabled
 dbc-rs = "1"
@@ -57,6 +52,12 @@ dbc-rs = { version = "1", default-features = false, features = ["alloc"] }
 
 # no_std with stack allocation
 dbc-rs = { version = "1", default-features = false, features = ["heapless"] }
+
+# With embedded-can Frame decoding support
+dbc-rs = { version = "1", features = ["embedded-can"] }
+
+# no_std with stack allocation + embedded-can (embedded targets)
+dbc-rs = { version = "1", default-features = false, features = ["heapless", "embedded-can"] }
 ```
 
 ## DBC Format Support
@@ -74,7 +75,7 @@ Not implemented: Value tables (`VAL_TABLE_`), structured comments (`CM_`), attri
 
 ## Examples
 
-### Basic Parsing
+### Basic Parsing (works with either `std`, `alloc`, or `heapless`)
 
 ```rust
 use dbc_rs::Dbc;
@@ -118,6 +119,33 @@ let dbc = DbcBuilder::new()
 let dbc_string = dbc.to_dbc_string();
 ```
 
+### Decoding CAN Messages
+
+```rust
+use dbc_rs::Dbc;
+
+let dbc = Dbc::parse(&content)?;
+
+// Decode a standard CAN message (11-bit ID)
+let payload = [0x40, 0x1F, 0x5A, 0x00, 0x00, 0x00, 0x00, 0x00];
+let decoded = dbc.decode(256, &payload, false)?;
+
+for signal in decoded.iter() {
+    println!("{}: {} {:?}", signal.name, signal.value, signal.unit);
+}
+
+// Decode an extended CAN message (29-bit ID)
+let decoded_ext = dbc.decode(0x400, &payload, true)?;
+```
+
+With the `embedded-can` feature, you can decode frames directly:
+
+```rust,ignore
+use dbc_rs::Dbc;
+
+let decoded = dbc.decode_frame(can_frame)?;
+```
+
 ### Error Handling
 
 ```rust
@@ -134,27 +162,14 @@ match Dbc::parse(invalid_content) {
 
 ## Security & Limits
 
-Capacity limits prevent resource exhaustion (DoS protection). Defaults accommodate typical DBC files. Limits are configurable at build time:
+Capacity limits prevent resource exhaustion (DoS protection). Limits are configurable at build time via environment variables. See [ARCHITECTURE.md](ARCHITECTURE.md#build-time-configuration) for the full list.
 
-| Environment Variable | Default | Description |
-|---------------------|---------|-------------|
-| `DBC_MAX_MESSAGES` | `8192` | Maximum number of messages per DBC file |
-| `DBC_MAX_SIGNALS_PER_MESSAGE` | `256` | Maximum number of signals per message |
-| `DBC_MAX_NODES` | `256` | Maximum number of nodes in the bus |
-| `DBC_MAX_VALUE_DESCRIPTIONS` | `64` | Maximum number of value descriptions |
-| `DBC_MAX_NAME_SIZE` | `32` | Maximum length of names (per DBC specification) |
-| `DBC_MAX_EXTENDED_MULTIPLEXING` | `512` | Maximum extended multiplexing entries per file |
-
-**Example:**
 ```bash
-# Reduce capacity limits for embedded targets (recommended for heapless)
-DBC_MAX_MESSAGES=512 cargo build --release --verbose --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs
+# Example: Reduce limits for embedded targets
+DBC_MAX_MESSAGES=512 cargo build --no-default-features --features heapless --target thumbv7em-none-eabihf
 ```
 
-**Performance Notes:**
-- **`alloc`/`std`**: Heap-allocated, dynamic sizing
-- **`heapless`**: Stack-allocated, fixed-size arrays. Reduce limits for embedded targets. **Most values must be powers of 2** (messages, signals, nodes, name size, extended multiplexing).
-- **Parsing**: O(n) complexity, entire file parsed into memory
+**Note:** With `heapless`, most limits must be powers of 2.
 
 ## Troubleshooting
 
@@ -174,6 +189,7 @@ Available under **MIT OR Apache-2.0** (open source) or commercial licensing. See
 
 ## References
 
+- [Architecture](ARCHITECTURE.md) - Internal design and module structure
 - [DBC Format Specification](SPECIFICATIONS.md)
 - [Security Audit](SECURITY.md)
 - Vector Informatik: "DBC File Format Documentation Version 01/2007"

@@ -3,11 +3,15 @@ mod parse;
 
 #[cfg(feature = "std")]
 mod builder;
+#[cfg(feature = "std")]
+mod std;
 
 use crate::{
     MAX_NAME_SIZE, MAX_NODES,
     compat::{String, Vec},
 };
+#[cfg(feature = "std")]
+pub use builder::ReceiversBuilder;
 
 /// Represents the receiver nodes for a signal in a DBC file.
 ///
@@ -61,6 +65,3 @@ pub enum Receivers {
     /// No explicit receivers specified (serializes as `Vector__XXX`).
     None,
 }
-
-#[cfg(feature = "std")]
-pub use builder::ReceiversBuilder;

@@ -1,5 +1,4 @@
 use super::Signal;
-use crate::Receivers;
 use std::{
     fmt::{Display, Formatter, Result},
     string::String,
@@ -57,30 +56,9 @@ impl Signal {
             result.push_str("\"\"");
         }
 
-        // Per DBC spec Section 9.5: receivers are comma-separated
-        // receivers = receiver {',' receiver} ;
-        // receiver = node_name | 'Vector__XXX' ;
-        match self.receivers() {
-            Receivers::Nodes(nodes) => {
-                result.push(' ');
-                if nodes.is_empty() {
-                    // Empty nodes list - use Vector__XXX per spec
-                    result.push_str(crate::VECTOR__XXX);
-                } else {
-                    for (i, node) in self.receivers().iter().enumerate() {
-                        if i > 0 {
-                            result.push(',');
-                        }
-                        result.push_str(node);
-                    }
-                }
-            }
-            Receivers::None => {
-                // No receivers specified - use Vector__XXX per spec
-                result.push(' ');
-                result.push_str(crate::VECTOR__XXX);
-            }
-        }
+        // Receivers serialization delegated to Receivers::to_dbc_string()
+        result.push(' ');
+        result.push_str(&self.receivers().to_dbc_string());
 
         result
     }

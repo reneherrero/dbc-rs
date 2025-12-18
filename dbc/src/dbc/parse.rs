@@ -369,7 +369,7 @@ impl Dbc {
                 BTreeMap::new();
             for (message_id, signal_name, entries) in value_descriptions_buffer {
                 let key = (message_id, signal_name);
-                let value_descriptions = ValueDescriptions::from_slice(&entries);
+                let value_descriptions = ValueDescriptions::new(entries);
                 map.insert(key, value_descriptions);
             }
             ValueDescriptionsMap::from_map(map)
@@ -394,17 +394,15 @@ impl Dbc {
 
         // Construct directly (validation already done)
         let messages = Messages::new(messages_slice)?;
-        #[cfg(feature = "std")]
-        let dbc = Dbc::new(
+
+        Ok(Dbc::new(
             version,
             nodes,
             messages,
+            #[cfg(feature = "std")]
             value_descriptions_map,
             extended_multiplexing_buffer,
-        );
-        #[cfg(not(feature = "std"))]
-        let dbc = Dbc::new(version, nodes, messages, extended_multiplexing_buffer);
-        Ok(dbc)
+        ))
     }
 
     /// Parse a DBC file from a byte slice

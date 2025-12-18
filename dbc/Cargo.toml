@@ -15,7 +15,14 @@ homepage.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-heapless = { version = "0.8", optional = true }
+
+[dependencies.heapless]
+version = "0.9.2" # or latest compatible version
+optional = true
+
+[dependencies.embedded-can]
+version = "0.4.1" # or latest compatible version
+optional = true
 
 [package.metadata.docs.rs]
 features = ["std"]
@@ -24,10 +31,12 @@ features = ["std"]
 default = ["std"]
 # Optional: enable when you have a global allocator (Cortex-A, Linux, etc.)
 alloc = []
-# Optional: enable when you want the bounded versions (almost always)
+# Optional: enable when you want the bounded versions
 heapless = ["dep:heapless"]
 # Default: enable when you want all the std features (Builders, etc.)
 std = ["alloc"]
+# Optional: enable when you want to use the embedded-can crate for CAN message decoding
+embedded-can = ["dep:embedded-can"]
 
 [[example]]
 name = "create_dbc"
@@ -48,6 +57,11 @@ required-features = ["alloc"]
 name = "decode"
 path = "examples/decode.rs"
 required-features = ["std"]
+
+[[example]]
+name = "decode_frame"
+path = "examples/decode_frame.rs"
+required-features = ["std", "embedded-can"]
 
 [dev-dependencies]
 proptest = { version = "1.9.0", default-features = false, features = ["std"] }

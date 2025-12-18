@@ -105,10 +105,7 @@ impl ValueDescriptionsBuilder {
             return Err(err);
         }
 
-        // Use Cow::Owned for owned strings (no leak needed)
-        let cow_entries: Vec<(u64, String)> = self.entries.into_iter().collect();
-
-        Ok(ValueDescriptions::from_slice(&cow_entries))
+        Ok(ValueDescriptions::new(self.entries))
     }
 }
 

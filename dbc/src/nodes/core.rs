@@ -6,6 +6,11 @@ use crate::{
 };
 
 impl Nodes {
+    pub(crate) fn new(nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }>) -> Self {
+        // Validation should have been done prior (by builder)
+        Self { nodes }
+    }
+
     // Shared validation function
     pub(crate) fn validate(nodes: &[impl AsRef<str>]) -> Result<()> {
         // Check for too many nodes (DoS protection)
@@ -26,11 +31,6 @@ impl Nodes {
             }
         }
         Ok(())
-    }
-
-    pub(crate) fn new(nodes: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }>) -> Self {
-        // Validation should have been done prior (by builder)
-        Self { nodes }
     }
 
     /// Returns an iterator over the node names.

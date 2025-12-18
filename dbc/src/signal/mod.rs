@@ -2,12 +2,14 @@ mod core;
 mod decode;
 mod parse;
 #[cfg(feature = "std")]
-mod serialize;
+mod std;
 
 #[cfg(feature = "std")]
 mod builder;
 
 use crate::{ByteOrder, MAX_NAME_SIZE, Receivers, compat::String};
+#[cfg(feature = "std")]
+pub use builder::SignalBuilder;
 
 /// Represents a CAN signal within a message.
 ///
@@ -58,6 +60,3 @@ pub struct Signal {
     /// None means this is a normal signal (not multiplexed)
     multiplexer_switch_value: Option<u64>,
 }
-
-#[cfg(feature = "std")]
-pub use builder::SignalBuilder;
