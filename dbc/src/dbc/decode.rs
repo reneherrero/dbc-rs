@@ -11,6 +11,13 @@ pub struct DecodedSignal<'a> {
     pub name: &'a str,
     /// The decoded physical value after applying factor and offset.
     pub value: f64,
+    /// The raw integer value before applying factor and offset.
+    /// Useful for debugging, re-encoding, or storing raw CAN data.
+    pub raw_value: i64,
+    /// The minimum valid physical value as defined in the DBC file.
+    pub min: f64,
+    /// The maximum valid physical value as defined in the DBC file.
+    pub max: f64,
     /// The unit of the signal (e.g., "rpm", "°C"), if defined.
     pub unit: Option<&'a str>,
     /// The value description text if defined in the DBC file (e.g., "Park", "Drive").
@@ -19,12 +26,15 @@ pub struct DecodedSignal<'a> {
 }
 
 impl<'a> DecodedSignal<'a> {
-    /// Creates a new `DecodedSignal` with the given name, value, unit, and description.
+    /// Creates a new `DecodedSignal` with the given parameters.
     ///
     /// # Arguments
     ///
     /// * `name` - The signal name
     /// * `value` - The decoded physical value (after applying factor and offset)
+    /// * `raw_value` - The raw integer value before scaling
+    /// * `min` - The minimum valid physical value
+    /// * `max` - The maximum valid physical value
     /// * `unit` - The optional unit of measurement (e.g., "rpm", "km/h")
     /// * `description` - The optional value description text (e.g., "Park", "Drive")
     ///
@@ -33,24 +43,50 @@ impl<'a> DecodedSignal<'a> {
     /// ```rust,no_run
     /// use dbc_rs::DecodedSignal;
     ///
-    /// let signal = DecodedSignal::new("Gear", 3.0, Some(""), Some("Drive"));
+    /// let signal = DecodedSignal::new("Gear", 3.0, 3, 0.0, 5.0, Some(""), Some("Drive"));
     /// assert_eq!(signal.name, "Gear");
     /// assert_eq!(signal.value, 3.0);
+    /// assert_eq!(signal.raw_value, 3);
+    /// assert!(signal.is_in_range());
     /// assert_eq!(signal.description, Some("Drive"));
     /// ```
     #[inline]
     pub fn new(
         name: &'a str,
         value: f64,
+        raw_value: i64,
+        min: f64,
+        max: f64,
         unit: Option<&'a str>,
         description: Option<&'a str>,
     ) -> Self {
         Self {
             name,
             value,
+            raw_value,
+            min,
+            max,
             unit,
             description,
         }
+    }
+
+    /// Returns `true` if the decoded value is within the valid range [min, max].
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DecodedSignal;
+    ///
+    /// let signal = DecodedSignal::new("RPM", 2000.0, 8000, 0.0, 8000.0, Some("rpm"), None);
+    /// assert!(signal.is_in_range());
+    ///
+    /// let out_of_range = DecodedSignal::new("RPM", 9000.0, 36000, 0.0, 8000.0, Some("rpm"), None);
+    /// assert!(!out_of_range.is_in_range());
+    /// ```
+    #[inline]
+    pub fn is_in_range(&self) -> bool {
+        self.value >= self.min && self.value <= self.max
     }
 }
 
@@ -235,6 +271,9 @@ impl Dbc {
                     .push(DecodedSignal::new(
                         signal.name(),
                         physical_value,
+                        raw_value,
+                        signal.min(),
+                        signal.max(),
                         signal.unit(),
                         description,
                     ))
@@ -284,6 +323,9 @@ impl Dbc {
                     .push(DecodedSignal::new(
                         signal.name(),
                         physical_value,
+                        raw_value,
+                        signal.min(),
+                        signal.max(),
                         signal.unit(),
                         description,
                     ))
@@ -461,6 +503,10 @@ BO_ 256 Engine : 8 ECM
         assert_eq!(decoded.len(), 1);
         assert_eq!(decoded[0].name, "RPM");
         assert_eq!(decoded[0].value, 2000.0);
+        assert_eq!(decoded[0].raw_value, 8000); // raw = 2000 / 0.25 = 8000
+        assert_eq!(decoded[0].min, 0.0);
+        assert_eq!(decoded[0].max, 8000.0);
+        assert!(decoded[0].is_in_range());
         assert_eq!(decoded[0].unit, Some("rpm"));
     }
 
