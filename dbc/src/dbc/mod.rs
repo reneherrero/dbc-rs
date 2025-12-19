@@ -15,6 +15,7 @@ mod value_descriptions_map;
 #[cfg(feature = "std")]
 mod builder;
 mod decode;
+mod encode;
 mod impls;
 mod parse;
 #[cfg(feature = "std")]

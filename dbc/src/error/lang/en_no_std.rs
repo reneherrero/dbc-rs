@@ -75,3 +75,9 @@ pub const EXT_MUX_SIGNAL_NOT_FOUND: &str = "Extended multiplexing references non
 pub const EXT_MUX_SWITCH_NOT_FOUND: &str =
     "Extended multiplexing references non-existent multiplexer switch signal";
 pub const EXT_MUX_INVALID_RANGE: &str = "Extended multiplexing has invalid value range (min > max)";
+
+// Encoding error messages
+pub const ENCODING_ERROR_PREFIX: &str = "Encoding error";
+pub const ENCODING_SIGNAL_NOT_FOUND: &str = "Signal not found in message";
+pub const ENCODING_VALUE_OUT_OF_RANGE: &str = "Physical value outside signal min/max range";
+pub const ENCODING_VALUE_OVERFLOW: &str = "Encoded value exceeds signal bit length";

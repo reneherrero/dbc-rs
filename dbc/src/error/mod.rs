@@ -48,6 +48,8 @@ pub enum Error {
     },
     /// Decoding-related error (runtime, no line info).
     Decoding(&'static str),
+    /// Encoding-related error (runtime, no line info).
+    Encoding(&'static str),
     /// Validation-related error (post-parse, no line info).
     Validation(&'static str),
 }
@@ -149,6 +151,12 @@ impl Error {
     pub const EXT_MUX_SIGNAL_NOT_FOUND: &'static str = lang::EXT_MUX_SIGNAL_NOT_FOUND;
     pub const EXT_MUX_SWITCH_NOT_FOUND: &'static str = lang::EXT_MUX_SWITCH_NOT_FOUND;
     pub const EXT_MUX_INVALID_RANGE: &'static str = lang::EXT_MUX_INVALID_RANGE;
+
+    // Encoding error constants (no_std)
+    pub const ENCODING_ERROR_PREFIX: &'static str = lang::ENCODING_ERROR_PREFIX;
+    pub const ENCODING_SIGNAL_NOT_FOUND: &'static str = lang::ENCODING_SIGNAL_NOT_FOUND;
+    pub const ENCODING_VALUE_OUT_OF_RANGE: &'static str = lang::ENCODING_VALUE_OUT_OF_RANGE;
+    pub const ENCODING_VALUE_OVERFLOW: &'static str = lang::ENCODING_VALUE_OVERFLOW;
 }
 
 /// Result type alias for operations that can return an `Error`.

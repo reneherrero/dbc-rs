@@ -58,6 +58,12 @@ impl<T, const N: usize> Vec<T, N> {
         &self.0
     }
 
+    /// Extracts a mutable slice containing the entire vector.
+    #[inline]
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        &mut self.0
+    }
+
     /// Returns the length of the vector.
     #[inline]
     pub fn len(&self) -> usize {

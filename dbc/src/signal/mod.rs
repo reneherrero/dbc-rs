@@ -1,4 +1,5 @@
 mod decode;
+mod encode;
 mod impls;
 mod parse;
 #[cfg(feature = "std")]

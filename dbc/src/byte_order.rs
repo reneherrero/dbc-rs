@@ -132,6 +132,120 @@ impl ByteOrder {
             }
         }
     }
+
+    /// Insert bits into data based on byte order.
+    /// This is the inverse of `extract_bits` - used for encoding signals.
+    /// Inlined for hot path optimization.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - Mutable byte slice to write into
+    /// * `start_bit` - Starting bit position (LSB for LE, MSB for BE)
+    /// * `length` - Number of bits to write
+    /// * `value` - The value to insert (must fit in `length` bits)
+    #[inline]
+    pub(crate) fn insert_bits(self, data: &mut [u8], start_bit: usize, length: usize, value: u64) {
+        match self {
+            ByteOrder::LittleEndian => {
+                // Fast path: byte-aligned little-endian signals (most common case)
+                let bit_offset = start_bit % 8;
+                let byte_idx = start_bit / 8;
+
+                if bit_offset == 0 {
+                    // Byte-aligned - use direct memory writes
+                    match length {
+                        8 => {
+                            data[byte_idx] = value as u8;
+                            return;
+                        }
+                        16 => {
+                            let bytes = (value as u16).to_le_bytes();
+                            data[byte_idx] = bytes[0];
+                            data[byte_idx + 1] = bytes[1];
+                            return;
+                        }
+                        32 => {
+                            let bytes = (value as u32).to_le_bytes();
+                            data[byte_idx] = bytes[0];
+                            data[byte_idx + 1] = bytes[1];
+                            data[byte_idx + 2] = bytes[2];
+                            data[byte_idx + 3] = bytes[3];
+                            return;
+                        }
+                        64 => {
+                            let bytes = value.to_le_bytes();
+                            data[byte_idx..byte_idx + 8].copy_from_slice(&bytes);
+                            return;
+                        }
+                        _ => {} // Fall through to generic path
+                    }
+                }
+
+                // Generic path: insert bits sequentially from start_bit forward
+                let mut bits_remaining = length;
+                let mut current_bit = start_bit;
+                let mut value_offset = 0;
+
+                while bits_remaining > 0 {
+                    let byte_idx = current_bit / 8;
+                    let bit_in_byte = current_bit % 8;
+                    let bits_to_write = bits_remaining.min(8 - bit_in_byte);
+
+                    // Extract the bits from value that we want to write
+                    let bits_mask = (1u64 << bits_to_write) - 1;
+                    let bits_to_insert = ((value >> value_offset) & bits_mask) as u8;
+
+                    // Create mask for the target position in the byte
+                    let target_mask = (bits_mask as u8) << bit_in_byte;
+
+                    // Clear the target bits and set the new value
+                    data[byte_idx] =
+                        (data[byte_idx] & !target_mask) | (bits_to_insert << bit_in_byte);
+
+                    bits_remaining -= bits_to_write;
+                    current_bit += bits_to_write;
+                    value_offset += bits_to_write;
+                }
+            }
+            ByteOrder::BigEndian => {
+                // Big-endian (Motorola): start_bit is MSB in big-endian numbering.
+                // BE bit N maps to physical bit: byte_num * 8 + (7 - bit_in_byte)
+                let mut bits_remaining = length;
+                let mut signal_bit_offset = 0; // How many bits of the signal we've processed
+
+                while bits_remaining > 0 {
+                    // Current BE bit position
+                    let be_bit = start_bit + signal_bit_offset;
+                    let byte_num = be_bit / 8;
+                    let bit_in_byte = be_bit % 8;
+
+                    // Calculate how many bits we can write to this byte
+                    // In BE numbering, bits go from high to low within a byte (7,6,5,4,3,2,1,0)
+                    let available_in_byte = bit_in_byte + 1;
+                    let bits_to_write = bits_remaining.min(available_in_byte);
+
+                    // Calculate physical position in byte
+                    // BE bit_in_byte maps to physical position (7 - bit_in_byte)
+                    let physical_start = 7 - bit_in_byte;
+
+                    // Extract the bits from value (MSB first, so from the high end)
+                    let shift_amount = bits_remaining - bits_to_write;
+                    let bits_mask = (1u64 << bits_to_write) - 1;
+                    let bits_to_insert = ((value >> shift_amount) & bits_mask) as u8;
+
+                    // Create mask for the target position in the byte
+                    let target_mask = (bits_mask as u8) << physical_start;
+
+                    // Clear the target bits and set the new value
+                    data[byte_num] =
+                        (data[byte_num] & !target_mask) | (bits_to_insert << physical_start);
+
+                    bits_remaining -= bits_to_write;
+                    signal_bit_offset += bits_to_write;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -267,6 +381,120 @@ mod tests {
         // Bits 4-15: from byte 0 bits 4-7 (0xF) and byte 1 bits 0-7 (0x12)
         // Little-endian: value should be 0x12F
         assert_eq!(raw_value, 0x12F);
+    }
+
+    // ============================================================================
+    // insert_bits tests
+    // ============================================================================
+
+    #[test]
+    fn test_insert_bits_little_endian_8bit() {
+        let mut data = [0x00; 8];
+        ByteOrder::LittleEndian.insert_bits(&mut data, 0, 8, 0x42);
+        assert_eq!(data[0], 0x42);
+    }
+
+    #[test]
+    fn test_insert_bits_little_endian_16bit() {
+        let mut data = [0x00; 8];
+        ByteOrder::LittleEndian.insert_bits(&mut data, 0, 16, 0x1234);
+        // Little-endian: LSB first
+        assert_eq!(data[0], 0x34);
+        assert_eq!(data[1], 0x12);
+    }
+
+    #[test]
+    fn test_insert_bits_little_endian_32bit() {
+        let mut data = [0x00; 8];
+        ByteOrder::LittleEndian.insert_bits(&mut data, 0, 32, 0x12345678);
+        assert_eq!(data[0], 0x78);
+        assert_eq!(data[1], 0x56);
+        assert_eq!(data[2], 0x34);
+        assert_eq!(data[3], 0x12);
+    }
+
+    #[test]
+    fn test_insert_bits_little_endian_64bit() {
+        let mut data = [0x00; 8];
+        ByteOrder::LittleEndian.insert_bits(&mut data, 0, 64, 0x0123456789ABCDEF);
+        assert_eq!(data, [0xEF, 0xCD, 0xAB, 0x89, 0x67, 0x45, 0x23, 0x01]);
+    }
+
+    #[test]
+    fn test_insert_bits_little_endian_non_aligned() {
+        let mut data = [0x00; 8];
+        // Insert 12 bits at bit 4
+        ByteOrder::LittleEndian.insert_bits(&mut data, 4, 12, 0x12F);
+        // Verify by extracting
+        let extracted = ByteOrder::LittleEndian.extract_bits(&data, 4, 12);
+        assert_eq!(extracted, 0x12F);
+    }
+
+    #[test]
+    fn test_insert_extract_roundtrip_little_endian() {
+        // Round-trip test: insert then extract should return same value
+        let test_cases = [
+            (0, 8, 0x42u64),
+            (0, 16, 0x1234),
+            (8, 16, 0xABCD),
+            (4, 12, 0x123),
+            (0, 32, 0x12345678),
+            (0, 64, 0x0123456789ABCDEF),
+        ];
+
+        for (start_bit, length, value) in test_cases {
+            let mut data = [0x00; 8];
+            ByteOrder::LittleEndian.insert_bits(&mut data, start_bit, length, value);
+            let extracted = ByteOrder::LittleEndian.extract_bits(&data, start_bit, length);
+            assert_eq!(
+                extracted, value,
+                "Round-trip failed for start_bit={}, length={}, value=0x{:X}",
+                start_bit, length, value
+            );
+        }
+    }
+
+    #[test]
+    fn test_insert_extract_roundtrip_big_endian() {
+        // Round-trip test for big-endian
+        let test_cases = [
+            (7, 8, 0x42u64),  // 8-bit at MSB position 7
+            (7, 16, 0x1234),  // 16-bit spanning bytes 0-1
+            (15, 16, 0xABCD), // 16-bit spanning bytes 1-2
+        ];
+
+        for (start_bit, length, value) in test_cases {
+            let mut data = [0x00; 8];
+            ByteOrder::BigEndian.insert_bits(&mut data, start_bit, length, value);
+            let extracted = ByteOrder::BigEndian.extract_bits(&data, start_bit, length);
+            assert_eq!(
+                extracted, value,
+                "BE round-trip failed for start_bit={}, length={}, value=0x{:X}",
+                start_bit, length, value
+            );
+        }
+    }
+
+    #[test]
+    fn test_insert_bits_preserves_other_bits() {
+        // Test that insert_bits doesn't corrupt other bits
+        let mut data = [0xFF; 8];
+        ByteOrder::LittleEndian.insert_bits(&mut data, 8, 8, 0x00);
+        // Byte 0 should still be 0xFF, byte 1 should be 0x00
+        assert_eq!(data[0], 0xFF);
+        assert_eq!(data[1], 0x00);
+        assert_eq!(data[2], 0xFF);
+    }
+
+    #[test]
+    fn test_insert_bits_at_offset() {
+        let mut data = [0x00; 8];
+        // Insert 16-bit value at byte 2
+        ByteOrder::LittleEndian.insert_bits(&mut data, 16, 16, 0x5678);
+        assert_eq!(data[0], 0x00);
+        assert_eq!(data[1], 0x00);
+        assert_eq!(data[2], 0x78);
+        assert_eq!(data[3], 0x56);
     }
 
     // Tests that require std (for DefaultHasher)

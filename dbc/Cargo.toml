@@ -59,6 +59,11 @@ path = "examples/decode.rs"
 required-features = ["std"]
 
 [[example]]
+name = "encode"
+path = "examples/encode.rs"
+required-features = ["std"]
+
+[[example]]
 name = "decode_frame"
 path = "examples/decode_frame.rs"
 required-features = ["std", "embedded-can"]

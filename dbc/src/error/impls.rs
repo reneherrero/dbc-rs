@@ -156,7 +156,7 @@ impl Error {
             Error::Receivers { line, .. } => *line,
             Error::Nodes { line, .. } => *line,
             Error::Signal { line, .. } => *line,
-            Error::Decoding(_) | Error::Validation(_) => None,
+            Error::Decoding(_) | Error::Encoding(_) | Error::Validation(_) => None,
         }
     }
 
@@ -290,6 +290,9 @@ impl fmt::Display for Error {
             }
             Error::Decoding(msg) => {
                 write!(f, "{}: {}", Error::DECODING_ERROR_PREFIX, msg)
+            }
+            Error::Encoding(msg) => {
+                write!(f, "{}: {}", Error::ENCODING_ERROR_PREFIX, msg)
             }
             Error::Validation(msg) => {
                 write!(f, "{}: {}", Error::VALIDATION_ERROR_PREFIX, msg)
