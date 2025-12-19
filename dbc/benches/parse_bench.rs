@@ -234,13 +234,16 @@ BU_: ECM
 }
 
 fn bench_decode_big_endian(c: &mut Criterion) {
+    // For Motorola (big-endian) byte order, start_bit is the MSB position
+    // RPM: start_bit=7 means MSB at bit 7 of byte 0, 16-bit spans bytes 0-1
+    // Pressure: start_bit=23 means MSB at bit 7 of byte 2, 16-bit spans bytes 2-3
     let dbc_content = r#"VERSION "1.0"
 
 BU_: ECM
 
 BO_ 256 Engine : 8 ECM
- SG_ RPM : 0|16@0+ (1.0,0) [0|65535] "rpm"
- SG_ Pressure : 16|16@0+ (0.1,0) [0|6553.5] "bar"
+ SG_ RPM : 7|16@0+ (1.0,0) [0|65535] "rpm"
+ SG_ Pressure : 23|16@0+ (0.1,0) [0|6553.5] "bar"
 "#;
 
     let dbc = Dbc::parse(dbc_content).unwrap();
