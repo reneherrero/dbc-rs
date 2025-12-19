@@ -220,16 +220,17 @@ BO_ 256 Test : 8 ECM
 #[test]
 fn test_big_endian_signal_boundary() {
     // Test big-endian signal at boundary
+    // For BE, start_bit is the MSB position. For byte 7 (last byte), MSB is at bit 63.
     let dbc_str = r#"VERSION "1.0"
 
 BU_: ECM
 
 BO_ 256 Test : 8 ECM
- SG_ Signal1 : 56|8@0+ (1,0) [0|255] ""
+ SG_ Signal1 : 63|8@0+ (1,0) [0|255] ""
 "#;
     let dbc = Dbc::parse(dbc_str).expect("Big-endian signal at boundary should be valid");
     let signal = dbc.messages().at(0).unwrap().signals().at(0).unwrap();
-    assert_eq!(signal.start_bit(), 56);
+    assert_eq!(signal.start_bit(), 63);
     assert_eq!(signal.length(), 8);
     assert_eq!(signal.byte_order(), ByteOrder::BigEndian);
 }

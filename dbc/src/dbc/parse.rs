@@ -472,8 +472,8 @@ BO_ 256 Engine : 8 ECM
 BU_: ECM TCM
 
 BO_ 256 Engine : 8 ECM
- SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm"
- SG_ Temp : 16|8@0- (1,-40) [-40|215] "°C"
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+ SG_ Temp : 16|8@1- (1,-40) [-40|215] "°C"
 
 BO_ 512 Brake : 4 TCM
  SG_ Pressure : 0|16@1+ (0.1,0) [0|1000] "bar""#;

@@ -635,23 +635,23 @@ BU_: ECM
 
 BO_ 256 MixedByteOrder : 8 ECM
  SG_ LittleEndianSignal : 0|16@1+ (1.0,0) [0|65535] ""
- SG_ BigEndianSignal : 16|16@0+ (1.0,0) [0|65535] ""
+ SG_ BigEndianSignal : 23|16@0+ (1.0,0) [0|65535] ""
  SG_ AnotherLittleEndian : 32|8@1+ (1.0,0) [0|255] ""
- SG_ AnotherBigEndian : 40|8@0+ (1.0,0) [0|255] ""
+ SG_ AnotherBigEndian : 47|8@0+ (1.0,0) [0|255] ""
 "#,
         )
         .unwrap();
 
         // Test payload with both big-endian and little-endian signals:
         // - LittleEndianSignal at bits 0-15 (bytes 0-1): [0x34, 0x12] = 0x1234 = 4660
-        // - BigEndianSignal at bits 16-31 (bytes 2-3): [0x00, 0x01] = decoded based on BE bit mapping
+        // - BigEndianSignal: BE start_bit=23 (MSB of byte 2), 16 bits -> bytes 2-3
         // - AnotherLittleEndian at bits 32-39 (byte 4): 0xAB = 171
-        // - AnotherBigEndian at bits 40-47 (byte 5): 0xCD = decoded based on BE bit mapping
+        // - AnotherBigEndian: BE start_bit=47 (MSB of byte 5), 8 bits -> byte 5
         let payload = [
             0x34, 0x12, // Bytes 0-1: LittleEndianSignal
-            0x00, 0x01, // Bytes 2-3: BigEndianSignal
+            0x00, 0x01, // Bytes 2-3: BigEndianSignal (BE: 0x0001 = 1)
             0xAB, // Byte 4: AnotherLittleEndian
-            0xCD, // Byte 5: AnotherBigEndian
+            0xCD, // Byte 5: AnotherBigEndian (BE: 0xCD = 205)
             0x00, 0x00, // Padding
         ];
         let decoded = dbc.decode(256, &payload, false).unwrap();

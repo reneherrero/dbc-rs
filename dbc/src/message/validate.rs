@@ -109,44 +109,61 @@ impl Message {
     }
 
     fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
-        let start = start_bit;
-        let len = length;
-
         match byte_order {
             ByteOrder::LittleEndian => {
-                // Little-endian: start_bit is LSB, signal extends forward
+                // Little-endian: start_bit is LSB, signal extends forward (to higher bit positions)
                 // Range: [start_bit, start_bit + length - 1]
-                (start, start + len - 1)
+                (start_bit, start_bit + length - 1)
             }
             ByteOrder::BigEndian => {
-                // Big-endian: start_bit is MSB in big-endian numbering, signal extends backward
-                // The big-endian bit numbering follows Vector convention:
-                // be_bits = [7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8, 23, 22, ...]
-                // This means: BE bit 0 -> physical bit 7, BE bit 7 -> physical bit 0
-                //            BE bit 8 -> physical bit 15, BE bit 15 -> physical bit 8
-                // To find the physical bit range:
-                // 1. Find the index of start_bit in the be_bits sequence
-                // 2. MSB (physical) = be_bits[idx]
-                // 3. LSB (physical) = be_bits[idx + length - 1]
-                // We can calculate this directly:
-                // For BE bit N: byte_num = N / 8, bit_in_byte = N % 8
-                // Physical bit = byte_num * 8 + (7 - bit_in_byte)
-                let byte_num = start / 8;
-                let bit_in_byte = start % 8;
-                let physical_msb = byte_num * 8 + (7 - bit_in_byte);
+                // Big-endian (Motorola): start_bit is MSB position in Vector convention
+                // Vector bit numbering: byte N contains bits [N*8+7, N*8+6, ..., N*8+0]
+                // where bit N*8+7 is the MSB of byte N
+                //
+                // For a BE signal:
+                // - First byte: uses bits from (start_bit % 8) down to 0
+                // - Subsequent bytes: uses bits from 7 down to 0 (or partial for last byte)
+                //
+                // Example: start_bit=7, length=16
+                //   Byte 0: bits 7,6,5,4,3,2,1,0 (8 bits) -> linear bits 7-0
+                //   Byte 1: bits 7,6,5,4,3,2,1,0 (8 bits) -> linear bits 15-8
+                //   Linear range: [0, 15]
+                //
+                // Example: start_bit=23, length=16
+                //   Byte 2: bits 7,6,5,4,3,2,1,0 (8 bits) -> linear bits 23-16
+                //   Byte 3: bits 7,6,5,4,3,2,1,0 (8 bits) -> linear bits 31-24
+                //   Linear range: [16, 31]
 
-                // Calculate LSB: move forward (length - 1) positions in the BE sequence
-                // BE bit (start + length - 1) maps to physical bit
-                let lsb_be_bit = start + len - 1;
-                let lsb_byte_num = lsb_be_bit / 8;
-                let lsb_bit_in_byte = lsb_be_bit % 8;
-                let physical_lsb = lsb_byte_num * 8 + (7 - lsb_bit_in_byte);
+                let start_byte = start_bit / 8;
+                let msb_bit_in_byte = start_bit % 8; // 0-7, where 7 is MSB of byte
+                let bits_in_first_byte = msb_bit_in_byte + 1;
 
-                // Ensure lsb <= msb (they should be in that order for big-endian)
-                if physical_lsb <= physical_msb {
-                    (physical_lsb, physical_msb)
+                if length <= bits_in_first_byte {
+                    // Signal fits within one byte
+                    // Uses bits from msb_bit_in_byte down to (msb_bit_in_byte - length + 1)
+                    let lsb = start_bit - (length - 1);
+                    (lsb, start_bit)
                 } else {
-                    (physical_msb, physical_lsb)
+                    // Signal spans multiple bytes
+                    let remaining = length - bits_in_first_byte;
+                    let additional_full_bytes = remaining / 8;
+                    let bits_in_last_byte = remaining % 8;
+
+                    // Calculate last byte index
+                    let last_byte = if bits_in_last_byte > 0 {
+                        start_byte + 1 + additional_full_bytes
+                    } else {
+                        // All remaining bits fit in full bytes
+                        start_byte + additional_full_bytes
+                    };
+
+                    // For multi-byte BE signals:
+                    // - Min bit is bit 0 of the first byte (we go all the way down)
+                    // - Max bit is bit 7 of the last byte (subsequent bytes start at bit 7)
+                    let min_bit = start_byte * 8;
+                    let max_bit = last_byte * 8 + 7;
+
+                    (min_bit, max_bit)
                 }
             }
         }
@@ -161,16 +178,14 @@ mod tests {
     #[test]
     fn test_message_big_endian_bit_range_calculation() {
         // Test big-endian bit range calculation
-        // BE bit 0 -> physical bit 7
-        // BE bit 7 -> physical bit 0
-        // BE bit 8 -> physical bit 15
-        // BE bit 15 -> physical bit 8
+        // For BE, start_bit is the MSB position
+        // A typical BE signal starts at bit 7 (MSB of byte 0)
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
 
-        // Signal starting at BE bit 0, length 8 -> should map to physical bits 0-7
+        // Signal starting at BE bit 7 (MSB of byte 0), length 8 -> bytes 0
         let signal =
-            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@1+ (1,0) [0|255] \"\"").unwrap())
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 7|8@0+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
         let message = Message::parse(&mut parser, &[signal]).unwrap();
@@ -187,7 +202,7 @@ mod tests {
 
         // Signal starting at LE bit 0, length 8 -> should map to physical bits 0-7
         let signal =
-            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@1+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
         let message = Message::parse(&mut parser, &[signal]).unwrap();
@@ -202,27 +217,108 @@ mod tests {
         let mut parser = Parser::new(data).unwrap();
 
         // Create signals that exactly fill the message (8 bytes = 64 bits)
+        // Using little-endian (@1+) where start_bit is LSB position
         // Signal 1: bits 0-15 (16 bits)
         let signal1 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|16@0+ (1,0) [0|65535] \"\"").unwrap())
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|16@1+ (1,0) [0|65535] \"\"").unwrap())
                 .unwrap();
         // Signal 2: bits 16-31 (16 bits)
         let signal2 = Signal::parse(
-            &mut Parser::new(b"SG_ Signal2 : 16|16@0+ (1,0) [0|65535] \"\"").unwrap(),
+            &mut Parser::new(b"SG_ Signal2 : 16|16@1+ (1,0) [0|65535] \"\"").unwrap(),
         )
         .unwrap();
         // Signal 3: bits 32-47 (16 bits)
         let signal3 = Signal::parse(
-            &mut Parser::new(b"SG_ Signal3 : 32|16@0+ (1,0) [0|65535] \"\"").unwrap(),
+            &mut Parser::new(b"SG_ Signal3 : 32|16@1+ (1,0) [0|65535] \"\"").unwrap(),
         )
         .unwrap();
         // Signal 4: bits 48-63 (16 bits) - exactly at boundary
         let signal4 = Signal::parse(
-            &mut Parser::new(b"SG_ Signal4 : 48|16@0+ (1,0) [0|65535] \"\"").unwrap(),
+            &mut Parser::new(b"SG_ Signal4 : 48|16@1+ (1,0) [0|65535] \"\"").unwrap(),
         )
         .unwrap();
 
         let message = Message::parse(&mut parser, &[signal1, signal2, signal3, signal4]).unwrap();
         assert_eq!(message.signals().len(), 4);
+    }
+
+    #[test]
+    fn test_big_endian_non_overlapping_signals() {
+        // Test that non-overlapping big-endian signals are correctly detected as non-overlapping
+        // This was a regression where BE signals in different bytes were incorrectly flagged as overlapping
+        let data = b"BO_ 768 WheelSpeeds : 8 ECU";
+        let mut parser = Parser::new(data).unwrap();
+
+        // Signal 1: BE, start_bit=7 (byte 0 MSB), length=16 -> bytes 0-1
+        let signal1 = Signal::parse(
+            &mut Parser::new(b"SG_ WheelSpeed_FL : 7|16@0+ (0.01,0) [0|300] \"km/h\"").unwrap(),
+        )
+        .unwrap();
+
+        // Signal 2: BE, start_bit=23 (byte 2 MSB), length=16 -> bytes 2-3
+        let signal2 = Signal::parse(
+            &mut Parser::new(b"SG_ WheelSpeed_FR : 23|16@0+ (0.01,0) [0|300] \"km/h\"").unwrap(),
+        )
+        .unwrap();
+
+        // These signals should NOT overlap (bytes 0-1 vs bytes 2-3)
+        let message = Message::parse(&mut parser, &[signal1, signal2]).unwrap();
+        assert_eq!(message.signals().len(), 2);
+    }
+
+    #[test]
+    fn test_big_endian_overlapping_signals_detected() {
+        // Test that overlapping big-endian signals ARE correctly detected
+        let data = b"BO_ 256 Test : 8 ECU";
+        let mut parser = Parser::new(data).unwrap();
+
+        // Signal 1: BE, start_bit=7, length=16 -> bytes 0-1
+        let signal1 =
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 7|16@0+ (1,0) [0|65535] \"\"").unwrap())
+                .unwrap();
+
+        // Signal 2: BE, start_bit=15, length=16 -> bytes 1-2 (overlaps with signal1 in byte 1)
+        let signal2 = Signal::parse(
+            &mut Parser::new(b"SG_ Signal2 : 15|16@0+ (1,0) [0|65535] \"\"").unwrap(),
+        )
+        .unwrap();
+
+        // These signals SHOULD overlap (both use byte 1)
+        let result = Message::parse(&mut parser, &[signal1, signal2]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_bit_range_big_endian_single_byte() {
+        // Single byte BE signal: start_bit=5, length=4 -> bits 5,4,3,2
+        let (min, max) = Message::bit_range(5, 4, ByteOrder::BigEndian);
+        assert_eq!(min, 2);
+        assert_eq!(max, 5);
+    }
+
+    #[test]
+    fn test_bit_range_big_endian_multi_byte() {
+        // Multi-byte BE signal: start_bit=7, length=16 -> bytes 0-1, bits 0-15
+        let (min, max) = Message::bit_range(7, 16, ByteOrder::BigEndian);
+        assert_eq!(min, 0);
+        assert_eq!(max, 15);
+
+        // Multi-byte BE signal: start_bit=23, length=16 -> bytes 2-3, bits 16-31
+        let (min, max) = Message::bit_range(23, 16, ByteOrder::BigEndian);
+        assert_eq!(min, 16);
+        assert_eq!(max, 31);
+    }
+
+    #[test]
+    fn test_bit_range_little_endian() {
+        // LE signal: start_bit=0, length=16 -> bits 0-15
+        let (min, max) = Message::bit_range(0, 16, ByteOrder::LittleEndian);
+        assert_eq!(min, 0);
+        assert_eq!(max, 15);
+
+        // LE signal: start_bit=16, length=16 -> bits 16-31
+        let (min, max) = Message::bit_range(16, 16, ByteOrder::LittleEndian);
+        assert_eq!(min, 16);
+        assert_eq!(max, 31);
     }
 }

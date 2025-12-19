@@ -160,13 +160,13 @@ mod tests {
         let data = b"BO_ 256 EngineData : 8 ECM";
         let mut parser = Parser::new(data).unwrap();
 
-        // Create test signals
+        // Create test signals (using little-endian for simple bit layout)
         let signal1 = Signal::parse(
-            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
+            &mut Parser::new(b"SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
         )
         .unwrap();
         let signal2 = Signal::parse(
-            &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\"").unwrap(),
+            &mut Parser::new(b"SG_ Temp : 16|8@1- (1,-40) [-40|215] \"\xC2\xB0C\"").unwrap(),
         )
         .unwrap();
 

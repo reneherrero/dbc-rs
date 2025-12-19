@@ -56,11 +56,11 @@ mod tests {
         let mut parser = Parser::new(data).unwrap();
 
         let signal1 = Signal::parse(
-            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
+            &mut Parser::new(b"SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\"").unwrap(),
         )
         .unwrap();
         let signal2 = Signal::parse(
-            &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\"").unwrap(),
+            &mut Parser::new(b"SG_ Temp : 16|8@1- (1,-40) [-40|215] \"\xC2\xB0C\"").unwrap(),
         )
         .unwrap();
 
@@ -135,7 +135,7 @@ mod tests {
 
         // Parse signal from DBC string instead of using builder
         let signal = Signal::parse(
-            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
+            &mut Parser::new(b"SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
         )
         .unwrap();
 
@@ -153,12 +153,12 @@ mod tests {
 
         // Parse signals from DBC strings instead of using builders
         let signal1 = Signal::parse(
-            &mut Parser::new(b"SG_ RPM : 0|16@0+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
+            &mut Parser::new(b"SG_ RPM : 0|16@1+ (0.25,0) [0|8000] \"rpm\" *").unwrap(),
         )
         .unwrap();
 
         let signal2 = Signal::parse(
-            &mut Parser::new(b"SG_ Temp : 16|8@0- (1,-40) [-40|215] \"\xC2\xB0C\" *").unwrap(),
+            &mut Parser::new(b"SG_ Temp : 16|8@1- (1,-40) [-40|215] \"\xC2\xB0C\" *").unwrap(),
         )
         .unwrap();
 
@@ -218,13 +218,13 @@ mod tests {
         let mut parser = Parser::new(data).unwrap();
 
         let signal1 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@0+ (1,0) [0|255] \"\"").unwrap())
+            Signal::parse(&mut Parser::new(b"SG_ Signal1 : 0|8@1+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
         let signal2 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@0+ (1,0) [0|255] \"\"").unwrap())
+            Signal::parse(&mut Parser::new(b"SG_ Signal2 : 8|8@1+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
         let signal3 =
-            Signal::parse(&mut Parser::new(b"SG_ Signal3 : 16|8@0+ (1,0) [0|255] \"\"").unwrap())
+            Signal::parse(&mut Parser::new(b"SG_ Signal3 : 16|8@1+ (1,0) [0|255] \"\"").unwrap())
                 .unwrap();
 
         let message = Message::parse(&mut parser, &[signal1, signal2, signal3]).unwrap();
