@@ -1,240 +1,284 @@
 # Architecture
 
-This document describes the internal architecture of `mdf4-rs`, a Rust library for reading and writing ASAM MDF 4 (Measurement Data Format) files.
+This document describes the internal architecture of the `dbc-rs` library.
 
-## Overview
+## Design Principles
 
-MDF4 is a binary file format used primarily in automotive and industrial applications for storing measurement data. The format consists of linked binary blocks that describe metadata and contain raw measurement samples.
+1. **`no_std` First** - The library is designed to work without the standard library, enabling use on embedded targets (Cortex-M, RISC-V, etc.)
 
+2. **Zero Unsafe Code** - The crate uses `#![forbid(unsafe_code)]` to guarantee memory safety at compile time
+
+3. **Minimal Dependencies** - Zero dependencies with `alloc`/`std` features; only `heapless` when using that feature
+
+4. **Immutability** - All data structures are immutable after creation; modifications require builders
+
+5. **Validation at Construction** - All inputs are validated when structures are created, not when accessed
+
+## Feature Flags
+
+| Feature | Default | Requires | Provides |
+|---------|---------|----------|----------|
+| `std` | ✅ | — | `alloc` + builders, serialization, I/O |
+| `alloc` | ❌ | Global allocator | Heap-allocated `Vec`/`String` |
+| `heapless` | ❌ | — | Stack-allocated bounded collections |
+| `embedded-can` | ❌ | — | `decode_frame()` method |
+
+**Dependency graph:**
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           MDF4 File                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│  ID Block (64 bytes) - File identifier and version                  │
-├─────────────────────────────────────────────────────────────────────┤
-│  HD Block - Header with file metadata and links                     │
-├─────────────────────────────────────────────────────────────────────┤
-│  DG Block(s) - Data Groups containing channel groups                │
-│    └── CG Block(s) - Channel Groups with record layout              │
-│          └── CN Block(s) - Channels with data type info             │
-│                └── CC Block - Conversion rules (optional)           │
-├─────────────────────────────────────────────────────────────────────┤
-│  DT/DL Blocks - Raw data records                                    │
-├─────────────────────────────────────────────────────────────────────┤
-│  TX/MD Blocks - Text and metadata strings                           │
-└─────────────────────────────────────────────────────────────────────┘
+std ───────► alloc ───────► Heap collections (zero deps)
+                  
+heapless ─────────────────► Stack collections (one dep: heapless)
+
+embedded-can ─────────────► Frame decoding (one dep: embedded-can)
 ```
+
+**Rules:**
+- You MUST enable exactly one of: `std`, `alloc`, or `heapless`
+- `alloc` and `heapless` are **mutually exclusive**
+- `std` implicitly enables `alloc`
+- `embedded-can` is independent and can combine with any allocation strategy
 
 ## Module Structure
 
 ```
 src/
-├── lib.rs              # Public API re-exports and crate documentation
-├── error.rs            # Error types and Result alias
-├── mdf.rs              # High-level MDF reader (entry point)
-├── channel.rs          # Channel wrapper for value access
-├── channel_group.rs    # Channel group wrapper
-│
-├── blocks/             # Low-level MDF block definitions
-│   ├── mod.rs          # Block type re-exports
-│   ├── common.rs       # BlockHeader, DataType, parsing utilities
-│   ├── identification_block.rs
-│   ├── header_block.rs
-│   ├── data_group_block.rs
-│   ├── channel_group_block.rs
-│   ├── channel_block.rs
-│   ├── conversion/     # Value conversion implementations
-│   │   ├── base.rs     # ConversionBlock definition
-│   │   ├── linear.rs   # Linear/rational/algebraic conversions
-│   │   ├── text.rs     # Value-to-text mappings
-│   │   └── ...
-│   └── ...
-│
-├── parsing/            # File parsing and raw data access
-│   ├── mod.rs          # Parser re-exports
-│   ├── mdf_file.rs     # Full file parser
-│   ├── raw_data_group.rs
-│   ├── raw_channel_group.rs
-│   ├── raw_channel.rs  # Record iteration
-│   ├── decoder.rs      # DecodedValue and decoding logic
-│   └── ...
-│
-├── writer/             # MDF file creation
-│   ├── mod.rs          # MdfWriter struct and docs
-│   ├── io.rs           # File I/O and block writing
-│   ├── init.rs         # Block initialization and linking
-│   └── data.rs         # Record encoding
-│
-├── index.rs            # JSON-serializable file index
-├── cut.rs              # Time-based segment extraction
-└── merge.rs            # File merging
+├── lib.rs              # Crate root, public API exports
+├── compat/                 # Abstraction layer for alloc/heapless
+│   ├── mod.rs    
+│   ├── string.rs           # String<N> wrapper
+│   └── vec.rs              # Vec<T, N> wrapper
+├── parser/                 # Hand-written zero-copy parser
+│   ├── mod.rs              # Parser struct definition
+│   ├── impls.rs            # Core parsing methods
+│   ├── expect.rs           # Token expectation utilities
+│   ├── keyword.rs          # DBC keyword parsing
+│   ├── parse.rs            # Parsing trait implementations
+│   ├── skip.rs             # Whitespace/comment skipping
+│   └── take.rs             # Token extraction
+├── dbc/                    # Top-level DBC structure
+│   ├── mod.rs              # Dbc struct definition
+│   ├── impls.rs            # Core methods (accessors)
+│   ├── parse.rs            # Dbc::parse() implementation
+│   ├── decode.rs           # CAN message decoding
+│   ├── std.rs              # std only features
+│   ├── validate.rs         # Validation logic
+│   ├── messages.rs         # Messages collection with indexing
+│   └── builder/            # DbcBuilder [std only]
+├── message/                # CAN message entity
+├── signal/                 # Signal entity
+├── nodes/                  # Network nodes (ECUs)
+├── version/                # VERSION string
+├── receivers/              # Signal receivers
+├── extended_multiplexing/  # SG_MUL_VAL_ entries
+├── value_descriptions/     # VAL_ entries [std only]
+├── error/                  # Error types and messages
+│   └── lang/               # Localized error strings
+└── byte_order.rs           # BigEndian/LittleEndian enum
 ```
 
-## Core Components
+## Entity Module Pattern
 
-### Reading Pipeline
-
-```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  MDF::from   │───▶│   MdfFile    │───▶│ RawDataGroup │
-│    _file()   │    │   (parser)   │    │  (parsed)    │
-└──────────────┘    └──────────────┘    └──────────────┘
-                                               │
-                                               ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   Channel    │◀───│ ChannelGroup │◀───│RawChannelGrp │
-│  .values()   │    │  (wrapper)   │    │  (parsed)    │
-└──────────────┘    └──────────────┘    └──────────────┘
-       │
-       ▼
-┌──────────────┐    ┌──────────────┐
-│  Decoder     │───▶│ DecodedValue │
-│  + CC Block  │    │   (output)   │
-└──────────────┘    └──────────────┘
-```
-
-1. **MDF** (`src/mdf.rs`): Entry point that memory-maps the file and delegates to `MdfFile`
-2. **MdfFile** (`src/parsing/mdf_file.rs`): Parses all blocks into raw structures
-3. **RawDataGroup/RawChannelGroup/RawChannel**: Hold parsed block data and provide iteration
-4. **ChannelGroup/Channel**: High-level wrappers providing ergonomic access
-5. **Decoder** (`src/parsing/decoder.rs`): Converts raw bytes to `DecodedValue` enum
-6. **ConversionBlock**: Applies unit conversions (linear, polynomial, text mappings)
-
-### Writing Pipeline
+Each DBC entity (message, signal, nodes, etc.) follows a consistent module structure:
 
 ```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│  MdfWriter   │───▶│ init_mdf_    │───▶│  ID + HD     │
-│    ::new()   │    │   file()     │    │   blocks     │
-└──────────────┘    └──────────────┘    └──────────────┘
-       │
-       ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ add_channel  │───▶│ add_channel  │───▶│  DG + CG +   │
-│   _group()   │    │     ()       │    │  CN blocks   │
-└──────────────┘    └──────────────┘    └──────────────┘
-       │
-       ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ start_data   │───▶│ write_record │───▶│  DT block    │
-│   _block()   │    │     ()       │    │   (data)     │
-└──────────────┘    └──────────────┘    └──────────────┘
-       │
-       ▼
-┌──────────────┐
-│  finalize()  │───▶ Flush + update links
-└──────────────┘
+entity/
+├── mod.rs          # Entity struct definition, re-exports, constants
+├── impls.rs        # Accessor methods (getters), constructors
+├── parse.rs        # Parser::parse_entity() implementation
+├── std.rs          # std only features
+├── validate.rs     # Validation rules [if applicable]
+└── builder/        # EntityBuilder [std only]
+    ├── mod.rs      # Builder struct definition
+    ├── impls.rs    # Constructor (new), Default impl, and builder methods
+    └── build.rs    # build() method and validation
 ```
 
-1. **MdfWriter** (`src/writer/mod.rs`): Main writer state machine
-2. **IO layer** (`src/writer/io.rs`): Block writing with 8-byte alignment
-3. **Init layer** (`src/writer/init.rs`): Block creation and link management
-4. **Data layer** (`src/writer/data.rs`): Record encoding to bytes
+This pattern provides:
+- **Separation of concerns** - Each file has a single responsibility
+- **Feature isolation** - `std`-only code lives in dedicated files
+- **Consistent navigation** - Same structure across all entities
+- **Clear builder phases** - Construction/configuration in impls.rs, finalization in build.rs
 
-## Key Design Decisions
+## Compatibility Layer (`compat/`)
 
-### Memory Mapping
+The compat module provides type aliases that abstract over `alloc` and `heapless`:
 
-The library uses `memmap2` for reading files. This allows:
-- Zero-copy access to file data
-- Efficient random access for block traversal
-- OS-level caching and prefetching
+```rust
+// With alloc feature:
+type Vec<T, const N: usize> = alloc::vec::Vec<T>;
+type String<const N: usize> = alloc::string::String;
 
-### Block Parsing
-
-Blocks are parsed lazily where possible:
-- Block headers are parsed to locate data
-- Channel values are only decoded when `values()` is called
-- String blocks are read on demand via `read_string_block()`
-
-### Value Conversions
-
-MDF supports complex conversion chains:
-
-```
-Raw Value → CC Block 1 → CC Block 2 → ... → Physical Value
+// With heapless feature:
+type Vec<T, const N: usize> = heapless::Vec<T, N>;
+type String<const N: usize> = heapless::String<N>;
 ```
 
-Conversions are implemented in `src/blocks/conversion/`:
-- **Identity** (type 0): No conversion
-- **Linear** (type 1): `y = a + b*x`
-- **Rational** (type 2): `y = (a + bx + cx²) / (d + ex + fx²)`
-- **Algebraic** (type 3): Formula evaluation with custom parser
-- **Value-to-Text** (types 7-8): Lookup tables
-- **Text-to-Value** (type 9): Reverse lookup
+**Key design decisions:**
 
-### Error Handling
+1. **Unified API** - Both implementations expose the same methods
+2. **Capacity parameter** - `N` is always required, even for `alloc` (enables limit enforcement)
+3. **Result-based push** - `push()` returns `Result<()>` to handle capacity limits uniformly
+4. **Limit enforcement** - Even `alloc::Vec` enforces `N` as a maximum size (DoS protection)
 
-All fallible operations return `Result<T, Error>`:
-- I/O errors are wrapped in `Error::IOError`
-- Parse errors provide context (expected vs actual)
-- Conversion errors are propagated through the chain
+## Parser Architecture
 
-### Indexing
+The parser is hand-written (not using parser combinators like `nom`) for several reasons:
 
-The `MdfIndex` system (`src/index.rs`) enables:
-- Creating lightweight JSON metadata files
-- Reading specific channels without full file parsing
-- HTTP range request support via `ByteRangeReader` trait
+1. **Zero dependencies** - No external parser crate needed
+2. **Zero-copy** - Returns `&str` slices into the input, no allocations during parsing
+3. **`no_std` compatible** - Works without allocator during the parsing phase
+4. **Simple error messages** - Direct control over error reporting
 
-## Block Types Reference
+```rust
+pub struct Parser<'a> {
+    input: &'a [u8],  // Original input bytes
+    pos: usize,       // Current position
+    line: usize,      // Current line number (for errors)
+}
+```
 
-| Block ID | Name | Purpose |
-|----------|------|---------|
-| `##ID` | Identification | File format identifier (always first 64 bytes) |
-| `##HD` | Header | File metadata, links to first DG |
-| `##DG` | Data Group | Groups related channel groups |
-| `##CG` | Channel Group | Defines record layout |
-| `##CN` | Channel | Individual signal definition |
-| `##CC` | Conversion | Value transformation rules |
-| `##TX` | Text | String storage |
-| `##MD` | Metadata | XML metadata |
-| `##DT` | Data | Raw sample records |
-| `##DL` | Data List | Links multiple DT blocks |
-| `##SI` | Source Info | Acquisition source metadata |
+**Parsing flow:**
+```
+Input &str
+    │
+    ▼
+Parser::new(input.as_bytes())
+    │
+    ▼
+parse_version() ──► Version
+parse_nodes()   ──► Nodes  
+parse_messages()──► Vec<Message>
+    │                  │
+    │                  └──► parse_signals() ──► Vec<Signal>
+    ▼
+Dbc::new(version, nodes, messages, ...)
+    │
+    ▼
+Validate::validate() ──► Ok(Dbc) or Err(Error)
+```
 
-## Thread Safety
+## Build-Time Configuration
 
-- **Reading**: `MDF` is not `Send`/`Sync` due to internal `&[u8]` references
-- **Writing**: `MdfWriter` is single-threaded (uses internal buffers)
-- **Indexing**: `MdfIndex` is `Send`/`Sync` (owns all data)
+Capacity limits are configurable via environment variables at build time:
 
-## Performance Considerations
+```bash
+DBC_MAX_MESSAGES=512 cargo build ...
+```
 
-1. **Large Files**: Use indexing to avoid parsing entire file
-2. **Many Records**: Records are decoded on-demand via iterators
-3. **Writing**: Default 1 MB buffer; use `new_with_capacity()` to tune
-4. **Memory**: Memory mapping means OS manages page cache
+The `build.rs` script:
+1. Reads environment variables
+2. Validates values (power of 2 required for `heapless`)
+3. Generates `limits.rs` with `const` definitions
+4. Included via `include!(concat!(env!("OUT_DIR"), "/limits.rs"))`
 
-## Extending the Library
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DBC_MAX_MESSAGES` | 8192 | Maximum messages per DBC |
+| `DBC_MAX_SIGNALS_PER_MESSAGE` | 256 | Maximum signals per message |
+| `DBC_MAX_NODES` | 256 | Maximum network nodes |
+| `DBC_MAX_VALUE_DESCRIPTIONS` | 64 | Maximum value descriptions |
+| `DBC_MAX_NAME_SIZE` | 32 | Maximum identifier length |
+| `DBC_MAX_EXTENDED_MULTIPLEXING` | 512 | Maximum SG_MUL_VAL_ entries |
 
-### Adding a New Conversion Type
+## Message Lookup Optimization
 
-1. Add variant to `ConversionType` in `src/blocks/conversion/base.rs`
-2. Implement conversion logic in appropriate file under `src/blocks/conversion/`
-3. Update `ConversionBlock::apply_decoded()` dispatch
+The `Messages` struct includes optional indexing for fast ID lookups:
 
-### Adding a New Block Type
+```rust
+pub struct Messages {
+    messages: Vec<Message, MAX_MESSAGES>,
+    
+    #[cfg(feature = "heapless")]
+    id_index: Option<FnvIndexMap<u32, usize, MAX_MESSAGES>>,  // O(1)
+    
+    #[cfg(feature = "alloc")]
+    sorted_indices: Option<Vec<(u32, usize)>>,  // O(log n) binary search
+}
+```
 
-1. Create `src/blocks/new_block.rs` with struct and `BlockParse` impl
-2. Add to `src/blocks/mod.rs` re-exports
-3. Update parser in `src/parsing/` to read the block
-4. Update writer in `src/writer/` if block is writable
+- **heapless**: `FnvIndexMap` provides O(1) hash-based lookup
+- **alloc**: Sorted vector with binary search provides O(log n) lookup
+- **Fallback**: Linear scan O(n) if index building fails
 
-## Testing
+## Decoding Architecture
+
+CAN message decoding supports both basic and extended multiplexing:
+
+```
+decode(id, payload, is_extended)
+    │
+    ├──► Find message by ID (optimized lookup)
+    │
+    ├──► Validate payload length ≥ DLC
+    │
+    ├──► Decode multiplexer switches first
+    │         │
+    │         └──► Store (name, raw_value) pairs
+    │
+    └──► For each signal:
+              │
+              ├──► Check multiplexing rules
+              │         │
+              │         ├──► Extended (SG_MUL_VAL_): Check value ranges
+              │         │
+              │         └──► Basic (m0, m1...): Check switch == value
+              │
+              └──► If should_decode:
+                        │
+                        └──► signal.decode(payload) ──► DecodedSignal
+```
+
+**Extended CAN ID handling:**
+- DBC stores extended IDs with bit 31 set: `0x80000000 | raw_id`
+- `decode(id, payload, is_extended)` adds the flag when `is_extended=true`
+- `decode_frame(frame)` (embedded-can) extracts ID type automatically
+
+## Error Handling
+
+Errors use a single enum with string messages for `no_std` compatibility. Parsing errors include optional line number information:
+
+```rust
+pub enum Error {
+    UnexpectedEof { line: Option<usize> },
+    Expected { msg: &'static str, line: Option<usize> },
+    InvalidChar { char: char, line: Option<usize> },
+    MaxStrLength { max: usize, line: Option<usize> },
+    Version { msg: &'static str, line: Option<usize> },
+    Message { msg: &'static str, line: Option<usize> },
+    Signal { msg: &'static str, line: Option<usize> },
+    Nodes { msg: &'static str, line: Option<usize> },
+    Receivers { msg: &'static str, line: Option<usize> },
+    Decoding(&'static str),      // Runtime decode error (no line info)
+    Validation(&'static str),    // Post-parse validation (no line info)
+}
+```
+
+Error messages are defined as `const` strings in `error/lang/`:
+- `en_no_std.rs` - Minimal messages for embedded
+- `en_std.rs` - Detailed messages with context
+
+## Testing Strategy
 
 ```
 tests/
-├── api.rs                      # High-level API tests
-├── blocks.rs                   # Block roundtrip tests
-├── data_files.rs               # Integration tests with real files
-├── index.rs                    # Indexing tests
-├── merge.rs                    # File merging tests
-├── test_invalidation_bits.rs   # Invalidation bit handling
-└── enhanced_index_conversions.rs
+├── integration_tests.rs   # Full DBC parsing scenarios
+├── real_world_tests.rs    # Tests with actual DBC files
+├── edge_cases.rs          # Boundary conditions
+├── proptest_tests.rs      # Property-based testing
+└── data/                  # Sample DBC files
+    ├── simple.dbc
+    ├── complete.dbc
+    ├── j1939.dbc
+    └── ...
 ```
 
-Run tests with:
-```bash
-cargo test
-```
+Unit tests are co-located with implementation (`#[cfg(test)] mod tests`).
+
+## Performance Considerations
+
+1. **Zero-copy parsing** - Parser returns references to input, no string allocations
+2. **Indexed lookups** - O(1) or O(log n) message lookup by ID
+3. **Inlined hot paths** - `#[inline]` on frequently called accessors
+4. **Early validation** - Fail fast before expensive operations
+5. **Pre-allocated collections** - Vec capacity hints reduce reallocations
+

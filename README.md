@@ -21,22 +21,48 @@ A Rust library for parsing, editing, and manipulating DBC (CAN Database) files.
 dbc-rs = "0.1"
 ```
 
+### Decode CAN Frames
+
+```rust
+use dbc_rs::Dbc;
+
+// Parse DBC content
+let dbc = Dbc::parse(dbc_content)?;
+
+// Decode a CAN frame (ID 0x100, 8 bytes, standard 11-bit ID)
+let signals = dbc.decode(0x100, &frame_data, false)?;
+for signal in signals {
+    println!("{}: {:.2} {}", signal.name, signal.value, signal.unit);
+}
+```
+
+### Encode Signal Values
+
 ```rust
 use dbc_rs::Dbc;
 
 let dbc = Dbc::parse(dbc_content)?;
-let signals = dbc.decode(0x100, &frame_data, false)?;
-for signal in signals {
-    println!("{}: {:.2}", signal.name, signal.value);
-}
+
+// Encode signal values into a CAN frame payload
+let payload = dbc.encode(0x100, &[
+    ("RPM", 2500.0),
+    ("Temperature", 85.0),
+])?;
 ```
 
-For embedded (`no_std`):
+### Embedded (`no_std`)
 
 ```toml
 [dependencies]
 dbc-rs = { version = "0.1", default-features = false, features = ["heapless"] }
 ```
+
+See [`examples/`](./examples/) for complete working examples:
+- `decode.rs` - Signal decoding basics
+- `decode_frame.rs` - Using `embedded-can` Frame trait
+- `encode.rs` - Encoding signals to CAN payloads
+- `create_dbc.rs` - Building DBC files programmatically
+- `parse_std.rs` / `parse_no_std.rs` - Parsing in different environments
 
 ## Feature Flags
 
