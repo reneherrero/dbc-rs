@@ -2,7 +2,7 @@
 # Pre-commit hook to run quality checks before allowing commits
 #
 # This hook ensures that code quality checks pass before commits are made.
-# It runs tests, clippy, and formatting checks on all packages and feature combinations.
+# It runs tests, clippy, and formatting checks on all feature combinations.
 
 set -e
 
@@ -58,7 +58,7 @@ fi
 
 # Run tests with alloc feature
 echo -e "\n${YELLOW}Running tests with alloc feature...${NC}"
-if cargo test --quiet --no-default-features --features alloc -p dbc-rs 2>&1; then
+if cargo test --quiet --no-default-features --features alloc 2>&1; then
     echo -e "${GREEN}✓ Tests passed (alloc)${NC}"
 else
     echo -e "${RED}✗ Tests failed (alloc)${NC}"
@@ -67,59 +67,49 @@ fi
 
 # Run tests with heapless feature (with reduced constants to avoid stack overflow)
 echo -e "\n${YELLOW}Running tests with heapless feature (release mode, reduced constants)...${NC}"
-if DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --quiet --release --no-default-features --features heapless -p dbc-rs 2>&1; then
+if DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 cargo test --quiet --release --no-default-features --features heapless 2>&1; then
     echo -e "${GREEN}✓ Tests passed (heapless)${NC}"
 else
     echo -e "${RED}✗ Tests failed (heapless)${NC}"
     FAILED=1
 fi
 
-# Run clippy on dbc-rs with heapless feature (embedded)
+# Run clippy with heapless feature (embedded)
 # Note: DBC_MAX_MESSAGES must be a power of 2 for heapless (build.rs validates this)
-echo -e "\n${YELLOW}Running clippy on dbc-rs (heapless embedded)...${NC}"
-if DBC_MAX_MESSAGES=512 rustup run stable cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed (heapless embedded)${NC}"
+echo -e "\n${YELLOW}Running clippy (heapless embedded)...${NC}"
+if DBC_MAX_MESSAGES=512 rustup run stable cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ Clippy check passed (heapless embedded)${NC}"
 else
-    echo -e "${RED}✗ dbc-rs clippy check failed (heapless embedded)${NC}"
-    FAILED=1
-fi
-# Run clippy on dbc-rs with heapless feature (x86_64)
-# Note: DBC_MAX_MESSAGES must be a power of 2 for heapless (build.rs validates this)
-echo -e "\n${YELLOW}Running clippy on dbc-rs (heapless x86_64)...${NC}"
-if DBC_MAX_MESSAGES=512 rustup run stable cargo clippy --no-default-features --features heapless -p dbc-rs --lib --bins -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed (heapless x86_64)${NC}"
-else
-    echo -e "${RED}✗ dbc-rs clippy check failed (heapless x86_64)${NC}"
+    echo -e "${RED}✗ Clippy check failed (heapless embedded)${NC}"
     FAILED=1
 fi
 
-# Run clippy on dbc-rs with alloc feature (embedded)
-echo -e "\n${YELLOW}Running clippy on dbc-rs (alloc embedded)...${NC}"
-if rustup run stable cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -p dbc-rs -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed (alloc embedded)${NC}"
+# Run clippy with heapless feature (x86_64)
+echo -e "\n${YELLOW}Running clippy (heapless x86_64)...${NC}"
+if DBC_MAX_MESSAGES=512 rustup run stable cargo clippy --no-default-features --features heapless --lib --bins -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ Clippy check passed (heapless x86_64)${NC}"
 else
-    echo -e "${RED}✗ dbc-rs clippy check failed (alloc embedded)${NC}"
+    echo -e "${RED}✗ Clippy check failed (heapless x86_64)${NC}"
     FAILED=1
 fi
 
-# Run clippy on dbc-rs using latest stable (std feature)
-echo -e "\n${YELLOW}Running clippy on dbc-rs (std feature)...${NC}"
-if rustup run stable cargo clippy --lib --bins -p dbc-rs -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-rs clippy check passed (std)${NC}"
+# Run clippy with alloc feature (embedded)
+echo -e "\n${YELLOW}Running clippy (alloc embedded)...${NC}"
+if rustup run stable cargo clippy --no-default-features --features alloc --target thumbv7em-none-eabihf -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ Clippy check passed (alloc embedded)${NC}"
 else
-    echo -e "${RED}✗ dbc-rs clippy check failed (std)${NC}"
+    echo -e "${RED}✗ Clippy check failed (alloc embedded)${NC}"
     FAILED=1
 fi
 
-# Run clippy on dbc-cli using latest stable (for better linting)
-echo -e "\n${YELLOW}Running clippy on dbc-cli (using latest stable)...${NC}"
-if rustup run stable cargo clippy --all-targets -p dbc-cli -- -D warnings 2>&1; then
-    echo -e "${GREEN}✓ dbc-cli clippy check passed${NC}"
+# Run clippy using latest stable (std feature)
+echo -e "\n${YELLOW}Running clippy (std feature)...${NC}"
+if rustup run stable cargo clippy --lib --bins -- -D warnings 2>&1; then
+    echo -e "${GREEN}✓ Clippy check passed (std)${NC}"
 else
-    echo -e "${RED}✗ dbc-cli clippy check failed${NC}"
+    echo -e "${RED}✗ Clippy check failed (std)${NC}"
     FAILED=1
 fi
-
 
 # Check formatting using pinned toolchain (from rust-toolchain.toml)
 # This ensures consistent formatting across all workstations
