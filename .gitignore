@@ -15,4 +15,3 @@ coverage/
 
 # Local git submodule configuration (not tracked)
 .gitmodules
-ti-linux-kernel/
