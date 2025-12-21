@@ -38,16 +38,16 @@ VAL_TABLE_ GearPosition 0 "Park" 1 "Reverse" 2 "Neutral" 3 "Drive" 4 "Sport" 5 "
 VAL_TABLE_ Status 0 "Inactive" 1 "Active" 2 "Error" 3 "Warning" ;
 
 BO_ 256 EngineData : 8 ECM
- SG_ RPM : 0|16@0+ (0.25,0) [0|8000] "rpm" TCM BCM
- SG_ Temperature : 16|8@0- (1,-40) [-40|215] "°C" TCM BCM ABS
- SG_ ThrottlePosition : 24|8@0+ (0.392157,0) [0|100] "%" *
+ SG_ RPM : 7|16@0+ (0.25,0) [0|8000] "rpm" TCM BCM
+ SG_ Temperature : 23|8@0- (1,-40) [-40|215] "°C" TCM BCM ABS
+ SG_ ThrottlePosition : 31|8@0+ (0.392157,0) [0|100] "%" *
  SG_ OilPressure : 32|16@1+ (0.01,0) [0|1000] "kPa" TCM
 
 BO_ 512 TransmissionData : 8 TCM
- SG_ GearPosition : 0|8@0+ (1,0) [0|5] "" BCM
+ SG_ GearPosition : 7|8@0+ (1,0) [0|5] "" BCM
  SG_ ClutchEngaged : 8|1@0+ (1,0) [0|1] "" ECM
  SG_ Torque : 16|16@1- (0.1,0) [-3276.8|3276.7] "Nm" ECM BCM
- SG_ TransmissionTemp : 32|8@0- (1,-40) [-40|215] "°C" ECM
+ SG_ TransmissionTemp : 39|8@0- (1,-40) [-40|215] "°C" ECM
 
 BO_ 768 BrakeData : 6 ABS
  SG_ BrakePressure : 0|16@1+ (0.1,0) [0|1000] "bar" ECM BCM
@@ -56,9 +56,9 @@ BO_ 768 BrakeData : 6 ABS
  SG_ WheelSpeedFR : 32|15@1+ (0.01,0) [0|327.67] "km/h" ECM
 
 BO_ 1024 SensorData : 6 SENSOR
- SG_ Voltage : 0|16@0+ (0.01,0) [0|20] "V" ECM TCM
- SG_ Current : 16|16@0- (0.001,0) [-32.768|32.767] "A" ECM
- SG_ Humidity : 32|8@0+ (0.5,0) [0|127.5] "%" BCM
+ SG_ Voltage : 7|16@0+ (0.01,0) [0|20] "V" ECM TCM
+ SG_ Current : 23|16@0- (0.001,0) [-32.768|32.767] "A" ECM
+ SG_ Humidity : 39|8@0+ (0.5,0) [0|127.5] "%" BCM
 
 CM_ "This is a comprehensive DBC file for testing all features";
 CM_ BO_ 256 "Primary engine control message with RPM, temperature, and throttle";

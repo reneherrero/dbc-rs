@@ -192,7 +192,6 @@ mod std {
     }
 
     #[test]
-    #[ignore = "VAL_TABLE_ not implemented"]
     fn test_parse_complete_dbc_file() {
         // Parse the complete.dbc file
         let content =
@@ -227,15 +226,15 @@ mod std {
         assert_eq!(engine_msg.sender(), "ECM");
         assert_eq!(engine_msg.signals().len(), 4);
 
-        // Verify signals in EngineData
+        // Verify signals in EngineData (big-endian signals use MSB as start_bit)
         let rpm = engine_msg.signals().find("RPM").expect("RPM signal not found");
-        assert_eq!(rpm.start_bit(), 0);
+        assert_eq!(rpm.start_bit(), 7); // BE: MSB of 16-bit signal in bytes 0-1
         assert_eq!(rpm.length(), 16);
         assert_eq!(rpm.factor(), 0.25);
         assert_eq!(rpm.unit(), Some("rpm"));
 
         let temp = engine_msg.signals().find("Temperature").expect("Temperature signal not found");
-        assert_eq!(temp.start_bit(), 16);
+        assert_eq!(temp.start_bit(), 23); // BE: MSB of 8-bit signal in byte 2
         assert_eq!(temp.length(), 8);
         assert_eq!(temp.unit(), Some("°C"));
 
