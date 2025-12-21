@@ -15,6 +15,10 @@ impl Message {
 
     /// Returns the CAN message ID.
     ///
+    /// This returns the raw CAN ID as it would appear on the bus (11-bit or 29-bit).
+    /// For extended (29-bit) IDs, the internal flag bit is stripped.
+    /// Use [`is_extended()`](Self::is_extended) to check if this is an extended ID.
+    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -28,7 +32,44 @@ impl Message {
     #[inline]
     #[must_use = "return value should be used"]
     pub fn id(&self) -> u32 {
+        self.id & Self::MAX_EXTENDED_ID
+    }
+
+    /// Returns the raw internal ID including any extended ID flag.
+    ///
+    /// This is primarily for internal use. Most users should use [`id()`](Self::id) instead.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub(crate) fn id_with_flag(&self) -> u32 {
         self.id
+    }
+
+    /// Returns `true` if this message uses an extended (29-bit) CAN ID.
+    ///
+    /// Standard CAN uses 11-bit identifiers (0-2047), while extended CAN uses 29-bit
+    /// identifiers (0-536870911).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// // Standard 11-bit ID
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"\n\nBU_: ECM\n\nBO_ 256 EngineData : 8 ECM"#)?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// assert!(!message.is_extended());
+    ///
+    /// // Extended 29-bit ID (with flag bit set: 0x80000000 | 0x18DAF115)
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"\n\nBU_: ECM\n\nBO_ 2564485397 OBD2 : 8 ECM"#)?;
+    /// let message = dbc.messages().at(0).unwrap();
+    /// assert!(message.is_extended());
+    /// assert_eq!(message.id(), 0x18DAF115);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn is_extended(&self) -> bool {
+        (self.id & Self::EXTENDED_ID_FLAG) != 0
     }
 
     /// Returns the message name.

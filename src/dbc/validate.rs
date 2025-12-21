@@ -30,9 +30,11 @@ impl Validate {
     // Common validation logic
     fn validate_common(nodes: &Nodes, messages: &[Message]) -> Result<()> {
         // Check for duplicate message IDs
+        // Compare using the internal ID representation (with extended flag)
+        // Standard and extended IDs with the same base value are NOT duplicates
         for (i, msg1) in messages.iter().enumerate() {
             for msg2 in messages.iter().skip(i + 1) {
-                if msg1.id() == msg2.id() {
+                if msg1.id_with_flag() == msg2.id_with_flag() {
                     return Err(Error::Validation(Error::DUPLICATE_MESSAGE_ID));
                 }
             }

@@ -238,7 +238,9 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(message.id(), 0x80000100);
+        // id() returns the raw CAN ID without the extended flag
+        assert_eq!(message.id(), 0x100);
+        assert!(message.is_extended());
     }
 
     #[test]

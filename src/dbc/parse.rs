@@ -763,10 +763,9 @@ BO_ 2147484820 ExtendedMessage : 8 ECM
         let dbc = Dbc::parse(data).unwrap();
         assert_eq!(dbc.messages().len(), 1);
         let msg = dbc.messages().iter().next().unwrap();
-        assert_eq!(msg.id(), 2147484820);
-        // Verify this is extended ID 0x494 with bit 31 set
-        assert_eq!(msg.id() & 0x80000000, 0x80000000); // Bit 31 is set
-        assert_eq!(msg.id() & 0x1FFFFFFF, 0x494); // Lower 29 bits are the actual ID
+        // id() returns the raw CAN ID without the extended flag
+        assert_eq!(msg.id(), 0x494); // Raw extended ID
+        assert!(msg.is_extended()); // is_extended() tells if it's a 29-bit ID
     }
 
     /// Verify Section 8.3: Maximum extended ID (0x1FFFFFFF) with bit 31 flag
@@ -782,7 +781,9 @@ BO_ 2684354559 MaxExtendedId : 8 ECM
         let dbc = Dbc::parse(data).unwrap();
         assert_eq!(dbc.messages().len(), 1);
         let msg = dbc.messages().iter().next().unwrap();
-        assert_eq!(msg.id(), 0x9FFFFFFF);
+        // id() returns the raw 29-bit CAN ID without the extended flag
+        assert_eq!(msg.id(), 0x1FFFFFFF);
+        assert!(msg.is_extended());
     }
 
     /// Verify Section 8.4: Vector__XXX as transmitter

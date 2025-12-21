@@ -352,21 +352,21 @@ BO_ 3221225472 VECTOR__INDEPENDENT_SIG_MSG : 0 Vector__XXX
  SG_ OrphanSignal : 0|16@1+ (1,0) [0|65535] "unit" Vector__XXX
 "#;
         let dbc = Dbc::parse(pseudo_msg_dbc).expect("Pseudo-message with DLC 0 should parse");
+        // id() returns raw CAN ID without the extended flag
+        // 0xC0000000 & 0x1FFFFFFF = 0x00000000 (only bits 0-28 are the CAN ID)
         let pseudo_msg = dbc
             .messages()
             .iter()
-            .find(|m| m.id() == 0xC0000000)
+            .find(|m| m.name() == "VECTOR__INDEPENDENT_SIG_MSG")
             .expect("Should find VECTOR__INDEPENDENT_SIG_MSG");
         assert_eq!(pseudo_msg.name(), "VECTOR__INDEPENDENT_SIG_MSG");
+        assert_eq!(pseudo_msg.id(), 0); // 0xC0000000 & 0x1FFFFFFF = 0
         assert_eq!(pseudo_msg.dlc(), 0);
         assert_eq!(pseudo_msg.sender(), "Vector__XXX");
+        assert!(pseudo_msg.is_extended()); // Bit 31 is set
 
         // Verify extended message ID format (0xC0000000 = 3221225472)
         // See SPECIFICATIONS.md Section 8.1: Extended ID has bit 31 set
-        assert_eq!(
-            3221225472u32, 0xC0000000u32,
-            "Message ID should be 0xC0000000"
-        );
 
         // Verify we can manually construct the expected structure using builders
         // This ensures our expected assertions (commented below) are valid and will work

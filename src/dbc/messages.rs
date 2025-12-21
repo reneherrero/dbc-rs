@@ -50,7 +50,7 @@ impl Messages {
     ) -> Option<FnvIndexMap<u32, usize, { MAX_MESSAGES }>> {
         let mut index = FnvIndexMap::new();
         for (idx, msg) in messages.iter().enumerate() {
-            if index.insert(msg.id(), idx).is_err() {
+            if index.insert(msg.id_with_flag(), idx).is_err() {
                 // If we can't insert (capacity full or duplicate), return None
                 // This should not happen in practice if MAX_MESSAGES is correct
                 return None;
@@ -64,7 +64,7 @@ impl Messages {
     fn build_sorted_index(messages: &[Message]) -> Option<alloc::vec::Vec<(u32, usize)>> {
         let mut indices = alloc::vec::Vec::with_capacity(messages.len());
         for (idx, msg) in messages.iter().enumerate() {
-            indices.push((msg.id(), idx));
+            indices.push((msg.id_with_flag(), idx));
         }
         // Sort by message ID for binary search
         indices.sort_by_key(|&(id, _)| id);
@@ -210,6 +210,6 @@ impl Messages {
 
         // Fallback: linear search O(n)
         // This is used when no alloc/heapless features are enabled
-        self.messages.iter().find(|m| m.id() == id)
+        self.messages.iter().find(|m| m.id_with_flag() == id)
     }
 }
