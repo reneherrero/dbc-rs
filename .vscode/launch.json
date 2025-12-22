@@ -1,0 +1,180 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Unit Tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--all-features"
+                ],
+                "filter": {
+                    "name": "dbc-rs",
+                    "kind": "lib"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Integration Tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--all-features",
+                    "--test",
+                    "*"
+                ],
+                "filter": {
+                    "kind": "test"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Example: parse_std",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "parse_std",
+                    "--features",
+                    "std"
+                ],
+                "filter": {
+                    "name": "parse_std",
+                    "kind": "example"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Example: decode",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "decode",
+                    "--features",
+                    "std"
+                ],
+                "filter": {
+                    "name": "decode",
+                    "kind": "example"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Example: encode",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "encode",
+                    "--features",
+                    "std"
+                ],
+                "filter": {
+                    "name": "encode",
+                    "kind": "example"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Example: decode_frame",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "decode_frame",
+                    "--features",
+                    "std,embedded-can"
+                ],
+                "filter": {
+                    "name": "decode_frame",
+                    "kind": "example"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Example: create_dbc",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example",
+                    "create_dbc",
+                    "--features",
+                    "std"
+                ],
+                "filter": {
+                    "name": "create_dbc",
+                    "kind": "example"
+                }
+            },
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Benchmark (parse)",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bench",
+                    "parse_bench",
+                    "--features",
+                    "std"
+                ],
+                "filter": {
+                    "name": "parse_bench",
+                    "kind": "bench"
+                }
+            },
+            "args": ["--bench", "--profile-time", "5"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        }
+    ]
+}
