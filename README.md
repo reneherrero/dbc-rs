@@ -1,6 +1,6 @@
 # dbc-rs
 
-A Rust library for parsing, editing, and manipulating DBC (CAN Database) files.
+A lightweight Rust library for seamlessly parsing and editing DBC (CAN Database) files, with robust support for encoding and decoding messages and signals.
 
 [![Crates.io](https://img.shields.io/crates/v/dbc-rs.svg)](https://crates.io/crates/dbc-rs)
 [![Documentation](https://docs.rs/dbc-rs/badge.svg)](https://docs.rs/dbc-rs)

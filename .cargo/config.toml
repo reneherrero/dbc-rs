@@ -1,0 +1,4 @@
+# Increase stack size for tests to avoid overflow with large const generics
+# Default test thread stack is ~2MB, but builders with MAX_MESSAGES=8192 need more
+[env]
+RUST_MIN_STACK = "8388608"  # 8MB

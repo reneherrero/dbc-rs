@@ -15,3 +15,4 @@ coverage/
 
 # Local git submodule configuration (not tracked)
 .gitmodules
+# Cargo config is tracked for test stack size
