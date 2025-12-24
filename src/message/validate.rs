@@ -108,7 +108,7 @@ impl Message {
         Ok(())
     }
 
-    fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
+    pub(crate) fn bit_range(start_bit: u16, length: u16, byte_order: ByteOrder) -> (u16, u16) {
         match byte_order {
             ByteOrder::LittleEndian => {
                 // Little-endian: start_bit is LSB, signal extends forward (to higher bit positions)

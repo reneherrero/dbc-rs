@@ -219,9 +219,11 @@ impl Dbc {
             .find_by_id(id)
             .ok_or(Error::Decoding(Error::MESSAGE_NOT_FOUND))?;
 
-        // Validate payload length matches message DLC (early return before any decoding)
-        let dlc = message.dlc() as usize;
-        if payload.len() < dlc {
+        // Validate payload has enough bytes to decode all signals
+        // We check against min_bytes_required (actual signal coverage) rather than DLC
+        // because DLC may be larger than needed (e.g., DLC=8 but signals only use 3 bytes)
+        let min_bytes = message.min_bytes_required() as usize;
+        if payload.len() < min_bytes {
             return Err(Error::Decoding(Error::PAYLOAD_LENGTH_MISMATCH));
         }
 
@@ -567,8 +569,9 @@ BO_ 256 Engine : 8 ECM
 
         let dbc = Dbc::parse(data).unwrap();
 
-        // Try to decode with payload shorter than DLC (DLC is 8, payload is 4)
-        let payload = [0x40, 0x1F, 0x00, 0x00];
+        // Signal RPM uses bits 0-15 (2 bytes), so min_bytes_required = 2
+        // Payload with only 1 byte should fail
+        let payload = [0x40];
         let result = dbc.decode(256, &payload, false);
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -577,6 +580,64 @@ BO_ 256 Engine : 8 ECM
             }
             _ => panic!("Expected Error::Decoding"),
         }
+
+        // Payload with 2 bytes should succeed (matches min_bytes_required)
+        let payload = [0x40, 0x1F];
+        let result = dbc.decode(256, &payload, false);
+        assert!(result.is_ok());
+
+        // Payload with 4 bytes should also succeed (more than min_bytes_required)
+        let payload = [0x40, 0x1F, 0x00, 0x00];
+        let result = dbc.decode(256, &payload, false);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_decode_dlc_larger_than_signal_coverage() {
+        // Test case: DBC declares DLC=8 but signals only use 3 bytes
+        // Frame payload has 6 bytes - should decode successfully
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 1024 NewMessage : 8 ECM
+ SG_ Temp : 0|8@1+ (1,0) [0|255] "" ECM
+ SG_ Pressure : 8|8@1+ (1,0) [0|255] "" ECM
+ SG_ Heel : 16|4@1+ (1,0) [0|15] "" ECM
+ SG_ Rest : 20|4@1+ (1,0) [0|15] "" ECM
+"#;
+
+        let dbc = Dbc::parse(data).unwrap();
+        let message = dbc.messages().find("NewMessage").unwrap();
+
+        // Verify: DLC=8, but min_bytes_required=3 (signals span bits 0-23)
+        assert_eq!(message.dlc(), 8);
+        assert_eq!(message.min_bytes_required(), 3);
+
+        // Payload with 6 bytes should decode successfully
+        // (6 bytes > 3 bytes min required)
+        let payload = [0xAB, 0xCD, 0xEF, 0x00, 0x00, 0x00];
+        let decoded = dbc.decode(1024, &payload, false).unwrap();
+
+        assert_eq!(decoded.len(), 4);
+
+        // Verify decoded values: Temp=0xAB, Pressure=0xCD, Heel=0xF (lower nibble), Rest=0xE (upper nibble)
+        assert_eq!(
+            decoded.iter().find(|s| s.name == "Temp").unwrap().raw_value,
+            0xAB
+        );
+        assert_eq!(
+            decoded.iter().find(|s| s.name == "Pressure").unwrap().raw_value,
+            0xCD
+        );
+        assert_eq!(
+            decoded.iter().find(|s| s.name == "Heel").unwrap().raw_value,
+            0xF
+        );
+        assert_eq!(
+            decoded.iter().find(|s| s.name == "Rest").unwrap().raw_value,
+            0xE
+        );
     }
 
     #[test]

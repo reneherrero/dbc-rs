@@ -167,6 +167,50 @@ impl Message {
     pub fn signals(&self) -> &Signals {
         &self.signals
     }
+
+    /// Returns the minimum number of bytes required to decode all signals in this message.
+    ///
+    /// This calculates the actual byte coverage of all signals, which may be less than
+    /// the declared DLC. Use this when validating frame payloads for decoding - the
+    /// payload must have at least this many bytes to decode all signals successfully.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///  SG_ Temp : 0|8@1+ (1,0) [0|255] "" ECM
+    ///  SG_ Pressure : 8|8@1+ (1,0) [0|255] "" ECM
+    /// "#)?;
+    ///
+    /// let message = dbc.messages().find("Engine").unwrap();
+    /// assert_eq!(message.dlc(), 8);              // Declared DLC is 8
+    /// assert_eq!(message.min_bytes_required(), 2); // But signals only need 2 bytes
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use = "return value should be used"]
+    pub fn min_bytes_required(&self) -> u8 {
+        if self.signals.is_empty() {
+            return 0;
+        }
+
+        let mut max_bit: u16 = 0;
+        for signal in self.signals.iter() {
+            let (_lsb, msb) =
+                Self::bit_range(signal.start_bit(), signal.length(), signal.byte_order());
+            if msb > max_bit {
+                max_bit = msb;
+            }
+        }
+
+        // Convert max bit position to bytes: (max_bit / 8) + 1
+        ((max_bit / 8) + 1) as u8
+    }
 }
 
 #[cfg(test)]
