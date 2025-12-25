@@ -1,3 +1,4 @@
+mod decode;
 mod impls;
 mod parse;
 mod signals;
@@ -8,7 +9,7 @@ mod validate;
 #[cfg(feature = "std")]
 mod builder;
 
-use crate::compat::Name;
+use crate::compat::{Comment, Name};
 #[cfg(feature = "std")]
 pub use builder::MessageBuilder;
 pub use signals::Signals;
@@ -47,6 +48,8 @@ pub struct Message {
     dlc: u8,
     sender: Name,
     signals: Signals,
+    /// Comment text from CM_ BO_ entry
+    comment: Option<Comment>,
 }
 
 impl Message {

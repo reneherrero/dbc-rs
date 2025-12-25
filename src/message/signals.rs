@@ -133,6 +133,13 @@ impl Signals {
     pub fn find(&self, name: &str) -> Option<&Signal> {
         self.iter().find(|s| s.name() == name)
     }
+
+    /// Find a mutable reference to a signal by name.
+    /// Used internally during parsing when CM_ entries are processed after signals.
+    #[must_use = "return value should be used"]
+    pub(crate) fn find_mut(&mut self, name: &str) -> Option<&mut Signal> {
+        self.signals.iter_mut().find(|s| s.name() == name)
+    }
 }
 
 #[cfg(test)]

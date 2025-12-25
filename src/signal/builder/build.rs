@@ -13,6 +13,7 @@ type SignalFields = (
     f64,
     Option<String>,
     ReceiversBuilder,
+    Option<String>,
 );
 
 impl SignalBuilder {
@@ -47,6 +48,7 @@ impl SignalBuilder {
             max,
             self.unit.clone(),
             self.receivers.clone(),
+            self.comment.clone(),
         ))
     }
 
@@ -64,6 +66,7 @@ impl SignalBuilder {
             max,
             unit,
             receivers,
+            comment,
         ) = self.extract_fields()?;
 
         // Validate start_bit: must be between 0 and 511 (CAN FD maximum is 512 bits)
@@ -91,6 +94,7 @@ impl SignalBuilder {
             max: Some(max),
             unit,
             receivers,
+            comment,
         })
     }
 
@@ -143,6 +147,7 @@ impl SignalBuilder {
             max,
             unit,
             receivers,
+            comment,
         ) = self.extract_fields()?;
         // Build receivers first (receivers is already ReceiversBuilder)
         let built_receivers = receivers.build()?;
@@ -161,6 +166,7 @@ impl SignalBuilder {
             max,
             unit.map(|u| u.into()),
             built_receivers,
+            comment.map(|c| c.into()),
         ))
     }
 }

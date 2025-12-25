@@ -76,6 +76,7 @@ impl DbcBuilder {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)]
     fn extract_fields(
         self,
     ) -> Result<(
@@ -84,6 +85,7 @@ impl DbcBuilder {
         Messages,
         crate::dbc::ValueDescriptionsMap,
         CompatVec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>,
+        Option<std::string::String>,
     )> {
         // Build version
         let version = self.version.build()?;
@@ -138,6 +140,7 @@ impl DbcBuilder {
             messages,
             value_descriptions,
             extended_multiplexing,
+            self.comment,
         ))
     }
 
@@ -158,7 +161,7 @@ impl DbcBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<Dbc> {
-        let (version, nodes, messages, value_descriptions, extended_multiplexing) =
+        let (version, nodes, messages, value_descriptions, extended_multiplexing, comment) =
             self.extract_fields()?;
         // Validate before construction
         // Get slice from Messages for validation
@@ -177,6 +180,8 @@ impl DbcBuilder {
             messages,
             value_descriptions,
             extended_multiplexing,
+            comment.map(|c| c.into()),
+            crate::compat::BTreeMap::new(), // TODO: node_comments from builder
         ))
     }
 }

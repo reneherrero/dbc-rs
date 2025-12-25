@@ -1,8 +1,8 @@
 use crate::{
     Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES,
     MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, ValueDescriptions, Version,
-    compat::{Name, ValueDescEntries, Vec},
-    dbc::{Messages, Validate, ValueDescriptionsMap},
+    compat::{BTreeMap, Comment, Name, ValueDescEntries, Vec},
+    dbc::{Messages, NodeCommentsMap, Validate, ValueDescriptionsMap},
 };
 
 impl Dbc {
@@ -45,8 +45,20 @@ impl Dbc {
         type ValueDescBuffer = Vec<ValueDescBufferEntry, { MAX_MESSAGES }>;
         type ExtMuxBuffer = Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>;
 
+        // Comment buffers - CM_ entries can appear anywhere in the file
+        // so we collect them first and apply after parsing messages
+        type MessageCommentBuffer = Vec<(u32, Comment), { MAX_MESSAGES }>;
+        // Signal comments: (message_id, signal_name, comment)
+        type SignalCommentBuffer = Vec<(u32, Name, Comment), { MAX_MESSAGES * 4 }>;
+
         let mut value_descriptions_buffer: ValueDescBuffer = ValueDescBuffer::new();
         let mut extended_multiplexing_buffer: ExtMuxBuffer = ExtMuxBuffer::new();
+
+        // Comment buffers
+        let mut db_comment: Option<Comment> = None;
+        let mut node_comments_buffer: NodeCommentsMap = BTreeMap::new();
+        let mut message_comments_buffer: MessageCommentBuffer = MessageCommentBuffer::new();
+        let mut signal_comments_buffer: SignalCommentBuffer = SignalCommentBuffer::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -107,11 +119,111 @@ impl Dbc {
                     }
                     continue;
                 }
-                CM_ | BS_ | VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | SIG_GROUP_
-                | SIG_VALTYPE_ | EV_ | BO_TX_BU_ => {
+                BS_ | VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | SIG_GROUP_ | SIG_VALTYPE_
+                | EV_ | BO_TX_BU_ => {
                     // Consume keyword then skip to end of line
                     let _ = parser.expect(keyword.as_bytes()).ok();
                     parser.skip_to_end_of_line();
+                    continue;
+                }
+                CM_ => {
+                    // Parse CM_ comment entry
+                    // Formats:
+                    //   CM_ "general comment";
+                    //   CM_ BU_ node_name "comment";
+                    //   CM_ BO_ message_id "comment";
+                    //   CM_ SG_ message_id signal_name "comment";
+                    let _ = parser.expect(crate::CM_.as_bytes()).ok();
+                    parser.skip_newlines_and_spaces();
+
+                    // Determine comment type by peeking next token
+                    if parser.starts_with(b"\"") {
+                        // General database comment: CM_ "string";
+                        if parser.expect(b"\"").is_ok() {
+                            if let Ok(comment_bytes) = parser.take_until_quote(false, 1024) {
+                                if let Ok(comment_str) = core::str::from_utf8(comment_bytes) {
+                                    if let Ok(comment) = Comment::try_from(comment_str) {
+                                        db_comment = Some(comment);
+                                    }
+                                }
+                            }
+                        }
+                        parser.skip_to_end_of_line();
+                    } else if parser.starts_with(BU_.as_bytes()) {
+                        // Node comment: CM_ BU_ node_name "string";
+                        let _ = parser.expect(BU_.as_bytes()).ok();
+                        parser.skip_newlines_and_spaces();
+                        if let Ok(node_name_bytes) = parser.parse_identifier() {
+                            if let Ok(node_name) = Name::try_from(node_name_bytes) {
+                                parser.skip_newlines_and_spaces();
+                                if parser.expect(b"\"").is_ok() {
+                                    if let Ok(comment_bytes) = parser.take_until_quote(false, 1024)
+                                    {
+                                        if let Ok(comment_str) = core::str::from_utf8(comment_bytes)
+                                        {
+                                            if let Ok(comment) = Comment::try_from(comment_str) {
+                                                let _ =
+                                                    node_comments_buffer.insert(node_name, comment);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        parser.skip_to_end_of_line();
+                    } else if parser.starts_with(BO_.as_bytes()) {
+                        // Message comment: CM_ BO_ message_id "string";
+                        let _ = parser.expect(BO_.as_bytes()).ok();
+                        parser.skip_newlines_and_spaces();
+                        if let Ok(message_id) = parser.parse_u32() {
+                            parser.skip_newlines_and_spaces();
+                            if parser.expect(b"\"").is_ok() {
+                                if let Ok(comment_bytes) = parser.take_until_quote(false, 1024) {
+                                    if let Ok(comment_str) = core::str::from_utf8(comment_bytes) {
+                                        if let Ok(comment) = Comment::try_from(comment_str) {
+                                            let _ =
+                                                message_comments_buffer.push((message_id, comment));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        parser.skip_to_end_of_line();
+                    } else if parser.starts_with(SG_.as_bytes()) {
+                        // Signal comment: CM_ SG_ message_id signal_name "string";
+                        let _ = parser.expect(SG_.as_bytes()).ok();
+                        parser.skip_newlines_and_spaces();
+                        if let Ok(message_id) = parser.parse_u32() {
+                            parser.skip_newlines_and_spaces();
+                            if let Ok(signal_name_bytes) = parser.parse_identifier() {
+                                if let Ok(signal_name) = Name::try_from(signal_name_bytes) {
+                                    parser.skip_newlines_and_spaces();
+                                    if parser.expect(b"\"").is_ok() {
+                                        if let Ok(comment_bytes) =
+                                            parser.take_until_quote(false, 1024)
+                                        {
+                                            if let Ok(comment_str) =
+                                                core::str::from_utf8(comment_bytes)
+                                            {
+                                                if let Ok(comment) = Comment::try_from(comment_str)
+                                                {
+                                                    let _ = signal_comments_buffer.push((
+                                                        message_id,
+                                                        signal_name,
+                                                        comment,
+                                                    ));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        parser.skip_to_end_of_line();
+                    } else {
+                        // Unknown comment type, skip
+                        parser.skip_to_end_of_line();
+                    }
                     continue;
                 }
                 SG_MUL_VAL_ => {
@@ -365,6 +477,29 @@ impl Dbc {
             ValueDescriptionsMap::new(map)
         };
 
+        // Apply comments to messages and signals
+        // Message comments are applied by matching message_id
+        for (message_id, comment) in message_comments_buffer.iter() {
+            for msg in messages_buffer.iter_mut() {
+                if msg.id() == *message_id || msg.id_with_flag() == *message_id {
+                    msg.set_comment(comment.clone());
+                    break;
+                }
+            }
+        }
+
+        // Signal comments are applied by matching (message_id, signal_name)
+        for (message_id, signal_name, comment) in signal_comments_buffer.iter() {
+            for msg in messages_buffer.iter_mut() {
+                if msg.id() == *message_id || msg.id_with_flag() == *message_id {
+                    if let Some(signal) = msg.signals_mut().find_mut(signal_name.as_str()) {
+                        signal.set_comment(comment.clone());
+                    }
+                    break;
+                }
+            }
+        }
+
         // Convert messages buffer to slice for validation and construction
         let messages_slice: &[Message] = messages_buffer.as_slice();
         let extended_multiplexing_slice: &[ExtendedMultiplexing] =
@@ -392,6 +527,8 @@ impl Dbc {
             messages,
             value_descriptions_map,
             extended_multiplexing_buffer,
+            db_comment,
+            node_comments_buffer,
         ))
     }
 
@@ -872,5 +1009,220 @@ BO_ invalid EngineData : 8 ECM
         let err = result.unwrap_err();
         // The error should have line information
         assert!(err.line().is_some(), "Error should include line number");
+    }
+
+    // ============================================================================
+    // CM_ Comment Parsing Tests (Section 14 of SPECIFICATIONS.md)
+    // ============================================================================
+
+    /// Test parsing general database comment: CM_ "string";
+    #[test]
+    fn test_parse_cm_database_comment() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+
+CM_ "This is the database comment";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.comment(), Some("This is the database comment"));
+    }
+
+    /// Test parsing node comment: CM_ BU_ node_name "string";
+    #[test]
+    fn test_parse_cm_node_comment() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+
+CM_ BU_ ECM "Engine Control Module";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        assert_eq!(dbc.node_comment("ECM"), Some("Engine Control Module"));
+    }
+
+    /// Test parsing message comment: CM_ BO_ message_id "string";
+    #[test]
+    fn test_parse_cm_message_comment() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+
+CM_ BO_ 256 "Engine status message";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        let msg = dbc.messages().iter().next().unwrap();
+        assert_eq!(msg.comment(), Some("Engine status message"));
+    }
+
+    /// Test parsing signal comment: CM_ SG_ message_id signal_name "string";
+    #[test]
+    fn test_parse_cm_signal_comment() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+
+CM_ SG_ 256 RPM "Engine rotations per minute";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        let msg = dbc.messages().iter().next().unwrap();
+        let signal = msg.signals().find("RPM").unwrap();
+        assert_eq!(signal.comment(), Some("Engine rotations per minute"));
+    }
+
+    /// Test multiple comments in one file
+    #[test]
+    fn test_parse_cm_multiple_comments() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM TCM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+
+BO_ 512 Trans : 8 TCM
+ SG_ Gear : 0|8@1+ (1,0) [0|6] ""
+
+CM_ "Vehicle CAN database";
+CM_ BU_ ECM "Engine Control Module";
+CM_ BU_ TCM "Transmission Control Module";
+CM_ BO_ 256 "Engine status message";
+CM_ BO_ 512 "Transmission status";
+CM_ SG_ 256 RPM "Engine rotations per minute";
+CM_ SG_ 512 Gear "Current gear position";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+
+        // Database comment
+        assert_eq!(dbc.comment(), Some("Vehicle CAN database"));
+
+        // Node comments
+        assert_eq!(dbc.node_comment("ECM"), Some("Engine Control Module"));
+        assert_eq!(dbc.node_comment("TCM"), Some("Transmission Control Module"));
+
+        // Message comments
+        let engine = dbc.messages().iter().find(|m| m.id() == 256).unwrap();
+        let trans = dbc.messages().iter().find(|m| m.id() == 512).unwrap();
+        assert_eq!(engine.comment(), Some("Engine status message"));
+        assert_eq!(trans.comment(), Some("Transmission status"));
+
+        // Signal comments
+        let rpm = engine.signals().find("RPM").unwrap();
+        let gear = trans.signals().find("Gear").unwrap();
+        assert_eq!(rpm.comment(), Some("Engine rotations per minute"));
+        assert_eq!(gear.comment(), Some("Current gear position"));
+    }
+
+    /// Test CM_ appearing before the entities they describe
+    #[test]
+    fn test_parse_cm_before_entity() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+CM_ BO_ 256 "Engine status message";
+CM_ SG_ 256 RPM "Engine RPM";
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        let msg = dbc.messages().iter().next().unwrap();
+        assert_eq!(msg.comment(), Some("Engine status message"));
+        let signal = msg.signals().find("RPM").unwrap();
+        assert_eq!(signal.comment(), Some("Engine RPM"));
+    }
+
+    /// Test multiple CM_ entries for same entity - last wins
+    #[test]
+    fn test_parse_cm_last_wins() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+
+CM_ BO_ 256 "First message comment";
+CM_ BO_ 256 "Second message comment";
+CM_ SG_ 256 RPM "First signal comment";
+CM_ SG_ 256 RPM "Second signal comment";
+CM_ BU_ ECM "First node comment";
+CM_ BU_ ECM "Second node comment";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+
+        // Last comment wins for each entity
+        let msg = dbc.messages().iter().next().unwrap();
+        assert_eq!(msg.comment(), Some("Second message comment"));
+        let signal = msg.signals().find("RPM").unwrap();
+        assert_eq!(signal.comment(), Some("Second signal comment"));
+        assert_eq!(dbc.node_comment("ECM"), Some("Second node comment"));
+    }
+
+    /// Test comment round-trip (parse -> serialize -> parse)
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_parse_cm_round_trip() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM TCM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+
+CM_ "Database comment";
+CM_ BU_ ECM "Engine Control Module";
+CM_ BO_ 256 "Engine status message";
+CM_ SG_ 256 RPM "Engine rotations per minute";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+
+        // Serialize and re-parse
+        let serialized = dbc.to_dbc_string();
+        let dbc2 = Dbc::parse(&serialized).unwrap();
+
+        // Verify comments are preserved
+        assert_eq!(dbc2.comment(), Some("Database comment"));
+        assert_eq!(dbc2.node_comment("ECM"), Some("Engine Control Module"));
+        let msg = dbc2.messages().iter().next().unwrap();
+        assert_eq!(msg.comment(), Some("Engine status message"));
+        let signal = msg.signals().find("RPM").unwrap();
+        assert_eq!(signal.comment(), Some("Engine rotations per minute"));
+    }
+
+    /// Test CM_ serialization in output
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_serialize_cm_comments() {
+        let data = r#"VERSION "1.0"
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+ SG_ RPM : 0|16@1+ (0.25,0) [0|8000] "rpm"
+
+CM_ "Database comment";
+CM_ BU_ ECM "Engine Control Module";
+CM_ BO_ 256 "Engine status";
+CM_ SG_ 256 RPM "RPM signal";
+"#;
+        let dbc = Dbc::parse(data).unwrap();
+        let serialized = dbc.to_dbc_string();
+
+        // Verify CM_ lines are present in output
+        assert!(serialized.contains("CM_ \"Database comment\";"));
+        assert!(serialized.contains("CM_ BU_ ECM \"Engine Control Module\";"));
+        assert!(serialized.contains("CM_ BO_ 256 \"Engine status\";"));
+        assert!(serialized.contains("CM_ SG_ 256 RPM \"RPM signal\";"));
     }
 }

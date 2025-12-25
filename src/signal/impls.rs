@@ -5,7 +5,7 @@ use core::hash::{Hash, Hasher};
 #[cfg(feature = "std")]
 use crate::MAX_NAME_SIZE;
 #[cfg(feature = "std")]
-use crate::compat::String;
+use crate::compat::{Comment, String};
 
 impl Signal {
     #[cfg(feature = "std")]
@@ -22,6 +22,7 @@ impl Signal {
         max: f64,
         unit: Option<String<{ MAX_NAME_SIZE }>>,
         receivers: Receivers,
+        comment: Option<Comment>,
     ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
@@ -38,6 +39,7 @@ impl Signal {
             receivers,
             is_multiplexer_switch: false,
             multiplexer_switch_value: None,
+            comment,
         }
     }
 
@@ -269,6 +271,20 @@ impl Signal {
     pub fn multiplexer_switch_value(&self) -> Option<u64> {
         self.multiplexer_switch_value
     }
+
+    /// Returns the signal comment from CM_ SG_ entry, if present.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn comment(&self) -> Option<&str> {
+        self.comment.as_ref().map(|c| c.as_ref())
+    }
+
+    /// Sets the signal comment (from CM_ SG_ entry).
+    /// Used internally during parsing when CM_ entries are processed after signals.
+    #[inline]
+    pub(crate) fn set_comment(&mut self, comment: crate::compat::Comment) {
+        self.comment = Some(comment);
+    }
 }
 
 impl PartialEq for Signal {
@@ -286,6 +302,7 @@ impl PartialEq for Signal {
             && self.receivers == other.receivers
             && self.is_multiplexer_switch == other.is_multiplexer_switch
             && self.multiplexer_switch_value == other.multiplexer_switch_value
+            && self.comment == other.comment
     }
 }
 
@@ -309,6 +326,7 @@ impl Hash for Signal {
         self.receivers.hash(state);
         self.is_multiplexer_switch.hash(state);
         self.multiplexer_switch_value.hash(state);
+        self.comment.hash(state);
     }
 }
 

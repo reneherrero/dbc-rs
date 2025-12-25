@@ -1,8 +1,15 @@
 use super::{Message, Signals};
-use crate::compat::Name;
+use crate::compat::{Comment, Name};
 
 impl Message {
-    pub(crate) fn new(id: u32, name: Name, dlc: u8, sender: Name, signals: Signals) -> Self {
+    pub(crate) fn new(
+        id: u32,
+        name: Name,
+        dlc: u8,
+        sender: Name,
+        signals: Signals,
+        comment: Option<Comment>,
+    ) -> Self {
         // Validation should have been done prior (by builder or parse)
         Self {
             id,
@@ -10,6 +17,7 @@ impl Message {
             dlc,
             sender,
             signals,
+            comment,
         }
     }
 
@@ -210,6 +218,27 @@ impl Message {
 
         // Convert max bit position to bytes: (max_bit / 8) + 1
         ((max_bit / 8) + 1) as u8
+    }
+
+    /// Returns the message comment from CM_ BO_ entry, if present.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn comment(&self) -> Option<&str> {
+        self.comment.as_ref().map(|c| c.as_ref())
+    }
+
+    /// Sets the message comment (from CM_ BO_ entry).
+    /// Used internally during parsing when CM_ entries are processed after messages.
+    #[inline]
+    pub(crate) fn set_comment(&mut self, comment: Comment) {
+        self.comment = Some(comment);
+    }
+
+    /// Returns a mutable reference to the signals collection.
+    /// Used internally during parsing when CM_ entries are processed after signals.
+    #[inline]
+    pub(crate) fn signals_mut(&mut self) -> &mut Signals {
+        &mut self.signals
     }
 }
 

@@ -44,6 +44,7 @@ pub struct DbcBuilder {
     messages: Vec<MessageBuilder>,
     value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder>,
     extended_multiplexing: Vec<ExtendedMultiplexingBuilder>,
+    comment: Option<String>,
 }
 
 // Include modules for additional functionality

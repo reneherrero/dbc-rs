@@ -5,12 +5,15 @@ use crate::{
 };
 
 impl MessageBuilder {
-    fn extract_fields(self) -> Result<(u32, String, u8, String, Vec<SignalBuilder>)> {
+    #[allow(clippy::type_complexity)]
+    fn extract_fields(
+        self,
+    ) -> Result<(u32, String, u8, String, Vec<SignalBuilder>, Option<String>)> {
         let id = required_field!(self.id, Error::message(Error::MESSAGE_ID_REQUIRED))?;
         let name = required_field!(self.name, Error::message(Error::MESSAGE_NAME_EMPTY))?;
         let dlc = required_field!(self.dlc, Error::message(Error::MESSAGE_DLC_REQUIRED))?;
         let sender = required_field!(self.sender, Error::message(Error::MESSAGE_SENDER_EMPTY))?;
-        Ok((id, name, dlc, sender, self.signals))
+        Ok((id, name, dlc, sender, self.signals, self.comment))
     }
 
     /// Validates the builder configuration without building the final `Message`.
@@ -93,7 +96,7 @@ impl MessageBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<Message> {
-        let (id, name, dlc, sender, signals) = self.extract_fields()?;
+        let (id, name, dlc, sender, signals, comment) = self.extract_fields()?;
         // Build all signals first
         let built_signals: Vec<Signal> = signals
             .into_iter()
@@ -113,6 +116,7 @@ impl MessageBuilder {
             dlc,
             sender_str,
             signals_collection,
+            comment.map(|c| c.into()),
         ))
     }
 }
@@ -254,5 +258,24 @@ mod tests {
         // CAN FD supports up to 64 bytes
         let message = minimal_message().dlc(64).build().unwrap();
         assert_eq!(message.dlc(), 64);
+    }
+
+    #[test]
+    fn test_message_builder_with_comment() {
+        let message = minimal_message()
+            .comment("Engine status message with RPM and temperature")
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            message.comment(),
+            Some("Engine status message with RPM and temperature")
+        );
+    }
+
+    #[test]
+    fn test_message_builder_without_comment() {
+        let message = minimal_message().build().unwrap();
+        assert_eq!(message.comment(), None);
     }
 }

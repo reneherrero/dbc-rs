@@ -149,6 +149,12 @@ impl<T, const N: usize> Vec<T, N> {
         self.0.iter()
     }
 
+    /// Returns a mutable iterator over the slice.
+    #[inline]
+    pub fn iter_mut(&mut self) -> slice::IterMut<'_, T> {
+        self.0.iter_mut()
+    }
+
     /// Consumes the Vec and returns the inner representation.
     #[inline]
     #[cfg(not(feature = "alloc"))]

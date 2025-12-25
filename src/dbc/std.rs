@@ -39,6 +39,46 @@ impl Dbc {
             result.push_str(&message.to_string_full());
         }
 
+        // CM_ lines (comments section)
+        // General database comment
+        if let Some(comment) = self.comment() {
+            result.push_str("\nCM_ \"");
+            result.push_str(comment);
+            result.push_str("\";\n");
+        }
+
+        // Node comments
+        for (node_name, comment) in self.node_comments.iter() {
+            result.push_str("CM_ BU_ ");
+            result.push_str(node_name.as_str());
+            result.push_str(" \"");
+            result.push_str(comment.as_str());
+            result.push_str("\";\n");
+        }
+
+        // Message and signal comments
+        for message in self.messages().iter() {
+            if let Some(comment) = message.comment() {
+                result.push_str("CM_ BO_ ");
+                result.push_str(&message.id().to_string());
+                result.push_str(" \"");
+                result.push_str(comment);
+                result.push_str("\";\n");
+            }
+
+            for signal in message.signals().iter() {
+                if let Some(comment) = signal.comment() {
+                    result.push_str("CM_ SG_ ");
+                    result.push_str(&message.id().to_string());
+                    result.push(' ');
+                    result.push_str(signal.name());
+                    result.push_str(" \"");
+                    result.push_str(comment);
+                    result.push_str("\";\n");
+                }
+            }
+        }
+
         result
     }
 }

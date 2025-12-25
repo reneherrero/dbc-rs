@@ -67,12 +67,14 @@ impl Message {
         let sender_str: compat::String<{ MAX_NAME_SIZE }> = compat::validate_name(sender)?;
         let signals_collection = Signals::from_slice(signals);
 
+        // Note: comment is None here - it gets set later from CM_ BO_ entries
         Ok(Message::new(
             id,
             name_str,
             dlc,
             sender_str,
             signals_collection,
+            None,
         ))
     }
 }

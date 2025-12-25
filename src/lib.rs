@@ -54,6 +54,10 @@ mod version;
 // and have no runtime dependencies. Builders themselves are std-only.
 mod macros;
 
+// High-performance wrapper (std-only)
+#[cfg(feature = "std")]
+mod fast_dbc;
+
 pub use byte_order::ByteOrder;
 pub use dbc::{Dbc, DecodedSignal};
 pub use error::{Error, Result};
@@ -82,6 +86,10 @@ pub use signal::SignalBuilder;
 pub use value_descriptions::ValueDescriptionsBuilder;
 #[cfg(feature = "std")]
 pub use version::VersionBuilder;
+
+// High-performance wrapper
+#[cfg(feature = "std")]
+pub use fast_dbc::FastDbc;
 
 pub(crate) use parser::Parser;
 

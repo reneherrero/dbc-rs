@@ -21,6 +21,7 @@ impl MessageBuilder {
             dlc: None,
             sender: None,
             signals: Vec::new(),
+            comment: None,
         }
     }
 
@@ -41,6 +42,10 @@ impl MessageBuilder {
     builder_string_setter!(
         sender,
         "Sets the sender (transmitter) ECU node name for this message."
+    );
+    builder_string_setter!(
+        comment,
+        "Sets the comment text for this message (from CM_ BO_ entry)."
     );
 
     /// Adds a signal to the message.

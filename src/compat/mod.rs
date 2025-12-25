@@ -25,6 +25,10 @@ pub use vec::Vec;
 
 use crate::{Error, MAX_NAME_SIZE, MAX_VALUE_DESCRIPTIONS, Result};
 
+/// Maximum size for comment text (CM_ entries).
+/// Not defined in DBC spec, using 256 as reasonable default.
+pub const MAX_COMMENT_SIZE: usize = 256;
+
 // ============================================================================
 // Common Type Aliases
 // ============================================================================
@@ -33,6 +37,11 @@ use crate::{Error, MAX_NAME_SIZE, MAX_VALUE_DESCRIPTIONS, Result};
 ///
 /// Used for identifiers like signal names, message names, node names, etc.
 pub type Name = String<{ MAX_NAME_SIZE }>;
+
+/// A comment string with `MAX_COMMENT_SIZE` limit.
+///
+/// Used for CM_ comment text (messages, signals, nodes, database).
+pub type Comment = String<MAX_COMMENT_SIZE>;
 
 /// A value description entry: `(numeric_value, description_string)`.
 ///

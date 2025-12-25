@@ -9,7 +9,10 @@ mod validate;
 #[cfg(feature = "std")]
 mod builder;
 
-use crate::{ByteOrder, Receivers, compat::Name};
+use crate::{
+    ByteOrder, Receivers,
+    compat::{Comment, Name},
+};
 #[cfg(feature = "std")]
 pub use builder::SignalBuilder;
 
@@ -68,4 +71,6 @@ pub struct Signal {
     /// If this is a multiplexed signal (marked with 'm0', 'm1', etc.), this contains the switch value
     /// None means this is a normal signal (not multiplexed)
     multiplexer_switch_value: Option<u64>,
+    /// Comment text from CM_ SG_ entry
+    comment: Option<Comment>,
 }

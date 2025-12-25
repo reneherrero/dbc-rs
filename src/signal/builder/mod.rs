@@ -13,6 +13,7 @@ pub struct SignalBuilder {
     pub(crate) max: Option<f64>,
     pub(crate) unit: Option<String>,
     pub(crate) receivers: ReceiversBuilder,
+    pub(crate) comment: Option<String>,
 }
 
 mod build;

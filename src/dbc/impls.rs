@@ -1,5 +1,5 @@
-use super::{ExtMuxIndex, ExtendedMultiplexings, Messages, ValueDescriptionsMap};
-use crate::{Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version};
+use super::{ExtMuxIndex, ExtendedMultiplexings, Messages, NodeCommentsMap, ValueDescriptionsMap};
+use crate::{Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version, compat::Comment};
 
 impl Dbc {
     pub(crate) fn new(
@@ -8,6 +8,8 @@ impl Dbc {
         messages: Messages,
         value_descriptions: ValueDescriptionsMap,
         extended_multiplexing: ExtendedMultiplexings,
+        comment: Option<Comment>,
+        node_comments: NodeCommentsMap,
     ) -> Self {
         // Build index for fast extended multiplexing lookup
         let ext_mux_index = ExtMuxIndex::build(extended_multiplexing.as_slice());
@@ -20,6 +22,8 @@ impl Dbc {
             value_descriptions,
             extended_multiplexing,
             ext_mux_index,
+            comment,
+            node_comments,
         }
     }
 
@@ -215,6 +219,58 @@ impl Dbc {
         self.extended_multiplexing
             .iter()
             .filter(move |ext_mux| ext_mux.message_id() == message_id)
+    }
+
+    /// Returns the database-level comment from CM_ (general comment), if present.
+    ///
+    /// This is the general comment for the entire DBC file, not associated with
+    /// any specific node, message, or signal.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///
+    /// CM_ "CAN database for powertrain";"#)?;
+    /// assert_eq!(dbc.comment(), Some("CAN database for powertrain"));
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn comment(&self) -> Option<&str> {
+        self.comment.as_ref().map(|c| c.as_ref())
+    }
+
+    /// Returns the comment for a specific node from CM_ BU_ entry, if present.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///
+    /// CM_ BU_ ECM "Engine Control Module";"#)?;
+    /// assert_eq!(dbc.node_comment("ECM"), Some("Engine Control Module"));
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn node_comment(&self, node_name: &str) -> Option<&str> {
+        self.node_comments
+            .iter()
+            .find(|(name, _)| name.as_str() == node_name)
+            .map(|(_, comment)| comment.as_str())
     }
 }
 

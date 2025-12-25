@@ -258,6 +258,7 @@ impl Signal {
         let name = crate::compat::validate_name(name)?;
 
         // Construct directly (validation already done)
+        // Note: comment is None here - it gets set later from CM_ SG_ entries
         Ok(Self {
             name,
             start_bit,
@@ -272,6 +273,7 @@ impl Signal {
             receivers,
             is_multiplexer_switch,
             multiplexer_switch_value,
+            comment: None,
         })
     }
 }

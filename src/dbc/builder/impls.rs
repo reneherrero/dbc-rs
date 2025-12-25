@@ -282,6 +282,22 @@ impl DbcBuilder {
         self
     }
 
+    /// Sets the database-level comment (general CM_ entry).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::DbcBuilder;
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .comment("CAN database for powertrain");
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn comment(mut self, comment: impl AsRef<str>) -> Self {
+        self.comment = Some(comment.as_ref().to_string());
+        self
+    }
+
     /// Creates a `DbcBuilder` from an existing `Dbc`.
     ///
     /// This allows you to modify an existing DBC file by creating a builder
@@ -406,12 +422,16 @@ impl DbcBuilder {
             })
             .collect();
 
+        // Copy comment if present
+        let comment = dbc.comment().map(|c| c.to_string());
+
         Self {
             version,
             nodes,
             messages,
             value_descriptions,
             extended_multiplexing,
+            comment,
         }
     }
 }
