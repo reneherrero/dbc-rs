@@ -18,7 +18,7 @@ impl NodesBuilder {
         Self { nodes: Vec::new() }
     }
 
-    /// Adds a single node to the list.
+    /// Adds a single node to the list without a comment.
     ///
     /// # Arguments
     ///
@@ -38,7 +38,41 @@ impl NodesBuilder {
     /// ```
     #[must_use = "builder method returns modified builder"]
     pub fn add_node(mut self, node: impl AsRef<str>) -> Self {
-        self.nodes.push(node.as_ref().to_string());
+        self.nodes.push((node.as_ref().to_string(), None));
+        self
+    }
+
+    /// Adds a single node to the list with an optional comment.
+    ///
+    /// # Arguments
+    ///
+    /// * `node` - The node name (anything that implements `AsRef<str>`)
+    /// * `comment` - The comment for this node
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::NodesBuilder;
+    ///
+    /// let nodes = NodesBuilder::new()
+    ///     .add_node_with_comment("ECM", "Engine Control Module")
+    ///     .add_node("TCM")
+    ///     .build()?;
+    /// assert_eq!(nodes.len(), 2);
+    /// assert_eq!(nodes.node_comment("ECM"), Some("Engine Control Module"));
+    /// assert_eq!(nodes.node_comment("TCM"), None);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn add_node_with_comment(
+        mut self,
+        node: impl AsRef<str>,
+        comment: impl AsRef<str>,
+    ) -> Self {
+        self.nodes.push((
+            node.as_ref().to_string(),
+            Some(comment.as_ref().to_string()),
+        ));
         self
     }
 

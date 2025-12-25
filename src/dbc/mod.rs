@@ -1,11 +1,9 @@
 use crate::{
-    ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_NODES, Nodes, Version,
-    compat::{BTreeMap, Comment, Name, Vec},
+    ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version,
+    compat::{Comment, Vec},
 };
 
 type ExtendedMultiplexings = Vec<ExtendedMultiplexing, { MAX_EXTENDED_MULTIPLEXING }>;
-/// Map of node names to their comments (from CM_ BU_ entries)
-type NodeCommentsMap = BTreeMap<Name, Comment, MAX_NODES>;
 
 // Index for fast extended multiplexing lookup by (message_id, signal_name)
 // Maps to indices into the extended_multiplexing vec
@@ -70,6 +68,4 @@ pub struct Dbc {
     ext_mux_index: ExtMuxIndex,
     /// Database-level comment from CM_ (general comment)
     comment: Option<Comment>,
-    /// Node comments from CM_ BU_ entries
-    node_comments: NodeCommentsMap,
 }

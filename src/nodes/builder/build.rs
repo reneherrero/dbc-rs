@@ -1,19 +1,32 @@
 use super::NodesBuilder;
-use crate::{Error, MAX_NAME_SIZE, MAX_NODES, Nodes, Result};
+use crate::nodes::{InnerNodes, Node};
+use crate::{Error, MAX_NODES, Nodes, Result};
 
 impl NodesBuilder {
-    /// Convert std strings to compat strings and validate
-    fn to_compat_nodes(
-        &self,
-    ) -> Result<crate::compat::Vec<crate::compat::String<{ MAX_NAME_SIZE }>, { MAX_NODES }>> {
-        use crate::compat::{String, Vec};
-        let mut result: Vec<String<{ MAX_NAME_SIZE }>, { MAX_NODES }> = Vec::new();
-        for node_str in &self.nodes {
-            let compat_str = String::try_from(node_str.as_str())
+    /// Convert std strings to compat Node structs and validate
+    fn to_compat_nodes(&self) -> Result<InnerNodes> {
+        use crate::compat::{Comment, Name, Vec};
+        let mut result: InnerNodes = InnerNodes::new();
+        let mut names: Vec<Name, { MAX_NODES }> = Vec::new();
+        for (node_name, node_comment) in &self.nodes {
+            let compat_name = Name::try_from(node_name.as_str())
                 .map_err(|_| Error::Validation(Error::MAX_NAME_SIZE_EXCEEDED))?;
-            result.push(compat_str).map_err(|_| Error::Validation(Error::NODES_TOO_MANY))?;
+            let _ = names.push(compat_name.clone());
+
+            let compat_comment = if let Some(comment) = node_comment {
+                Some(
+                    Comment::try_from(comment.as_str())
+                        .map_err(|_| Error::Validation("Comment exceeds maximum length"))?,
+                )
+            } else {
+                None
+            };
+
+            result
+                .push(Node::with_comment(compat_name, compat_comment))
+                .map_err(|_| Error::Validation(Error::NODES_TOO_MANY))?;
         }
-        Nodes::validate(&result)?;
+        Nodes::validate(&names)?;
         Ok(result)
     }
 

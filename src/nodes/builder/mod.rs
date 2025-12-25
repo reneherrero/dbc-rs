@@ -21,6 +21,23 @@ use std::{string::String, vec::Vec};
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
 ///
+/// # Adding Comments
+///
+/// You can add comments to nodes using `add_node_with_comment`:
+///
+/// ```rust,no_run
+/// use dbc_rs::NodesBuilder;
+///
+/// let nodes = NodesBuilder::new()
+///     .add_node_with_comment("ECM", "Engine Control Module")
+///     .add_node("TCM")
+///     .build()?;
+///
+/// assert_eq!(nodes.node_comment("ECM"), Some("Engine Control Module"));
+/// assert_eq!(nodes.node_comment("TCM"), None);
+/// # Ok::<(), dbc_rs::Error>(())
+/// ```
+///
 /// # Validation
 ///
 /// The builder validates:
@@ -34,7 +51,7 @@ use std::{string::String, vec::Vec};
 /// This builder requires the `std` feature to be enabled.
 #[derive(Debug)]
 pub struct NodesBuilder {
-    pub(crate) nodes: Vec<String>,
+    pub(crate) nodes: Vec<(String, Option<String>)>,
 }
 
 mod build;

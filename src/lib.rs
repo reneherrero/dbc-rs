@@ -63,7 +63,7 @@ pub use dbc::{Dbc, DecodedSignal};
 pub use error::{Error, Result};
 pub use extended_multiplexing::ExtendedMultiplexing;
 pub use message::{Message, Signals};
-pub use nodes::Nodes;
+pub use nodes::{Node, Nodes};
 pub use receivers::Receivers;
 pub use signal::Signal;
 pub use value_descriptions::ValueDescriptions;

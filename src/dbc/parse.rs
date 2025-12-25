@@ -1,8 +1,8 @@
 use crate::{
-    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES,
+    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES, MAX_NODES,
     MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, ValueDescriptions, Version,
-    compat::{BTreeMap, Comment, Name, ValueDescEntries, Vec},
-    dbc::{Messages, NodeCommentsMap, Validate, ValueDescriptionsMap},
+    compat::{Comment, Name, ValueDescEntries, Vec},
+    dbc::{Messages, Validate, ValueDescriptionsMap},
 };
 
 impl Dbc {
@@ -56,7 +56,9 @@ impl Dbc {
 
         // Comment buffers
         let mut db_comment: Option<Comment> = None;
-        let mut node_comments_buffer: NodeCommentsMap = BTreeMap::new();
+        // Node comments: (node_name, comment)
+        type NodeCommentBuffer = Vec<(Name, Comment), { MAX_NODES }>;
+        let mut node_comments_buffer: NodeCommentBuffer = NodeCommentBuffer::new();
         let mut message_comments_buffer: MessageCommentBuffer = MessageCommentBuffer::new();
         let mut signal_comments_buffer: SignalCommentBuffer = SignalCommentBuffer::new();
 
@@ -163,7 +165,7 @@ impl Dbc {
                                         {
                                             if let Ok(comment) = Comment::try_from(comment_str) {
                                                 let _ =
-                                                    node_comments_buffer.insert(node_name, comment);
+                                                    node_comments_buffer.push((node_name, comment));
                                             }
                                         }
                                     }
@@ -453,7 +455,12 @@ impl Dbc {
         }
 
         // Allow empty nodes (DBC spec allows empty BU_: line)
-        let nodes = nodes.unwrap_or_default();
+        let mut nodes = nodes.unwrap_or_default();
+
+        // Apply node comments to nodes
+        for (node_name, comment) in node_comments_buffer.iter() {
+            nodes.set_node_comment(node_name.as_str(), comment.clone());
+        }
 
         // If no version was parsed, default to empty version
         let version = version.or_else(|| {
@@ -528,7 +535,6 @@ impl Dbc {
             value_descriptions_map,
             extended_multiplexing_buffer,
             db_comment,
-            node_comments_buffer,
         ))
     }
 

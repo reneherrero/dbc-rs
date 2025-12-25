@@ -167,20 +167,24 @@ For detailed workflow information and CI verification procedures, see [RELEASE_C
 
 ```
 dbc-rs/
-├── dbc/                  # Main library crate
-│   ├── src/
-│   │   ├── dbc/         # DBC file structure & builder
-│   │   ├── message/     # CAN message definitions & builder
-│   │   ├── signal/      # Signal definitions & builder
-│   │   ├── nodes/       # Node/ECU management & builder
-│   │   ├── receivers/   # Signal receivers & builder
-│   │   ├── version/     # Version information & builder
-│   │   └── error/       # Error types
-│   ├── tests/           # Integration tests & test data
-│   ├── examples/        # Example code (std, no_std, builder)
-│   └── benches/         # Benchmark tests
-├── dbc-cli/             # Command-line interface
-└── .github/workflows/   # CI/CD workflows
+├── src/                      # Library source code
+│   ├── dbc/                  # DBC file structure & builder
+│   ├── message/              # CAN message definitions & builder
+│   ├── signal/               # Signal definitions & builder
+│   ├── nodes/                # Node/ECU management & builder
+│   ├── receivers/            # Signal receivers & builder
+│   ├── version/              # Version information & builder
+│   ├── extended_multiplexing/# Extended multiplexing support
+│   ├── value_descriptions/   # Value description tables
+│   ├── error/                # Error types
+│   ├── compat/               # Abstraction layer for alloc/heapless
+│   ├── parser/               # Hand-written zero-copy parser
+│   └── fast_dbc.rs           # High-performance wrapper (std only)
+├── tests/                    # Integration tests & test data
+├── examples/                 # Example code (std, no_std, builder)
+├── benches/                  # Benchmark tests
+├── build.rs                  # Build-time configuration
+└── .github/workflows/        # CI/CD workflows
 ```
 
 ## Areas for Contribution
@@ -214,7 +218,7 @@ If you have questions or need help:
 
 ## License
 
-By contributing to dbc-rs, you agree that your contributions will be licensed under the same license as the project (MIT OR Apache-2.0). See [LICENSING.md](dbc/LICENSING.md) for details.
+By contributing to dbc-rs, you agree that your contributions will be licensed under the same license as the project (MIT OR Apache-2.0). See [LICENSING.md](LICENSING.md) for details.
 
 Thank you for contributing! 🎉
 

@@ -48,12 +48,14 @@ impl Dbc {
         }
 
         // Node comments
-        for (node_name, comment) in self.node_comments.iter() {
-            result.push_str("CM_ BU_ ");
-            result.push_str(node_name.as_str());
-            result.push_str(" \"");
-            result.push_str(comment.as_str());
-            result.push_str("\";\n");
+        for node in self.nodes.iter_nodes() {
+            if let Some(comment) = node.comment() {
+                result.push_str("CM_ BU_ ");
+                result.push_str(node.name());
+                result.push_str(" \"");
+                result.push_str(comment);
+                result.push_str("\";\n");
+            }
         }
 
         // Message and signal comments

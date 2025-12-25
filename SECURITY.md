@@ -1,7 +1,7 @@
 # Security Audit Report
 
-**Date**: 2025-01-10  
-**Version**: 0.1.0-rc.1  
+**Date**: 2025-12-25
+**Version**: 0.2.0
 **Overall Security Rating**: 🟢 **EXCELLENT** (9.5/10)
 
 ## Executive Summary
@@ -39,20 +39,21 @@ The `dbc-rs` library demonstrates excellent security practices suitable for prod
 
 ### ✅ DoS Protection
 All limits are configurable via environment variables (DBC_MAX_*) at build time:
-- Maximum 256 nodes per DBC file
-- Maximum 64 receiver nodes per signal
-- Maximum 64 value descriptions per signal
-- Maximum 10,000 messages per DBC file
-- Maximum 64 signals per message
-- Maximum 64 characters for names (signals, messages, nodes, senders, versions, units)
+- Maximum 8,192 messages per DBC file (DBC_MAX_MESSAGES)
+- Maximum 256 signals per message (DBC_MAX_SIGNALS_PER_MESSAGE)
+- Maximum 256 nodes per DBC file (DBC_MAX_NODES)
+- Maximum 64 value descriptions per signal (DBC_MAX_VALUE_DESCRIPTIONS)
+- Maximum 32 characters for identifiers (DBC_MAX_NAME_SIZE)
+- Maximum 512 extended multiplexing entries (DBC_MAX_EXTENDED_MULTIPLEXING)
 
 ## Resolved Security Issues
 
 All previously identified security issues have been fixed:
-- ✅ Unbounded node/receiver node lists → Limits enforced
-- ✅ Unbounded message/signal lists → Limits enforced
+- ✅ Unbounded node/receiver node lists → Limits enforced (MAX_NODES)
+- ✅ Unbounded message/signal lists → Limits enforced (MAX_MESSAGES, MAX_SIGNALS_PER_MESSAGE)
 - ✅ Unbounded string parsing → Length limits enforced
-- ✅ Unbounded name strings → MAX_NAME_SIZE (64) enforced
+- ✅ Unbounded name strings → MAX_NAME_SIZE (32) enforced
+- ✅ Unbounded extended multiplexing → MAX_EXTENDED_MULTIPLEXING (512) enforced
 
 ## Low-Risk Items (No Action Required)
 

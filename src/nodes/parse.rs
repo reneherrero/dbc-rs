@@ -1,7 +1,7 @@
-use super::{NodeNames, Nodes};
+use super::{InnerNodes, Node, Nodes};
 use crate::{
     BU_, Error, MAX_NODES, Parser, Result,
-    compat::validate_name,
+    compat::{Name, validate_name},
     error::{check_max_limit, map_val_error_with_line},
 };
 
@@ -21,7 +21,8 @@ impl Nodes {
         parser.skip_newlines_and_spaces();
 
         // Parse node names into Vec
-        let mut nodes: NodeNames = NodeNames::new();
+        let mut nodes: InnerNodes = InnerNodes::new();
+        let mut node_names: crate::compat::Vec<Name, { MAX_NODES }> = crate::compat::Vec::new();
 
         loop {
             // Skip whitespace before each node name
@@ -39,7 +40,10 @@ impl Nodes {
                         return Err(err);
                     }
                     let node_str = validate_name(node)?;
-                    nodes.push(node_str).map_err(|_| parser.err_nodes(Error::NODES_TOO_MANY))?;
+                    let _ = node_names.push(node_str.clone());
+                    nodes
+                        .push(Node::new(node_str))
+                        .map_err(|_| parser.err_nodes(Error::NODES_TOO_MANY))?;
                 }
                 Err(_) => {
                     // No more identifiers, break
@@ -50,12 +54,12 @@ impl Nodes {
 
         if nodes.is_empty() {
             return Ok(Nodes {
-                nodes: NodeNames::new(),
+                nodes: InnerNodes::new(),
             });
         }
 
         // Validate before construction
-        Self::validate(nodes.as_slice()).map_err(|e| {
+        Self::validate(node_names.as_slice()).map_err(|e| {
             map_val_error_with_line(
                 e,
                 |msg| parser.err_nodes(msg),

@@ -1,4 +1,4 @@
-use super::{ExtMuxIndex, ExtendedMultiplexings, Messages, NodeCommentsMap, ValueDescriptionsMap};
+use super::{ExtMuxIndex, ExtendedMultiplexings, Messages, ValueDescriptionsMap};
 use crate::{Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version, compat::Comment};
 
 impl Dbc {
@@ -9,7 +9,6 @@ impl Dbc {
         value_descriptions: ValueDescriptionsMap,
         extended_multiplexing: ExtendedMultiplexings,
         comment: Option<Comment>,
-        node_comments: NodeCommentsMap,
     ) -> Self {
         // Build index for fast extended multiplexing lookup
         let ext_mux_index = ExtMuxIndex::build(extended_multiplexing.as_slice());
@@ -23,7 +22,6 @@ impl Dbc {
             extended_multiplexing,
             ext_mux_index,
             comment,
-            node_comments,
         }
     }
 
@@ -267,10 +265,7 @@ impl Dbc {
     #[inline]
     #[must_use = "return value should be used"]
     pub fn node_comment(&self, node_name: &str) -> Option<&str> {
-        self.node_comments
-            .iter()
-            .find(|(name, _)| name.as_str() == node_name)
-            .map(|(_, comment)| comment.as_str())
+        self.nodes.node_comment(node_name)
     }
 }
 

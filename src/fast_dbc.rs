@@ -28,16 +28,26 @@
 
 use crate::{Dbc, Message};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// High-performance DBC wrapper with O(1) message lookup.
 ///
 /// Wraps a [`Dbc`] and adds a `HashMap` index for fast message lookup by CAN ID.
 /// Use this when you need to decode many frames at high speed.
+///
+/// Cloning is O(1) due to internal `Arc` usage.
 #[derive(Debug, Clone)]
 pub struct FastDbc {
+    /// Shared inner data (cheap to clone)
+    inner: Arc<FastDbcInner>,
+}
+
+/// Inner data for FastDbc (shared via Arc).
+#[derive(Debug)]
+struct FastDbcInner {
     /// The underlying DBC
     dbc: Dbc,
-    /// O(1) message lookup by internal ID (with extended flag if applicable)
+    /// O(1) message lookup by CAN ID (standard IDs stored directly, extended with flag)
     index: HashMap<u32, usize>,
     /// Maximum signals in any single message
     max_signals: usize,
@@ -63,10 +73,12 @@ impl FastDbc {
         }
 
         Self {
-            dbc,
-            index,
-            max_signals,
-            total_signals,
+            inner: Arc::new(FastDbcInner {
+                dbc,
+                index,
+                max_signals,
+                total_signals,
+            }),
         }
     }
 
@@ -78,7 +90,7 @@ impl FastDbc {
     /// O(1) average case.
     #[inline]
     pub fn get(&self, id: u32) -> Option<&Message> {
-        self.index.get(&id).and_then(|&idx| self.dbc.messages().at(idx))
+        self.inner.index.get(&id).and_then(|&idx| self.inner.dbc.messages().at(idx))
     }
 
     /// Get a message by extended (29-bit) CAN ID.
@@ -87,15 +99,23 @@ impl FastDbc {
     #[inline]
     pub fn get_extended(&self, id: u32) -> Option<&Message> {
         let extended_id = id | Message::EXTENDED_ID_FLAG;
-        self.index.get(&extended_id).and_then(|&idx| self.dbc.messages().at(idx))
+        self.inner
+            .index
+            .get(&extended_id)
+            .and_then(|&idx| self.inner.dbc.messages().at(idx))
     }
 
-    /// Get a message by CAN ID, checking both standard and extended.
+    /// Get a message by CAN ID, trying with extended flag if standard not found.
     ///
-    /// Tries standard ID first, then extended.
+    /// Single lookup optimization: checks if id exists, then tries with extended flag.
     #[inline]
     pub fn get_any(&self, id: u32) -> Option<&Message> {
-        self.get(id).or_else(|| self.get_extended(id))
+        // Try standard first, then extended - but use single index access pattern
+        self.inner
+            .index
+            .get(&id)
+            .or_else(|| self.inner.index.get(&(id | Message::EXTENDED_ID_FLAG)))
+            .and_then(|&idx| self.inner.dbc.messages().at(idx))
     }
 
     /// Decode a message by standard CAN ID into the output buffer.
@@ -140,48 +160,53 @@ impl FastDbc {
     /// Use this to pre-allocate decode buffers.
     #[inline]
     pub fn max_signals(&self) -> usize {
-        self.max_signals
+        self.inner.max_signals
     }
 
     /// Get the total number of signals across all messages.
     #[inline]
     pub fn total_signals(&self) -> usize {
-        self.total_signals
+        self.inner.total_signals
     }
 
     /// Get the number of messages.
     #[inline]
     pub fn message_count(&self) -> usize {
-        self.dbc.messages().len()
+        self.inner.dbc.messages().len()
     }
 
     /// Check if a message with this standard CAN ID exists.
     #[inline]
     pub fn contains(&self, id: u32) -> bool {
-        self.index.contains_key(&id)
+        self.inner.index.contains_key(&id)
     }
 
     /// Check if a message with this extended CAN ID exists.
     #[inline]
     pub fn contains_extended(&self, id: u32) -> bool {
-        self.index.contains_key(&(id | Message::EXTENDED_ID_FLAG))
+        self.inner.index.contains_key(&(id | Message::EXTENDED_ID_FLAG))
     }
 
     /// Get the underlying Dbc.
     #[inline]
     pub fn dbc(&self) -> &Dbc {
-        &self.dbc
+        &self.inner.dbc
     }
 
     /// Consume and return the underlying Dbc.
+    ///
+    /// Returns the Dbc if this is the only reference, otherwise clones it.
     #[inline]
     pub fn into_dbc(self) -> Dbc {
-        self.dbc
+        match Arc::try_unwrap(self.inner) {
+            Ok(inner) => inner.dbc,
+            Err(arc) => arc.dbc.clone(),
+        }
     }
 
     /// Iterator over all CAN IDs (with extended flag where applicable).
     pub fn ids(&self) -> impl Iterator<Item = u32> + '_ {
-        self.index.keys().copied()
+        self.inner.index.keys().copied()
     }
 }
 

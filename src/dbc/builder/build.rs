@@ -181,7 +181,6 @@ impl DbcBuilder {
             value_descriptions,
             extended_multiplexing,
             comment.map(|c| c.into()),
-            crate::compat::BTreeMap::new(), // TODO: node_comments from builder
         ))
     }
 }
