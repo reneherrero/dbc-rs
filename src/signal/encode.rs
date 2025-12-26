@@ -35,7 +35,7 @@ impl Signal {
     /// raw_value = (physical_value - offset) / factor
     /// ```
     #[inline]
-    pub(crate) fn encode_raw(&self, physical_value: f64) -> Result<u64> {
+    pub fn encode_raw(&self, physical_value: f64) -> Result<u64> {
         // Validate value is within min/max range
         if physical_value < self.min || physical_value > self.max {
             return Err(Error::Encoding(Error::ENCODING_VALUE_OUT_OF_RANGE));
@@ -114,7 +114,7 @@ impl Signal {
     /// * `Ok(())` - Value was successfully encoded and written
     /// * `Err(Error)` - If encoding failed or signal extends beyond payload
     #[inline]
-    pub(crate) fn encode_to(&self, physical_value: f64, payload: &mut [u8]) -> Result<()> {
+    pub fn encode_to(&self, physical_value: f64, payload: &mut [u8]) -> Result<()> {
         let start_bit = self.start_bit as usize;
         let length = self.length as usize;
         let end_byte = (start_bit + length - 1) / 8;
