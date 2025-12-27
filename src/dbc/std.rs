@@ -1,7 +1,24 @@
 use super::Dbc;
-use std::fmt::{Display, Formatter, Result};
+use crate::Result;
+use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::path::Path;
 
 impl Dbc {
+    /// Load and parse a DBC file from disk.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::from_file("path/to/file.dbc")?;
+    /// println!("Loaded {} messages", dbc.messages().len());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let content = std::fs::read_to_string(path.as_ref())?;
+        Self::parse(&content)
+    }
     /// Serialize this DBC to a DBC format string
     ///
     /// # Examples
@@ -86,7 +103,7 @@ impl Dbc {
 }
 
 impl Display for Dbc {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.to_dbc_string())
     }
 }

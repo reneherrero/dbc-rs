@@ -52,6 +52,9 @@ pub enum Error {
     Encoding(&'static str),
     /// Validation-related error (post-parse, no line info).
     Validation(&'static str),
+    /// I/O error (std-only, for file operations).
+    #[cfg(feature = "std")]
+    Io(String),
 }
 
 impl Error {

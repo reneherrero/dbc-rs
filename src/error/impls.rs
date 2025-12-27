@@ -157,6 +157,8 @@ impl Error {
             Error::Nodes { line, .. } => *line,
             Error::Signal { line, .. } => *line,
             Error::Decoding(_) | Error::Encoding(_) | Error::Validation(_) => None,
+            #[cfg(feature = "std")]
+            Error::Io(_) => None,
         }
     }
 
@@ -297,7 +299,18 @@ impl fmt::Display for Error {
             Error::Validation(msg) => {
                 write!(f, "{}: {}", Error::VALIDATION_ERROR_PREFIX, msg)
             }
+            #[cfg(feature = "std")]
+            Error::Io(msg) => {
+                write!(f, "I/O error: {}", msg)
+            }
         }
+    }
+}
+
+#[cfg(feature = "std")]
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::Io(err.to_string())
     }
 }
 
@@ -309,11 +322,7 @@ impl From<core::num::ParseIntError> for Error {
 
 // std::error::Error is only available with std feature
 #[cfg(feature = "std")]
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-}
+impl std::error::Error for Error {}
 
 #[cfg(test)]
 mod tests {

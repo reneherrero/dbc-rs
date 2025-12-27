@@ -26,8 +26,9 @@
 //! }
 //! ```
 
-use crate::{Dbc, Message};
+use crate::{Dbc, Message, Result};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 
 /// High-performance DBC wrapper with O(1) message lookup.
@@ -56,6 +57,24 @@ struct FastDbcInner {
 }
 
 impl FastDbc {
+    /// Load a DBC file from disk and wrap it for fast access.
+    ///
+    /// This is a convenience method that combines [`Dbc::from_file`] and [`FastDbc::new`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::FastDbc;
+    ///
+    /// let fast_dbc = FastDbc::from_file("path/to/file.dbc")?;
+    /// println!("Loaded {} messages", fast_dbc.message_count());
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let dbc = Dbc::from_file(path)?;
+        Ok(Self::new(dbc))
+    }
+
     /// Create a new FastDbc wrapper from a Dbc.
     ///
     /// This builds a HashMap index for O(1) message lookup.
