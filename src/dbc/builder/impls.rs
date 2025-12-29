@@ -1,7 +1,7 @@
 use super::DbcBuilder;
 use crate::{
-    Dbc, ExtendedMultiplexingBuilder, MessageBuilder, NodesBuilder, Receivers, ReceiversBuilder,
-    SignalBuilder, ValueDescriptionsBuilder, VersionBuilder,
+    BitTimingBuilder, Dbc, ExtendedMultiplexingBuilder, MessageBuilder, NodesBuilder, Receivers,
+    ReceiversBuilder, SignalBuilder, ValueDescriptionsBuilder, VersionBuilder,
 };
 use std::collections::BTreeMap;
 
@@ -25,7 +25,15 @@ impl DbcBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            version: VersionBuilder::new(),
+            bit_timing: None,
+            nodes: NodesBuilder::new(),
+            messages: Vec::new(),
+            value_descriptions: BTreeMap::new(),
+            extended_multiplexing: Vec::new(),
+            comment: None,
+        }
     }
 
     /// Sets the version for the DBC file.
@@ -43,6 +51,26 @@ impl DbcBuilder {
     #[must_use = "builder method returns modified builder"]
     pub fn version(mut self, version: VersionBuilder) -> Self {
         self.version = version;
+        self
+    }
+
+    /// Sets the bit timing configuration for the DBC file.
+    ///
+    /// The BS_ section in DBC files specifies CAN bus timing parameters.
+    /// This section is typically empty as bit timing is obsolete in modern CAN systems.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::{DbcBuilder, BitTimingBuilder};
+    ///
+    /// let builder = DbcBuilder::new()
+    ///     .bit_timing(BitTimingBuilder::new().baudrate(500000));
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[must_use = "builder method returns modified builder"]
+    pub fn bit_timing(mut self, bit_timing: BitTimingBuilder) -> Self {
+        self.bit_timing = Some(bit_timing);
         self
     }
 
@@ -326,6 +354,21 @@ impl DbcBuilder {
             VersionBuilder::new()
         };
 
+        // Copy bit timing - convert to builder
+        let bit_timing = dbc.bit_timing().map(|bt| {
+            let mut builder = BitTimingBuilder::new();
+            if let Some(baudrate) = bt.baudrate() {
+                builder = builder.baudrate(baudrate);
+            }
+            if let Some(btr1) = bt.btr1() {
+                builder = builder.btr1(btr1);
+            }
+            if let Some(btr2) = bt.btr2() {
+                builder = builder.btr2(btr2);
+            }
+            builder
+        });
+
         // Convert nodes to builder (store builder, not final type)
         // Note: We unwrap here because we're converting from a valid Dbc, so names should already fit MAX_NAME_SIZE
         let nodes = {
@@ -427,6 +470,7 @@ impl DbcBuilder {
 
         Self {
             version,
+            bit_timing,
             nodes,
             messages,
             value_descriptions,
@@ -682,5 +726,11 @@ SG_MUL_VAL_ 500 SignalA Mux1 0-5,10-15 ;
         assert_eq!(new_entry.signal_name(), "SignalA");
         assert_eq!(new_entry.value_ranges().len(), 1);
         assert_eq!(new_entry.value_ranges()[0], (20, 25));
+    }
+}
+
+impl Default for DbcBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -18,14 +18,14 @@ use crate::SignalBuilder;
 ///     .build()?;
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageBuilder {
-    pub(crate) id: Option<u32>,
-    pub(crate) name: Option<String>,
-    pub(crate) dlc: Option<u8>,
-    pub(crate) sender: Option<String>,
-    pub(crate) signals: Vec<SignalBuilder>,
-    pub(crate) comment: Option<String>,
+    id: Option<u32>,
+    name: Option<String>,
+    dlc: Option<u8>,
+    sender: Option<String>,
+    signals: Vec<SignalBuilder>,
+    comment: Option<String>,
 }
 
 mod build;

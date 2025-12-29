@@ -68,9 +68,10 @@ src/
 ├── signal/                 # Signal entity
 ├── nodes/                  # Network nodes (ECUs)
 ├── version/                # VERSION string
+├── bit_timing/             # BS_ bit timing configuration
 ├── receivers/              # Signal receivers
 ├── extended_multiplexing/  # SG_MUL_VAL_ entries
-├── value_descriptions/     # VAL_ entries [std only]
+├── value_descriptions/     # VAL_ entries
 ├── error/                  # Error types and messages
 │   └── lang/               # Localized error strings
 └── byte_order.rs           # BigEndian/LittleEndian enum

@@ -23,9 +23,9 @@
 /// # Feature Requirements
 ///
 /// This builder requires the `std` feature to be enabled.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VersionBuilder {
-    pub(crate) version: Option<String>,
+    version: Option<String>,
 }
 
 mod build;

@@ -46,6 +46,15 @@ impl Dbc {
             result.push_str("\n\n");
         }
 
+        // BS_ line (bit timing) - only output if present
+        if let Some(ref bit_timing) = self.bit_timing {
+            result.push_str(&bit_timing.to_string());
+            result.push_str("\n\n");
+        } else {
+            // Empty BS_: is always required per DBC spec
+            result.push_str("BS_:\n\n");
+        }
+
         // BU_ line
         result.push_str(&self.nodes.to_dbc_string());
         result.push('\n');
@@ -238,5 +247,78 @@ BO_ 512 BrakeData : 4 TCM
         assert!(saved.contains("BO_ 512 BrakeData : 4 TCM"));
         assert!(saved.contains("SG_ RPM"));
         assert!(saved.contains("SG_ Pressure"));
+    }
+
+    #[test]
+    fn test_bit_timing_empty() {
+        // Empty BS_: should still be present in output
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BS_:
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+"#,
+        )
+        .unwrap();
+
+        // bit_timing should be None when empty
+        assert!(dbc.bit_timing().is_none());
+
+        // Output should still have BS_:
+        let saved = dbc.to_dbc_string();
+        assert!(saved.contains("BS_:"));
+    }
+
+    #[test]
+    fn test_bit_timing_with_values() {
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BS_: 500000 : 1,2
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+"#,
+        )
+        .unwrap();
+
+        // bit_timing should be Some with values
+        let bt = dbc.bit_timing().expect("bit timing should be present");
+        assert_eq!(bt.baudrate(), Some(500000));
+        assert_eq!(bt.btr1(), Some(1));
+        assert_eq!(bt.btr2(), Some(2));
+
+        // Output should have full BS_ line
+        let saved = dbc.to_dbc_string();
+        assert!(saved.contains("BS_: 500000 : 1,2"));
+    }
+
+    #[test]
+    fn test_bit_timing_baudrate_only() {
+        let dbc = Dbc::parse(
+            r#"VERSION "1.0"
+
+BS_: 500000
+
+BU_: ECM
+
+BO_ 256 Engine : 8 ECM
+"#,
+        )
+        .unwrap();
+
+        // bit_timing should be Some with baudrate only
+        let bt = dbc.bit_timing().expect("bit timing should be present");
+        assert_eq!(bt.baudrate(), Some(500000));
+        assert_eq!(bt.btr1(), None);
+        assert_eq!(bt.btr2(), None);
+
+        // Output should have BS_ with baudrate
+        let saved = dbc.to_dbc_string();
+        assert!(saved.contains("BS_: 500000"));
     }
 }

@@ -45,7 +45,7 @@ use std::string::String;
 /// This builder requires the `std` feature to be enabled.
 #[derive(Debug, Clone)]
 pub struct ReceiversBuilder {
-    pub(crate) nodes: Vec<String>,
+    nodes: Vec<String>,
 }
 
 mod build;

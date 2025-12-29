@@ -34,7 +34,7 @@ use std::{string::String, vec::Vec};
 /// This builder requires the `std` feature to be enabled.
 #[derive(Debug, Clone)]
 pub struct ValueDescriptionsBuilder {
-    pub(crate) entries: Vec<(u64, String)>,
+    entries: Vec<(u64, String)>,
 }
 
 mod build;

@@ -36,6 +36,7 @@ extern crate std;
 #[cfg(all(feature = "alloc", not(feature = "heapless")))]
 extern crate alloc;
 
+mod bit_timing;
 mod byte_order;
 mod compat;
 mod dbc;
@@ -58,6 +59,7 @@ mod macros;
 #[cfg(feature = "std")]
 mod fast_dbc;
 
+pub use bit_timing::BitTiming;
 pub use byte_order::ByteOrder;
 pub use dbc::{Dbc, DecodedSignal};
 pub use error::{Error, Result};
@@ -70,6 +72,8 @@ pub use value_descriptions::ValueDescriptions;
 pub use version::Version;
 
 /// Builders
+#[cfg(feature = "std")]
+pub use bit_timing::BitTimingBuilder;
 #[cfg(feature = "std")]
 pub use dbc::DbcBuilder;
 #[cfg(feature = "std")]

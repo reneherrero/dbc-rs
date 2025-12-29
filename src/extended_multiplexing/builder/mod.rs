@@ -29,10 +29,10 @@
 /// This builder requires the `std` feature to be enabled.
 #[derive(Debug, Clone)]
 pub struct ExtendedMultiplexingBuilder {
-    pub(crate) message_id: Option<u32>,
-    pub(crate) signal_name: Option<String>,
-    pub(crate) multiplexer_switch: Option<String>,
-    pub(crate) value_ranges: std::vec::Vec<(u64, u64)>,
+    message_id: Option<u32>,
+    signal_name: Option<String>,
+    multiplexer_switch: Option<String>,
+    value_ranges: std::vec::Vec<(u64, u64)>,
 }
 
 mod build;

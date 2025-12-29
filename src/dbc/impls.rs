@@ -1,9 +1,12 @@
 use super::{ExtMuxIndex, ExtendedMultiplexings, Messages, ValueDescriptionsMap};
-use crate::{Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version, compat::Comment};
+use crate::{
+    BitTiming, Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version, compat::Comment,
+};
 
 impl Dbc {
     pub(crate) fn new(
         version: Option<Version>,
+        bit_timing: Option<BitTiming>,
         nodes: Nodes,
         messages: Messages,
         value_descriptions: ValueDescriptionsMap,
@@ -16,6 +19,7 @@ impl Dbc {
         // Validation should have been done prior (by builder)
         Self {
             version,
+            bit_timing,
             nodes,
             messages,
             value_descriptions,
@@ -43,6 +47,29 @@ impl Dbc {
     #[must_use = "return value should be used"]
     pub fn version(&self) -> Option<&Version> {
         self.version.as_ref()
+    }
+
+    /// Get the bit timing configuration
+    ///
+    /// The BS_ section in DBC files specifies CAN bus timing parameters.
+    /// Returns `None` if the BS_ section was empty or not present.
+    /// Returns `Some(&BitTiming)` if timing parameters were specified.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse("VERSION \"1.0\"\n\nBS_: 500000 : 1,2\n\nBU_: ECM\n\nBO_ 256 Engine : 8 ECM")?;
+    /// if let Some(bit_timing) = dbc.bit_timing() {
+    ///     println!("Baudrate: {:?}", bit_timing.baudrate());
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn bit_timing(&self) -> Option<&BitTiming> {
+        self.bit_timing.as_ref()
     }
 
     /// Get a reference to the nodes collection

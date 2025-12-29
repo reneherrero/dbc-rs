@@ -1,7 +1,7 @@
 use super::DbcBuilder;
 use crate::{
-    Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES, MAX_NAME_SIZE, Message,
-    Nodes, Result, Version,
+    BitTiming, Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES, MAX_NAME_SIZE,
+    Message, Nodes, Result, Version,
     compat::{BTreeMap, String, Vec as CompatVec},
     dbc::{Messages, Validate},
 };
@@ -81,6 +81,7 @@ impl DbcBuilder {
         self,
     ) -> Result<(
         Version,
+        Option<BitTiming>,
         Nodes,
         Messages,
         crate::dbc::ValueDescriptionsMap,
@@ -89,6 +90,15 @@ impl DbcBuilder {
     )> {
         // Build version
         let version = self.version.build()?;
+
+        // Build bit timing if present
+        let bit_timing = match self.bit_timing {
+            Some(builder) => {
+                let bt = builder.build()?;
+                if bt.is_empty() { None } else { Some(bt) }
+            }
+            None => None,
+        };
 
         // Build nodes (allow empty - DBC spec allows empty BU_: line)
         let nodes = self.nodes.build()?;
@@ -136,6 +146,7 @@ impl DbcBuilder {
 
         Ok((
             version,
+            bit_timing,
             nodes,
             messages,
             value_descriptions,
@@ -161,8 +172,15 @@ impl DbcBuilder {
     /// # Ok::<(), dbc_rs::Error>(())
     /// ```
     pub fn build(self) -> Result<Dbc> {
-        let (version, nodes, messages, value_descriptions, extended_multiplexing, comment) =
-            self.extract_fields()?;
+        let (
+            version,
+            bit_timing,
+            nodes,
+            messages,
+            value_descriptions,
+            extended_multiplexing,
+            comment,
+        ) = self.extract_fields()?;
         // Validate before construction
         // Get slice from Messages for validation
         let messages_slice: std::vec::Vec<Message> = messages.iter().cloned().collect();
@@ -176,6 +194,7 @@ impl DbcBuilder {
         )?;
         Ok(Dbc::new(
             Some(version),
+            bit_timing,
             nodes,
             messages,
             value_descriptions,

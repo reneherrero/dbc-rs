@@ -49,9 +49,9 @@ use std::{string::String, vec::Vec};
 /// # Feature Requirements
 ///
 /// This builder requires the `std` feature to be enabled.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NodesBuilder {
-    pub(crate) nodes: Vec<(String, Option<String>)>,
+    nodes: Vec<(String, Option<String>)>,
 }
 
 mod build;

@@ -1,6 +1,7 @@
 use crate::{
-    Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES, MAX_NODES,
-    MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, ValueDescriptions, Version,
+    BitTiming, Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES,
+    MAX_NODES, MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, ValueDescriptions,
+    Version,
     compat::{Comment, Name, ValueDescEntries, Vec},
     dbc::{Messages, Validate, ValueDescriptionsMap},
 };
@@ -38,6 +39,7 @@ impl Dbc {
         };
 
         let mut version: Option<Version> = None;
+        let mut bit_timing: Option<BitTiming> = None;
         let mut nodes: Option<Nodes> = None;
 
         // Type aliases for parsing buffers
@@ -121,8 +123,32 @@ impl Dbc {
                     }
                     continue;
                 }
-                BS_ | VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | SIG_GROUP_ | SIG_VALTYPE_
-                | EV_ | BO_TX_BU_ => {
+                BS_ => {
+                    // Parse bit timing section (usually empty)
+                    let parsed = BitTiming::parse(&mut parser)?;
+                    // Only store if not empty (has actual values)
+                    if !parsed.is_empty() {
+                        bit_timing = Some(parsed);
+                    }
+                    parser.skip_to_end_of_line();
+                    continue;
+                }
+                VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | SIG_GROUP_ | SIG_VALTYPE_ | EV_
+                | BO_TX_BU_ => {
+                    // TODO: These DBC sections are recognized but not parsed:
+                    //   VAL_TABLE_   - Global value tables (rarely used)
+                    //   BA_DEF_      - Attribute definitions (common, high priority)
+                    //   BA_DEF_DEF_  - Attribute defaults (common, high priority)
+                    //   BA_          - Attribute values (common, high priority)
+                    //   SIG_GROUP_   - Signal groups (rarely used)
+                    //   SIG_VALTYPE_ - Signal extended value types: float/double (medium priority)
+                    //   EV_          - Environment variables (rarely used)
+                    //   BO_TX_BU_    - Multiple message transmitters (rarely used)
+                    //
+                    // Not yet recognized (rarely used):
+                    //   ENVVAR_DATA_, SGTYPE_, BA_DEF_SGTYPE_, BA_SGTYPE_, SIG_TYPE_REF_,
+                    //   BA_DEF_REL_, BA_REL_, BA_DEF_DEF_REL_, BU_SG_REL_, BU_EV_REL_, BU_BO_REL_
+                    //
                     // Consume keyword then skip to end of line
                     let _ = parser.expect(keyword.as_bytes()).ok();
                     parser.skip_to_end_of_line();
@@ -530,6 +556,7 @@ impl Dbc {
 
         Ok(Dbc::new(
             version,
+            bit_timing,
             nodes,
             messages,
             value_descriptions_map,

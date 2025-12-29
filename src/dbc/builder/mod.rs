@@ -1,6 +1,6 @@
 use crate::{
-    ExtendedMultiplexingBuilder, MessageBuilder, NodesBuilder, ValueDescriptionsBuilder,
-    VersionBuilder,
+    BitTimingBuilder, ExtendedMultiplexingBuilder, MessageBuilder, NodesBuilder,
+    ValueDescriptionsBuilder, VersionBuilder,
 };
 use std::collections::BTreeMap;
 
@@ -37,9 +37,10 @@ use std::collections::BTreeMap;
 ///     .build()?;
 /// # Ok::<(), dbc_rs::Error>(())
 /// ```
-#[derive(Debug, Default)]
+#[derive(Debug, Clone)]
 pub struct DbcBuilder {
     version: VersionBuilder,
+    bit_timing: Option<BitTimingBuilder>,
     nodes: NodesBuilder,
     messages: Vec<MessageBuilder>,
     value_descriptions: BTreeMap<(Option<u32>, String), ValueDescriptionsBuilder>,

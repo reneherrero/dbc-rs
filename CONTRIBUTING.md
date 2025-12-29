@@ -2,8 +2,6 @@
 
 Thank you for your interest in contributing to dbc-rs! This document provides guidelines and instructions for contributing to the project.
 
-**For release procedures**, see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
-
 ## Code of Conduct
 
 This project adheres to a code of conduct that all contributors are expected to follow. Please be respectful and constructive in all interactions.
@@ -61,28 +59,29 @@ This installs a pre-commit hook that automatically runs clippy and formatting ch
 ```bash
 # Build
 cargo check --all-targets
-cargo check --target thumbv7em-none-eabihf --no-default-features --package dbc-rs
+cargo check --target thumbv7em-none-eabihf --no-default-features --features heapless
 
-# Test
+# Test (std, alloc, and heapless)
 cargo test
+cargo test --no-default-features --features alloc
+DBC_MAX_MESSAGES=16 DBC_MAX_SIGNALS_PER_MESSAGE=8 DBC_MAX_NODES=4 DBC_MAX_EXTENDED_MULTIPLEXING=8 \
+  cargo test --release --no-default-features --features heapless
 
 # Format
 cargo fmt
 
 # Lint
 cargo clippy --all-targets --all-features -- -D warnings
-cargo clippy --no-default-features --target thumbv7em-none-eabihf --package dbc-rs -- -D warnings
+cargo clippy --no-default-features --features heapless --target thumbv7em-none-eabihf -- -D warnings
 ```
 
 **Note**: The pre-commit hook automatically runs clippy and formatting checks.
 
 ### Testing and Quality Checks
 
-For comprehensive testing procedures, build verification, and code coverage requirements, see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) sections 1-2.
-
 **Quick reference:**
-- **Tests**: Must pass in both `std` and `no_std` modes
-- **Coverage**: Minimum 80% (see RELEASE_CHECKLIST.md for details)
+- **Tests**: Must pass in `std`, `alloc`, and `heapless` modes
+- **Coverage**: Minimum 80%
 - **MSRV**: Must work with Rust 1.85.0
 
 ### Coding Standards
@@ -109,12 +108,11 @@ For comprehensive testing procedures, build verification, and code coverage requ
 - Write tests for new functionality
 - Include both positive and negative test cases
 - Test edge cases and error conditions
-- Ensure tests pass in both `std` and `no_std` modes
-- See [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for comprehensive testing procedures
+- Ensure tests pass in `std`, `alloc`, and `heapless` modes
 
 #### Safety
 
-- **No `unsafe` code** - The project explicitly disallows unsafe code
+- **No `unsafe` code** - The project uses `#![forbid(unsafe_code)]` (see [ARCHITECTURE.md](ARCHITECTURE.md#design-principles))
 - Avoid `unwrap()` and `expect()` in production code (tests are fine)
 - Use proper error handling with the `Result` type
 
@@ -144,8 +142,8 @@ Fixes #123
 #### PR Checklist
 
 - [ ] Code follows the project's guidelines
-- [ ] All tests pass (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) for testing procedures)
-- [ ] Clippy passes without warnings (see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) section 1)
+- [ ] All tests pass (`cargo test`, `cargo test --no-default-features --features alloc`, and heapless with reduced constants)
+- [ ] Clippy passes without warnings
 - [ ] Code is formatted (`cargo fmt`)
 - [ ] Documentation is updated
 
@@ -154,9 +152,7 @@ Fixes #123
 The project uses GitHub Actions for continuous integration. Workflows automatically run on pushes and pull requests to the `main` branch.
 
 - **dbc-rs Library Workflow** (`.github/workflows/dbc-rs.yml`): Tests library with `std`/`no_std`, MSRV, linting, formatting, docs, and coverage
-- **dbc-cli Workflow** (`.github/workflows/dbc-cli.yml`): Tests CLI application
-
-For detailed workflow information and CI verification procedures, see [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) section 7.
+- **Benchmark Comparison** (`.github/workflows/benchmark-compare.yml`): Performance regression testing
 
 **Best Practices:**
 - Wait for CI checks to pass before merging PRs
@@ -165,48 +161,28 @@ For detailed workflow information and CI verification procedures, see [RELEASE_C
 
 ## Project Structure
 
-```
-dbc-rs/
-├── src/                      # Library source code
-│   ├── dbc/                  # DBC file structure & builder
-│   ├── message/              # CAN message definitions & builder
-│   ├── signal/               # Signal definitions & builder
-│   ├── nodes/                # Node/ECU management & builder
-│   ├── receivers/            # Signal receivers & builder
-│   ├── version/              # Version information & builder
-│   ├── extended_multiplexing/# Extended multiplexing support
-│   ├── value_descriptions/   # Value description tables
-│   ├── error/                # Error types
-│   ├── compat/               # Abstraction layer for alloc/heapless
-│   ├── parser/               # Hand-written zero-copy parser
-│   └── fast_dbc.rs           # High-performance wrapper (std only)
-├── tests/                    # Integration tests & test data
-├── examples/                 # Example code (std, no_std, builder)
-├── benches/                  # Benchmark tests
-├── build.rs                  # Build-time configuration
-└── .github/workflows/        # CI/CD workflows
-```
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed module structure, design principles, and technical documentation.
 
 ## Areas for Contribution
 
 ### High Priority
 
-- Additional DBC format features (attributes, value tables, comments, etc.)
+- **Attribute support** (BA_DEF_, BA_DEF_DEF_, BA_) - commonly used in real DBC files
+- **Signal value types** (SIG_VALTYPE_) - float/double signal support
 - Performance optimizations
 - More comprehensive test coverage
-- Documentation improvements
 
 ### Medium Priority
 
+- **Value tables** (VAL_TABLE_) - global value description tables
+- **Signal groups** (SIG_GROUP_)
 - More example code
 - Benchmarking and performance analysis
-- Additional DBC file test cases
 
 ### Low Priority
 
-- CLI enhancements
-- Additional tooling
-- Website/documentation site
+- **Environment variables** (EV_)
+- **Multiple transmitters** (BO_TX_BU_)
 
 ## Questions?
 

@@ -1,5 +1,5 @@
 use crate::{
-    ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version,
+    BitTiming, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, Nodes, Version,
     compat::{Comment, Vec},
 };
 
@@ -60,6 +60,7 @@ use value_descriptions_map::ValueDescriptionsMap;
 #[derive(Debug, Clone)]
 pub struct Dbc {
     version: Option<Version>,
+    bit_timing: Option<BitTiming>,
     nodes: Nodes,
     messages: Messages,
     value_descriptions: ValueDescriptionsMap,
