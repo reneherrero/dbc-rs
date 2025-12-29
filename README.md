@@ -18,7 +18,7 @@ A lightweight Rust library for seamlessly parsing and editing DBC (CAN Database)
 
 ```toml
 [dependencies]
-dbc-rs = "0.1"
+dbc-rs = "0.3"
 ```
 
 ### Decode CAN Frames
@@ -43,18 +43,18 @@ use dbc_rs::Dbc;
 
 let dbc = Dbc::parse(dbc_content)?;
 
-// Encode signal values into a CAN frame payload
+// Encode signal values into a CAN frame payload (standard 11-bit ID)
 let payload = dbc.encode(0x100, &[
     ("RPM", 2500.0),
     ("Temperature", 85.0),
-])?;
+], false)?;
 ```
 
 ### Embedded (`no_std`)
 
 ```toml
 [dependencies]
-dbc-rs = { version = "0.1", default-features = false, features = ["heapless"] }
+dbc-rs = { version = "0.3", default-features = false, features = ["heapless"] }
 ```
 
 See [`examples/`](./examples/) for complete working examples:
