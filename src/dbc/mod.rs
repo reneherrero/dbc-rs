@@ -11,6 +11,8 @@ mod ext_mux_index;
 use ext_mux_index::ExtMuxIndex;
 
 // Module declarations
+#[cfg(feature = "attributes")]
+mod attributes_map;
 mod messages;
 mod value_descriptions_map;
 
@@ -26,6 +28,8 @@ mod std;
 mod validate;
 
 // Re-exports
+#[cfg(feature = "attributes")]
+pub use attributes_map::{AttributeDefaultsMap, AttributeDefinitionsMap, AttributeValuesMap};
 #[cfg(feature = "std")]
 pub use builder::DbcBuilder;
 pub use decode::DecodedSignal;
@@ -69,4 +73,13 @@ pub struct Dbc {
     ext_mux_index: ExtMuxIndex,
     /// Database-level comment from CM_ (general comment)
     comment: Option<Comment>,
+    /// Attribute definitions (BA_DEF_)
+    #[cfg(feature = "attributes")]
+    attribute_definitions: AttributeDefinitionsMap,
+    /// Attribute default values (BA_DEF_DEF_)
+    #[cfg(feature = "attributes")]
+    attribute_defaults: AttributeDefaultsMap,
+    /// Attribute values (BA_)
+    #[cfg(feature = "attributes")]
+    attribute_values: AttributeValuesMap,
 }

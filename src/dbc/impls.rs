@@ -1,9 +1,46 @@
+#[cfg(feature = "attributes")]
+use super::{AttributeDefaultsMap, AttributeDefinitionsMap, AttributeValuesMap};
 use super::{ExtMuxIndex, ExtendedMultiplexings, Messages, ValueDescriptionsMap};
+#[cfg(feature = "attributes")]
+use crate::{AttributeDefinition, AttributeValue};
 use crate::{
     BitTiming, Dbc, ExtendedMultiplexing, Nodes, ValueDescriptions, Version, compat::Comment,
 };
 
 impl Dbc {
+    #[cfg(feature = "attributes")]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
+        version: Option<Version>,
+        bit_timing: Option<BitTiming>,
+        nodes: Nodes,
+        messages: Messages,
+        value_descriptions: ValueDescriptionsMap,
+        extended_multiplexing: ExtendedMultiplexings,
+        comment: Option<Comment>,
+        attribute_definitions: AttributeDefinitionsMap,
+        attribute_defaults: AttributeDefaultsMap,
+        attribute_values: AttributeValuesMap,
+    ) -> Self {
+        // Build index for fast extended multiplexing lookup
+        let ext_mux_index = ExtMuxIndex::build(extended_multiplexing.as_slice());
+
+        Self {
+            version,
+            bit_timing,
+            nodes,
+            messages,
+            value_descriptions,
+            extended_multiplexing,
+            ext_mux_index,
+            comment,
+            attribute_definitions,
+            attribute_defaults,
+            attribute_values,
+        }
+    }
+
+    #[cfg(not(feature = "attributes"))]
     pub(crate) fn new(
         version: Option<Version>,
         bit_timing: Option<BitTiming>,
@@ -16,7 +53,6 @@ impl Dbc {
         // Build index for fast extended multiplexing lookup
         let ext_mux_index = ExtMuxIndex::build(extended_multiplexing.as_slice());
 
-        // Validation should have been done prior (by builder)
         Self {
             version,
             bit_timing,
@@ -293,6 +329,184 @@ impl Dbc {
     #[must_use = "return value should be used"]
     pub fn node_comment(&self, node_name: &str) -> Option<&str> {
         self.nodes.node_comment(node_name)
+    }
+}
+
+// ============================================================================
+// Attribute Access Methods (feature-gated)
+// ============================================================================
+
+#[cfg(feature = "attributes")]
+impl Dbc {
+    /// Get all attribute definitions (BA_DEF_ entries).
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///
+    /// BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;"#)?;
+    /// assert_eq!(dbc.attribute_definitions().len(), 1);
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn attribute_definitions(&self) -> &AttributeDefinitionsMap {
+        &self.attribute_definitions
+    }
+
+    /// Get an attribute definition by name.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn attribute_definition(&self, name: &str) -> Option<&AttributeDefinition> {
+        self.attribute_definitions.get(name)
+    }
+
+    /// Get all attribute defaults (BA_DEF_DEF_ entries).
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn attribute_defaults(&self) -> &AttributeDefaultsMap {
+        &self.attribute_defaults
+    }
+
+    /// Get the default value for an attribute by name.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn attribute_default(&self, name: &str) -> Option<&AttributeValue> {
+        self.attribute_defaults.get(name)
+    }
+
+    /// Get all attribute values (BA_ entries).
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn attribute_values(&self) -> &AttributeValuesMap {
+        &self.attribute_values
+    }
+
+    /// Get a network-level attribute value by name.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///
+    /// BA_DEF_ "BusType" STRING;
+    /// BA_DEF_DEF_ "BusType" "";
+    /// BA_ "BusType" "CAN";"#)?;
+    /// if let Some(value) = dbc.network_attribute("BusType") {
+    ///     assert_eq!(value.as_string(), Some("CAN"));
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn network_attribute(&self, name: &str) -> Option<&AttributeValue> {
+        self.attribute_values.get_network(name)
+    }
+
+    /// Get a node attribute value by node name and attribute name.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn node_attribute(&self, node_name: &str, attr_name: &str) -> Option<&AttributeValue> {
+        self.attribute_values.get_node(node_name, attr_name)
+    }
+
+    /// Get a message attribute value by message ID and attribute name.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use dbc_rs::Dbc;
+    ///
+    /// let dbc = Dbc::parse(r#"VERSION "1.0"
+    ///
+    /// BU_: ECM
+    ///
+    /// BO_ 256 Engine : 8 ECM
+    ///
+    /// BA_DEF_ BO_ "GenMsgCycleTime" INT 0 10000;
+    /// BA_DEF_DEF_ "GenMsgCycleTime" 0;
+    /// BA_ "GenMsgCycleTime" BO_ 256 100;"#)?;
+    /// if let Some(value) = dbc.message_attribute(256, "GenMsgCycleTime") {
+    ///     assert_eq!(value.as_int(), Some(100));
+    /// }
+    /// # Ok::<(), dbc_rs::Error>(())
+    /// ```
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn message_attribute(&self, message_id: u32, attr_name: &str) -> Option<&AttributeValue> {
+        self.attribute_values.get_message(message_id, attr_name)
+    }
+
+    /// Get a signal attribute value by message ID, signal name, and attribute name.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn signal_attribute(
+        &self,
+        message_id: u32,
+        signal_name: &str,
+        attr_name: &str,
+    ) -> Option<&AttributeValue> {
+        self.attribute_values.get_signal(message_id, signal_name, attr_name)
+    }
+
+    /// Get a network attribute value with fallback to default.
+    ///
+    /// First checks for a specific value assignment, then falls back to the
+    /// attribute's default value if no specific assignment exists.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn network_attribute_or_default(&self, name: &str) -> Option<&AttributeValue> {
+        self.network_attribute(name).or_else(|| self.attribute_default(name))
+    }
+
+    /// Get a node attribute value with fallback to default.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn node_attribute_or_default(
+        &self,
+        node_name: &str,
+        attr_name: &str,
+    ) -> Option<&AttributeValue> {
+        self.node_attribute(node_name, attr_name)
+            .or_else(|| self.attribute_default(attr_name))
+    }
+
+    /// Get a message attribute value with fallback to default.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn message_attribute_or_default(
+        &self,
+        message_id: u32,
+        attr_name: &str,
+    ) -> Option<&AttributeValue> {
+        self.message_attribute(message_id, attr_name)
+            .or_else(|| self.attribute_default(attr_name))
+    }
+
+    /// Get a signal attribute value with fallback to default.
+    #[inline]
+    #[must_use = "return value should be used"]
+    pub fn signal_attribute_or_default(
+        &self,
+        message_id: u32,
+        signal_name: &str,
+        attr_name: &str,
+    ) -> Option<&AttributeValue> {
+        self.signal_attribute(message_id, signal_name, attr_name)
+            .or_else(|| self.attribute_default(attr_name))
     }
 }
 

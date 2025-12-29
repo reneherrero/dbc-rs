@@ -34,6 +34,7 @@ fn main() {
     let has_alloc = env::var("CARGO_FEATURE_ALLOC").is_ok();
     let has_heapless = env::var("CARGO_FEATURE_HEAPLESS").is_ok();
     let has_std = env::var("CARGO_FEATURE_STD").is_ok();
+    let has_attributes = env::var("CARGO_FEATURE_ATTRIBUTES").is_ok();
 
     // std includes alloc, so we only need to check if neither alloc nor heapless is enabled
     // Note: This check provides a better error message, but mayheap will also enforce this
@@ -91,10 +92,37 @@ fn main() {
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(512); // Default to 512 (power of 2, per-file limit for extended multiplexing entries)
 
+    // Attribute limits (only when attributes feature is enabled)
+    let (max_attribute_definitions, max_attribute_values, max_attribute_enum_values) =
+        if has_attributes {
+            let max_attribute_definitions = env::var("DBC_MAX_ATTRIBUTE_DEFINITIONS")
+                .ok()
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(256);
+
+            let max_attribute_values = env::var("DBC_MAX_ATTRIBUTE_VALUES")
+                .ok()
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(4096);
+
+            let max_attribute_enum_values = env::var("DBC_MAX_ATTRIBUTE_ENUM_VALUES")
+                .ok()
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(64);
+
+            (
+                Some(max_attribute_definitions),
+                Some(max_attribute_values),
+                Some(max_attribute_enum_values),
+            )
+        } else {
+            (None, None, None)
+        };
+
     // Validate that all values are powers of 2 when heapless feature is enabled
     // heapless::Vec, heapless::String, and heapless::FnvIndexMap require power-of-2 capacities
     if has_heapless {
-        let heapless_constants = [
+        let mut heapless_constants: Vec<(&str, usize, &str)> = vec![
             ("DBC_MAX_MESSAGES", max_messages, "MAX_MESSAGES"),
             (
                 "DBC_MAX_SIGNALS_PER_MESSAGE",
@@ -109,6 +137,25 @@ fn main() {
                 "MAX_EXTENDED_MULTIPLEXING",
             ),
         ];
+
+        // Add attribute constants only when feature is enabled
+        if let Some(val) = max_attribute_definitions {
+            heapless_constants.push((
+                "DBC_MAX_ATTRIBUTE_DEFINITIONS",
+                val,
+                "MAX_ATTRIBUTE_DEFINITIONS",
+            ));
+        }
+        if let Some(val) = max_attribute_values {
+            heapless_constants.push(("DBC_MAX_ATTRIBUTE_VALUES", val, "MAX_ATTRIBUTE_VALUES"));
+        }
+        if let Some(val) = max_attribute_enum_values {
+            heapless_constants.push((
+                "DBC_MAX_ATTRIBUTE_ENUM_VALUES",
+                val,
+                "MAX_ATTRIBUTE_ENUM_VALUES",
+            ));
+        }
 
         for (env_var, value, const_name) in heapless_constants.iter() {
             if !is_power_of_2(*value) {
@@ -134,14 +181,48 @@ fn main() {
     // Write the constants to a file in OUT_DIR
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = std::path::Path::new(&out_dir).join("limits.rs");
-    std::fs::write(
-               &dest_path,
-               format!(
-                   "#[allow(dead_code)]\npub const MAX_SIGNALS_PER_MESSAGE: usize = {};\n#[allow(dead_code)]\npub const MAX_MESSAGES: usize = {};\n#[allow(dead_code)]\npub const MAX_NODES: usize = {};\n#[allow(dead_code)]\npub const MAX_VALUE_DESCRIPTIONS: usize = {};\n#[allow(dead_code)]\npub const MAX_NAME_SIZE: usize = {};\n#[allow(dead_code)]\npub const MAX_EXTENDED_MULTIPLEXING: usize = {};",
-                   max_signals, max_messages, max_nodes, max_value_descriptions, max_name_size, max_extended_multiplexing
-               ),
-           )
-           .unwrap();
+
+    let mut limits_content = format!(
+        r#"#[allow(dead_code)]
+pub const MAX_SIGNALS_PER_MESSAGE: usize = {};
+#[allow(dead_code)]
+pub const MAX_MESSAGES: usize = {};
+#[allow(dead_code)]
+pub const MAX_NODES: usize = {};
+#[allow(dead_code)]
+pub const MAX_VALUE_DESCRIPTIONS: usize = {};
+#[allow(dead_code)]
+pub const MAX_NAME_SIZE: usize = {};
+#[allow(dead_code)]
+pub const MAX_EXTENDED_MULTIPLEXING: usize = {};
+"#,
+        max_signals,
+        max_messages,
+        max_nodes,
+        max_value_descriptions,
+        max_name_size,
+        max_extended_multiplexing
+    );
+
+    // Add attribute constants only when feature is enabled
+    if let (Some(attr_defs), Some(attr_vals), Some(attr_enums)) = (
+        max_attribute_definitions,
+        max_attribute_values,
+        max_attribute_enum_values,
+    ) {
+        limits_content.push_str(&format!(
+            r#"#[allow(dead_code)]
+pub const MAX_ATTRIBUTE_DEFINITIONS: usize = {};
+#[allow(dead_code)]
+pub const MAX_ATTRIBUTE_VALUES: usize = {};
+#[allow(dead_code)]
+pub const MAX_ATTRIBUTE_ENUM_VALUES: usize = {};
+"#,
+            attr_defs, attr_vals, attr_enums
+        ));
+    }
+
+    std::fs::write(&dest_path, limits_content).unwrap();
 
     // Rebuild if the environment variables change
     println!("cargo:rerun-if-env-changed=DBC_MAX_SIGNALS_PER_MESSAGE");
@@ -150,4 +231,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=DBC_MAX_VALUE_DESCRIPTIONS");
     println!("cargo:rerun-if-env-changed=DBC_MAX_NAME_SIZE");
     println!("cargo:rerun-if-env-changed=DBC_MAX_EXTENDED_MULTIPLEXING");
+    println!("cargo:rerun-if-env-changed=DBC_MAX_ATTRIBUTE_DEFINITIONS");
+    println!("cargo:rerun-if-env-changed=DBC_MAX_ATTRIBUTE_VALUES");
+    println!("cargo:rerun-if-env-changed=DBC_MAX_ATTRIBUTE_ENUM_VALUES");
 }

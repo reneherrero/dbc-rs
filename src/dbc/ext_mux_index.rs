@@ -33,6 +33,52 @@ pub struct ExtMuxIndex {
 
 impl ExtMuxIndex {
     /// Build an index from extended multiplexing entries.
+    ///
+    /// With alloc: uses sort + single-pass grouping for efficiency.
+    /// With heapless: uses simpler incremental approach.
+    #[cfg(feature = "alloc")]
+    pub fn build(entries: &[ExtendedMultiplexing]) -> Self {
+        if entries.is_empty() {
+            return Self { index: None };
+        }
+
+        // First pass: collect (key, index) pairs
+        let mut pairs: Vec<(IndexKey, usize), { MAX_INDEX_ENTRIES }> = Vec::new();
+        for (i, entry) in entries.iter().enumerate() {
+            let signal_name: Name = match Name::try_from(entry.signal_name()) {
+                Ok(name) => name,
+                Err(_) => continue,
+            };
+            let key = (entry.message_id(), signal_name);
+            let _ = pairs.push((key, i));
+        }
+
+        // Sort by key so same keys are adjacent (enables single-pass grouping)
+        pairs.as_mut_slice().sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Second pass: group adjacent entries with same key
+        let mut index = IndexMap::new();
+        let mut i = 0;
+        while i < pairs.len() {
+            let key = pairs[i].0.clone();
+            let mut indices = IndexValue::new();
+
+            // Collect all indices for this key
+            while i < pairs.len() && pairs[i].0 == key {
+                let _ = indices.push(pairs[i].1);
+                i += 1;
+            }
+
+            let _ = index.insert(key, indices);
+        }
+
+        Self { index: Some(index) }
+    }
+
+    /// Build an index from extended multiplexing entries (heapless version).
+    ///
+    /// Uses incremental insertion - simpler but O(n) per duplicate key.
+    #[cfg(not(feature = "alloc"))]
     pub fn build(entries: &[ExtendedMultiplexing]) -> Self {
         if entries.is_empty() {
             return Self { index: None };
@@ -41,10 +87,9 @@ impl ExtMuxIndex {
         let mut index = IndexMap::new();
 
         for (i, entry) in entries.iter().enumerate() {
-            // Try to get signal_name as Name
             let signal_name: Name = match Name::try_from(entry.signal_name()) {
                 Ok(name) => name,
-                Err(_) => continue, // Skip if name is too long
+                Err(_) => continue,
             };
 
             let key = (entry.message_id(), signal_name.clone());

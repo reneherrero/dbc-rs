@@ -173,6 +173,28 @@ impl<'a, T, const N: usize> IntoIterator for &'a Vec<T, N> {
     }
 }
 
+#[cfg(feature = "alloc")]
+impl<T, const N: usize> IntoIterator for Vec<T, N> {
+    type Item = T;
+    type IntoIter = alloc::vec::IntoIter<T>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+#[cfg(not(feature = "alloc"))]
+impl<T, const N: usize> IntoIterator for Vec<T, N> {
+    type Item = T;
+    type IntoIter = heapless::vec::IntoIter<T, N, usize>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl<T, const N: usize> FromIterator<T> for Vec<T, N> {
     fn from_iter<I>(iter: I) -> Self
     where

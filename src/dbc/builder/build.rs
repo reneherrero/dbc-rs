@@ -1,4 +1,6 @@
 use super::DbcBuilder;
+#[cfg(feature = "attributes")]
+use crate::dbc::{AttributeDefaultsMap, AttributeDefinitionsMap, AttributeValuesMap};
 use crate::{
     BitTiming, Dbc, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES, MAX_NAME_SIZE,
     Message, Nodes, Result, Version,
@@ -192,6 +194,20 @@ impl DbcBuilder {
             Some(&value_descriptions),
             Some(&extended_multiplexing_slice),
         )?;
+        #[cfg(feature = "attributes")]
+        return Ok(Dbc::new(
+            Some(version),
+            bit_timing,
+            nodes,
+            messages,
+            value_descriptions,
+            extended_multiplexing,
+            comment.map(|c| c.into()),
+            AttributeDefinitionsMap::default(),
+            AttributeDefaultsMap::default(),
+            AttributeValuesMap::default(),
+        ));
+        #[cfg(not(feature = "attributes"))]
         Ok(Dbc::new(
             Some(version),
             bit_timing,

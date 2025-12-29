@@ -33,18 +33,12 @@ impl Message {
             return 0;
         }
 
-        let signals = self.signals();
-        let count = signals.len().min(out.len());
-
-        for (i, out_val) in out.iter_mut().enumerate().take(count) {
-            if let Some(signal) = signals.at(i) {
-                // Use decode_raw which returns (raw_value, physical_value)
-                if let Ok((_, physical)) = signal.decode_raw(data) {
-                    *out_val = physical;
-                } else {
-                    *out_val = 0.0;
-                }
-            }
+        // Use zip to avoid redundant bounds checks - iterates min(signals, out) times
+        let mut count = 0;
+        for (out_val, signal) in out.iter_mut().zip(self.signals().iter()) {
+            // decode_raw returns (raw_value, physical_value)
+            *out_val = signal.decode_raw(data).map(|(_, p)| p).unwrap_or(0.0);
+            count += 1;
         }
 
         count
@@ -68,17 +62,11 @@ impl Message {
             return 0;
         }
 
-        let signals = self.signals();
-        let count = signals.len().min(out.len());
-
-        for (i, out_val) in out.iter_mut().enumerate().take(count) {
-            if let Some(signal) = signals.at(i) {
-                if let Ok((raw, _)) = signal.decode_raw(data) {
-                    *out_val = raw;
-                } else {
-                    *out_val = 0;
-                }
-            }
+        // Use zip to avoid redundant bounds checks
+        let mut count = 0;
+        for (out_val, signal) in out.iter_mut().zip(self.signals().iter()) {
+            *out_val = signal.decode_raw(data).map(|(r, _)| r).unwrap_or(0);
+            count += 1;
         }
 
         count

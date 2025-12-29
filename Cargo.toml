@@ -1,6 +1,6 @@
 [package]
 name = "dbc-rs"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["dbc-rs contributors"]
@@ -25,14 +25,15 @@ version = "0.4.1"
 optional = true
 
 [package.metadata.docs.rs]
-features = ["std"]
+features = ["std", "attributes"]
 
 [features]
-default = ["std"]
+default = ["std", "attributes"]
 alloc = []
 heapless = ["dep:heapless"]
 std = ["alloc"]
 embedded-can = ["dep:embedded-can"]
+attributes = []
 
 [[example]]
 name = "create_dbc"

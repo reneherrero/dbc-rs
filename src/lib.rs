@@ -36,6 +36,8 @@ extern crate std;
 #[cfg(all(feature = "alloc", not(feature = "heapless")))]
 extern crate alloc;
 
+#[cfg(feature = "attributes")]
+mod attribute;
 mod bit_timing;
 mod byte_order;
 mod compat;
@@ -59,6 +61,10 @@ mod macros;
 #[cfg(feature = "std")]
 mod fast_dbc;
 
+#[cfg(feature = "attributes")]
+pub use attribute::{
+    AttributeDefinition, AttributeObjectType, AttributeTarget, AttributeValue, AttributeValueType,
+};
 pub use bit_timing::BitTiming;
 pub use byte_order::ByteOrder;
 pub use dbc::{Dbc, DecodedSignal};
@@ -72,6 +78,8 @@ pub use value_descriptions::ValueDescriptions;
 pub use version::Version;
 
 /// Builders
+#[cfg(all(feature = "std", feature = "attributes"))]
+pub use attribute::AttributeDefinitionBuilder;
 #[cfg(feature = "std")]
 pub use bit_timing::BitTimingBuilder;
 #[cfg(feature = "std")]
@@ -131,64 +139,6 @@ pub(crate) const SIG_VALTYPE_: &str = "SIG_VALTYPE_";
 pub(crate) const EV_: &str = "EV_";
 pub(crate) const BO_TX_BU_: &str = "BO_TX_BU_";
 
-// Additional DBC keywords
-pub(crate) const VECTOR_INDEPENDENT_SIG_MSG: &str = "VECTOR__INDEPENDENT_SIG_MSG";
+// Additional keywords used in code
 pub(crate) const VECTOR_XXX: &str = "Vector__XXX";
-pub(crate) const BA_DEF_DEF_REL_: &str = "BA_DEF_DEF_REL_";
-pub(crate) const BA_DEF_SGTYPE_: &str = "BA_DEF_SGTYPE_";
-pub(crate) const SIGTYPE_VALTYPE_: &str = "SIGTYPE_VALTYPE_";
-pub(crate) const ENVVAR_DATA_: &str = "ENVVAR_DATA_";
-pub(crate) const SIG_TYPE_REF_: &str = "SIG_TYPE_REF_";
-pub(crate) const NS_DESC_: &str = "NS_DESC_";
-pub(crate) const BA_DEF_REL_: &str = "BA_DEF_REL_";
-pub(crate) const BA_SGTYPE_: &str = "BA_SGTYPE_";
-pub(crate) const SGTYPE_VAL_: &str = "SGTYPE_VAL_";
-pub(crate) const BU_SG_REL_: &str = "BU_SG_REL_";
-pub(crate) const BU_EV_REL_: &str = "BU_EV_REL_";
-pub(crate) const BU_BO_REL_: &str = "BU_BO_REL_";
 pub(crate) const SG_MUL_VAL_: &str = "SG_MUL_VAL_";
-pub(crate) const BA_REL_: &str = "BA_REL_";
-pub(crate) const CAT_DEF_: &str = "CAT_DEF_";
-pub(crate) const EV_DATA_: &str = "EV_DATA_";
-pub(crate) const CAT_: &str = "CAT_";
-pub(crate) const FILTER: &str = "FILTER";
-
-#[cfg_attr(not(feature = "std"), allow(dead_code))]
-const DBC_KEYWORDS: &[&str] = &[
-    VECTOR_INDEPENDENT_SIG_MSG,
-    VECTOR_XXX,
-    BA_DEF_DEF_REL_,
-    BA_DEF_SGTYPE_,
-    SIGTYPE_VALTYPE_,
-    ENVVAR_DATA_,
-    SIG_TYPE_REF_,
-    NS_DESC_,
-    BA_DEF_REL_,
-    BA_SGTYPE_,
-    SGTYPE_VAL_,
-    VAL_TABLE_,
-    SIG_GROUP_,
-    SIG_VALTYPE_,
-    BO_TX_BU_,
-    BU_SG_REL_,
-    BU_EV_REL_,
-    BU_BO_REL_,
-    SG_MUL_VAL_,
-    BA_DEF_DEF_,
-    BA_DEF_,
-    BA_REL_,
-    CAT_DEF_,
-    EV_DATA_,
-    BA_,
-    VAL_,
-    CM_,
-    CAT_,
-    NS_,
-    BS_,
-    BU_,
-    BO_,
-    SG_,
-    EV_,
-    VERSION,
-    FILTER,
-];

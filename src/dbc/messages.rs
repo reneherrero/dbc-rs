@@ -18,6 +18,7 @@ pub struct Messages {
 
 impl Messages {
     /// Create Messages from a slice of messages by cloning them
+    #[allow(dead_code)]
     pub(crate) fn new(messages: &[Message]) -> Result<Self> {
         if let Some(err) = crate::error::check_max_limit(
             messages.len(),
@@ -27,15 +28,27 @@ impl Messages {
             return Err(err);
         }
         let messages_vec: Vec<Message, { MAX_MESSAGES }> = messages.iter().cloned().collect();
+        Self::from_vec(messages_vec)
+    }
+
+    /// Create Messages from an owned Vec (avoids cloning)
+    pub(crate) fn from_vec(messages: Vec<Message, { MAX_MESSAGES }>) -> Result<Self> {
+        if let Some(err) = crate::error::check_max_limit(
+            messages.len(),
+            MAX_MESSAGES,
+            Error::message(Error::NODES_TOO_MANY),
+        ) {
+            return Err(err);
+        }
 
         // Build index for fast lookup (if features allow)
         #[cfg(feature = "heapless")]
-        let id_index = Self::build_heapless_index(&messages_vec);
+        let id_index = Self::build_heapless_index(&messages);
         #[cfg(all(feature = "alloc", not(feature = "heapless")))]
-        let sorted_indices = Self::build_sorted_index(&messages_vec);
+        let sorted_indices = Self::build_sorted_index(&messages);
 
         Ok(Self {
-            messages: messages_vec,
+            messages,
             #[cfg(feature = "heapless")]
             id_index,
             #[cfg(all(feature = "alloc", not(feature = "heapless")))]

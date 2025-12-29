@@ -160,6 +160,21 @@ impl Error {
     pub const ENCODING_SIGNAL_NOT_FOUND: &'static str = lang::ENCODING_SIGNAL_NOT_FOUND;
     pub const ENCODING_VALUE_OUT_OF_RANGE: &'static str = lang::ENCODING_VALUE_OUT_OF_RANGE;
     pub const ENCODING_VALUE_OVERFLOW: &'static str = lang::ENCODING_VALUE_OVERFLOW;
+
+    // Attribute error constants (no_std)
+    pub const ATTRIBUTE_DEFINITIONS_TOO_MANY: &'static str = lang::ATTRIBUTE_DEFINITIONS_TOO_MANY;
+    pub const ATTRIBUTE_VALUES_TOO_MANY: &'static str = lang::ATTRIBUTE_VALUES_TOO_MANY;
+    pub const ATTRIBUTE_ENUM_VALUES_TOO_MANY: &'static str = lang::ATTRIBUTE_ENUM_VALUES_TOO_MANY;
+    pub const ATTRIBUTE_DEFINITION_NOT_FOUND: &'static str = lang::ATTRIBUTE_DEFINITION_NOT_FOUND;
+    pub const ATTRIBUTE_VALUE_TYPE_MISMATCH: &'static str = lang::ATTRIBUTE_VALUE_TYPE_MISMATCH;
+    pub const ATTRIBUTE_VALUE_OUT_OF_RANGE: &'static str = lang::ATTRIBUTE_VALUE_OUT_OF_RANGE;
+    pub const ATTRIBUTE_ENUM_VALUE_INVALID: &'static str = lang::ATTRIBUTE_ENUM_VALUE_INVALID;
+
+    // Attribute error constants (std-only)
+    #[cfg(feature = "std")]
+    pub const ATTRIBUTE_NAME_REQUIRED: &'static str = lang::ATTRIBUTE_NAME_REQUIRED;
+    #[cfg(feature = "std")]
+    pub const ATTRIBUTE_VALUE_TYPE_REQUIRED: &'static str = lang::ATTRIBUTE_VALUE_TYPE_REQUIRED;
 }
 
 /// Result type alias for operations that can return an `Error`.

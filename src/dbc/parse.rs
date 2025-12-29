@@ -2,8 +2,17 @@ use crate::{
     BitTiming, Dbc, Error, ExtendedMultiplexing, MAX_EXTENDED_MULTIPLEXING, MAX_MESSAGES,
     MAX_NODES, MAX_SIGNALS_PER_MESSAGE, Message, Nodes, Parser, Result, Signal, ValueDescriptions,
     Version,
-    compat::{Comment, Name, ValueDescEntries, Vec},
+    compat::{BTreeMap, Comment, Name, ValueDescEntries, Vec},
     dbc::{Messages, Validate, ValueDescriptionsMap},
+};
+#[cfg(feature = "attributes")]
+use crate::{
+    MAX_ATTRIBUTE_DEFINITIONS, MAX_ATTRIBUTE_VALUES,
+    attribute::{
+        AttributeDefinition, AttributeTarget, AttributeValue,
+        parse::{parse_attribute_assignment, parse_attribute_default},
+    },
+    dbc::{AttributeDefaultsMap, AttributeDefinitionsMap, AttributeValuesMap},
 };
 
 impl Dbc {
@@ -63,6 +72,22 @@ impl Dbc {
         let mut node_comments_buffer: NodeCommentBuffer = NodeCommentBuffer::new();
         let mut message_comments_buffer: MessageCommentBuffer = MessageCommentBuffer::new();
         let mut signal_comments_buffer: SignalCommentBuffer = SignalCommentBuffer::new();
+
+        // Attribute buffers - BA_DEF_, BA_DEF_DEF_, BA_ entries can appear anywhere
+        #[cfg(feature = "attributes")]
+        type AttrDefBuffer = Vec<AttributeDefinition, { MAX_ATTRIBUTE_DEFINITIONS }>;
+        #[cfg(feature = "attributes")]
+        type AttrDefaultBuffer = Vec<(Name, AttributeValue), { MAX_ATTRIBUTE_DEFINITIONS }>;
+        #[cfg(feature = "attributes")]
+        type AttrValueBuffer =
+            Vec<(Name, AttributeTarget, AttributeValue), { MAX_ATTRIBUTE_VALUES }>;
+
+        #[cfg(feature = "attributes")]
+        let mut attribute_definitions_buffer: AttrDefBuffer = AttrDefBuffer::new();
+        #[cfg(feature = "attributes")]
+        let mut attribute_defaults_buffer: AttrDefaultBuffer = AttrDefaultBuffer::new();
+        #[cfg(feature = "attributes")]
+        let mut attribute_values_buffer: AttrValueBuffer = AttrValueBuffer::new();
 
         loop {
             // Skip comments (lines starting with //)
@@ -133,13 +158,46 @@ impl Dbc {
                     parser.skip_to_end_of_line();
                     continue;
                 }
-                VAL_TABLE_ | BA_DEF_ | BA_DEF_DEF_ | BA_ | SIG_GROUP_ | SIG_VALTYPE_ | EV_
-                | BO_TX_BU_ => {
+                #[cfg(feature = "attributes")]
+                BA_DEF_ => {
+                    // Parse attribute definition: BA_DEF_ [object_type] "attr_name" value_type ;
+                    let _ = parser.expect(BA_DEF_.as_bytes()).ok();
+                    if let Some(def) = AttributeDefinition::parse(&mut parser) {
+                        let _ = attribute_definitions_buffer.push(def);
+                    }
+                    parser.skip_to_end_of_line();
+                    continue;
+                }
+                #[cfg(feature = "attributes")]
+                BA_DEF_DEF_ => {
+                    // Parse attribute default: BA_DEF_DEF_ "attr_name" value ;
+                    let _ = parser.expect(BA_DEF_DEF_.as_bytes()).ok();
+                    if let Some((name, value)) = parse_attribute_default(&mut parser) {
+                        let _ = attribute_defaults_buffer.push((name, value));
+                    }
+                    parser.skip_to_end_of_line();
+                    continue;
+                }
+                #[cfg(feature = "attributes")]
+                BA_ => {
+                    // Parse attribute value: BA_ "attr_name" [object_ref] value ;
+                    let _ = parser.expect(BA_.as_bytes()).ok();
+                    if let Some((name, target, value)) = parse_attribute_assignment(&mut parser) {
+                        let _ = attribute_values_buffer.push((name, target, value));
+                    }
+                    parser.skip_to_end_of_line();
+                    continue;
+                }
+                #[cfg(not(feature = "attributes"))]
+                BA_DEF_ | BA_DEF_DEF_ | BA_ => {
+                    // Skip attribute entries when feature is disabled
+                    let _ = parser.expect(keyword.as_bytes()).ok();
+                    parser.skip_to_end_of_line();
+                    continue;
+                }
+                VAL_TABLE_ | SIG_GROUP_ | SIG_VALTYPE_ | EV_ | BO_TX_BU_ => {
                     // TODO: These DBC sections are recognized but not parsed:
                     //   VAL_TABLE_   - Global value tables (rarely used)
-                    //   BA_DEF_      - Attribute definitions (common, high priority)
-                    //   BA_DEF_DEF_  - Attribute defaults (common, high priority)
-                    //   BA_          - Attribute values (common, high priority)
                     //   SIG_GROUP_   - Signal groups (rarely used)
                     //   SIG_VALTYPE_ - Signal extended value types: float/double (medium priority)
                     //   EV_          - Environment variables (rarely used)
@@ -483,9 +541,9 @@ impl Dbc {
         // Allow empty nodes (DBC spec allows empty BU_: line)
         let mut nodes = nodes.unwrap_or_default();
 
-        // Apply node comments to nodes
-        for (node_name, comment) in node_comments_buffer.iter() {
-            nodes.set_node_comment(node_name.as_str(), comment.clone());
+        // Apply node comments to nodes (consume buffer to avoid cloning)
+        for (node_name, comment) in node_comments_buffer {
+            nodes.set_node_comment(node_name.as_str(), comment);
         }
 
         // If no version was parsed, default to empty version
@@ -495,55 +553,84 @@ impl Dbc {
             Version::parse(&mut parser).ok()
         });
 
-        // Build value descriptions map for storage in Dbc
+        // Build value descriptions map for storage in Dbc (consume buffer to avoid cloning)
         let value_descriptions_map = {
-            let mut map: crate::compat::BTreeMap<
-                (Option<u32>, Name),
-                ValueDescriptions,
-                { MAX_MESSAGES },
-            > = crate::compat::BTreeMap::new();
-            for (message_id, signal_name, entries) in value_descriptions_buffer.iter() {
-                let key = (*message_id, signal_name.clone());
-                let value_descriptions = ValueDescriptions::new(entries.clone());
+            let mut map: BTreeMap<(Option<u32>, Name), ValueDescriptions, { MAX_MESSAGES }> =
+                BTreeMap::new();
+            for (message_id, signal_name, entries) in value_descriptions_buffer {
+                let key = (message_id, signal_name);
+                let value_descriptions = ValueDescriptions::new(entries);
                 let _ = map.insert(key, value_descriptions);
             }
             ValueDescriptionsMap::new(map)
         };
 
-        // Apply comments to messages and signals
+        // Build attribute maps from buffers (consume buffers to avoid cloning)
+        #[cfg(feature = "attributes")]
+        let (attribute_definitions, attribute_defaults, attribute_values) = {
+            use crate::attribute::AttributeDefinitions;
+
+            let attribute_definitions = AttributeDefinitionsMap::from_vec({
+                let mut defs: AttributeDefinitions = AttributeDefinitions::new();
+                for def in attribute_definitions_buffer {
+                    let _ = defs.push(def);
+                }
+                defs
+            });
+
+            let attribute_defaults = AttributeDefaultsMap::from_map({
+                let mut map: BTreeMap<Name, AttributeValue, { MAX_ATTRIBUTE_DEFINITIONS }> =
+                    BTreeMap::new();
+                for (name, value) in attribute_defaults_buffer {
+                    let _ = map.insert(name, value);
+                }
+                map
+            });
+
+            let attribute_values = AttributeValuesMap::from_map({
+                let mut map: BTreeMap<
+                    (Name, AttributeTarget),
+                    AttributeValue,
+                    { MAX_ATTRIBUTE_VALUES },
+                > = BTreeMap::new();
+                for (name, target, value) in attribute_values_buffer {
+                    let _ = map.insert((name, target), value);
+                }
+                map
+            });
+
+            (attribute_definitions, attribute_defaults, attribute_values)
+        };
+
+        // Apply comments to messages and signals (consume buffers to avoid cloning)
         // Message comments are applied by matching message_id
-        for (message_id, comment) in message_comments_buffer.iter() {
+        for (message_id, comment) in message_comments_buffer {
             for msg in messages_buffer.iter_mut() {
-                if msg.id() == *message_id || msg.id_with_flag() == *message_id {
-                    msg.set_comment(comment.clone());
+                if msg.id() == message_id || msg.id_with_flag() == message_id {
+                    msg.set_comment(comment);
                     break;
                 }
             }
         }
 
         // Signal comments are applied by matching (message_id, signal_name)
-        for (message_id, signal_name, comment) in signal_comments_buffer.iter() {
+        for (message_id, signal_name, comment) in signal_comments_buffer {
             for msg in messages_buffer.iter_mut() {
-                if msg.id() == *message_id || msg.id_with_flag() == *message_id {
+                if msg.id() == message_id || msg.id_with_flag() == message_id {
                     if let Some(signal) = msg.signals_mut().find_mut(signal_name.as_str()) {
-                        signal.set_comment(comment.clone());
+                        signal.set_comment(comment);
                     }
                     break;
                 }
             }
         }
 
-        // Convert messages buffer to slice for validation and construction
-        let messages_slice: &[Message] = messages_buffer.as_slice();
-        let extended_multiplexing_slice: &[ExtendedMultiplexing] =
-            extended_multiplexing_buffer.as_slice();
-
         // Validate messages (duplicate IDs, sender in nodes, etc.)
         Validate::validate(
             &nodes,
-            messages_slice,
+            messages_buffer.as_slice(),
             Some(&value_descriptions_map),
-            Some(extended_multiplexing_slice),
+            Some(extended_multiplexing_buffer.as_slice()),
         )
         .map_err(|e| {
             crate::error::map_val_error(e, Error::message, || {
@@ -551,9 +638,24 @@ impl Dbc {
             })
         })?;
 
-        // Construct directly (validation already done)
-        let messages = Messages::new(messages_slice)?;
+        // Construct directly from owned buffer (avoids cloning all messages)
+        let messages = Messages::from_vec(messages_buffer)?;
 
+        #[cfg(feature = "attributes")]
+        return Ok(Dbc::new(
+            version,
+            bit_timing,
+            nodes,
+            messages,
+            value_descriptions_map,
+            extended_multiplexing_buffer,
+            db_comment,
+            attribute_definitions,
+            attribute_defaults,
+            attribute_values,
+        ));
+
+        #[cfg(not(feature = "attributes"))]
         Ok(Dbc::new(
             version,
             bit_timing,

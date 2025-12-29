@@ -81,3 +81,15 @@ pub const ENCODING_ERROR_PREFIX: &str = "Encoding error";
 pub const ENCODING_SIGNAL_NOT_FOUND: &str = "Signal not found in message";
 pub const ENCODING_VALUE_OUT_OF_RANGE: &str = "Physical value outside signal min/max range";
 pub const ENCODING_VALUE_OVERFLOW: &str = "Encoded value exceeds signal bit length";
+
+// Attribute error messages
+pub const ATTRIBUTE_DEFINITIONS_TOO_MANY: &str =
+    "Too many attribute definitions: maximum allowed is 256 per DBC file";
+pub const ATTRIBUTE_VALUES_TOO_MANY: &str =
+    "Too many attribute values: maximum allowed is 4096 per DBC file";
+pub const ATTRIBUTE_ENUM_VALUES_TOO_MANY: &str =
+    "Too many enum values in attribute definition: maximum allowed is 64";
+pub const ATTRIBUTE_DEFINITION_NOT_FOUND: &str = "Attribute definition not found";
+pub const ATTRIBUTE_VALUE_TYPE_MISMATCH: &str = "Attribute value type does not match definition";
+pub const ATTRIBUTE_VALUE_OUT_OF_RANGE: &str = "Attribute value outside defined range";
+pub const ATTRIBUTE_ENUM_VALUE_INVALID: &str = "Invalid enum value for attribute";
