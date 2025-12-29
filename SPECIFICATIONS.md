@@ -22,6 +22,12 @@
 16. [Extended Multiplexing](#extended-multiplexing)
 17. [Common Attributes](#common-attributes)
 18. [Examples](#examples)
+19. [Validation and Error Checking](#validation-and-error-checking)
+20. [Best Practices](#best-practices)
+21. [Common Pitfalls](#common-pitfalls)
+22. [Tools and Parsers](#tools-and-parsers)
+23. [Glossary](#glossary)
+24. [References](#references)
 
 ---
 
@@ -140,7 +146,7 @@ DBC_file =
 - **signal_type_refs** - Signal type references
 - **signal_groups** - Signal groupings
 
-### Rarely Used Sections
+### Obsolete Sections
 
 - **category_definitions** - Defined for completeness but rarely used in practice
 - **categories** - Defined for completeness but rarely used in practice
