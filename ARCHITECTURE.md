@@ -22,6 +22,7 @@ This document describes the internal architecture of the `dbc-rs` library.
 | `alloc` | ❌ | Global allocator | Heap-allocated `Vec`/`String` |
 | `heapless` | ❌ | — | Stack-allocated bounded collections |
 | `embedded-can` | ❌ | — | `decode_frame()` method |
+| `attributes` | ✅ | — | BA_DEF_, BA_DEF_DEF_, BA_ parsing |
 
 **Dependency graph:**
 ```
@@ -44,7 +45,7 @@ embedded-can ─────────────► Frame decoding (one dep:
 src/
 ├── lib.rs              # Crate root, public API exports
 ├── compat/                 # Abstraction layer for alloc/heapless
-│   ├── mod.rs    
+│   ├── mod.rs
 │   ├── string.rs           # String<N> wrapper
 │   └── vec.rs              # Vec<T, N> wrapper
 ├── parser/                 # Hand-written zero-copy parser
@@ -63,7 +64,18 @@ src/
 │   ├── std.rs              # std only features
 │   ├── validate.rs         # Validation logic
 │   ├── messages.rs         # Messages collection with indexing
+│   ├── attributes_map.rs   # Attribute storage wrappers
 │   └── builder/            # DbcBuilder [std only]
+├── attribute/              # BA_DEF_, BA_DEF_DEF_, BA_ support
+│   ├── mod.rs              # Type definitions
+│   ├── impls.rs            # Accessor methods
+│   ├── parse.rs            # Parser implementations
+│   ├── std.rs              # std-only Display/serialization
+│   └── builder/            # AttributeDefinitionBuilder [std only]
+├── fast_dbc/               # High-performance DBC wrapper
+│   ├── mod.rs              # FastDbc struct and public API
+│   ├── decode.rs           # Pre-computed decode structures
+│   └── hasher.rs           # FxHasher for fast lookups
 ├── message/                # CAN message entity
 ├── signal/                 # Signal entity
 ├── nodes/                  # Network nodes (ECUs)
@@ -180,6 +192,9 @@ The `build.rs` script:
 | `DBC_MAX_VALUE_DESCRIPTIONS` | 64 | Maximum value descriptions |
 | `DBC_MAX_NAME_SIZE` | 32 | Maximum identifier length |
 | `DBC_MAX_EXTENDED_MULTIPLEXING` | 512 | Maximum SG_MUL_VAL_ entries |
+| `DBC_MAX_ATTRIBUTE_DEFINITIONS` | 256 | Maximum BA_DEF_ entries |
+| `DBC_MAX_ATTRIBUTE_VALUES` | 4096 | Maximum BA_ entries |
+| `DBC_MAX_ATTRIBUTE_ENUM_VALUES` | 64 | Maximum enum values per attribute |
 
 ## Message Lookup Optimization
 

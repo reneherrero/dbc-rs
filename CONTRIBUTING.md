@@ -167,7 +167,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed module structure, design pri
 
 ### High Priority
 
-- **Attribute support** (BA_DEF_, BA_DEF_DEF_, BA_) - commonly used in real DBC files
 - **Signal value types** (SIG_VALTYPE_) - float/double signal support
 - Performance optimizations
 - More comprehensive test coverage

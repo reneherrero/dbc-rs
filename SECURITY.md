@@ -1,7 +1,7 @@
 # Security Audit Report
 
-**Date**: 2025-12-25
-**Version**: 0.2.0
+**Date**: 2025-12-29
+**Version**: 0.4.0
 **Overall Security Rating**: 🟢 **EXCELLENT** (9.5/10)
 
 ## Executive Summary
@@ -45,6 +45,9 @@ All limits are configurable via environment variables (DBC_MAX_*) at build time:
 - Maximum 64 value descriptions per signal (DBC_MAX_VALUE_DESCRIPTIONS)
 - Maximum 32 characters for identifiers (DBC_MAX_NAME_SIZE)
 - Maximum 512 extended multiplexing entries (DBC_MAX_EXTENDED_MULTIPLEXING)
+- Maximum 256 attribute definitions (DBC_MAX_ATTRIBUTE_DEFINITIONS)
+- Maximum 4,096 attribute values (DBC_MAX_ATTRIBUTE_VALUES)
+- Maximum 64 enum values per attribute (DBC_MAX_ATTRIBUTE_ENUM_VALUES)
 
 ## Resolved Security Issues
 
