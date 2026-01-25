@@ -32,7 +32,6 @@ impl Signal {
                 }
             }
             ByteOrder::BigEndian => {
-                print!("Big Endian Detected... ");
                 // 1. Convert DBC start_bit to a linear index (0-63)
                 // For Motorola, the DBC start_bit is usually the MSB.
                 let byte_index = start_bit / 8;
