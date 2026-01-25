@@ -32,9 +32,11 @@ impl Signal {
                 }
             }
             ByteOrder::BigEndian => {
+                print!("Big Endian Detected... ");
                 // Motorola: start_bit is the MSB.
                 // We need to ensure the signal doesn't underflow bit 0 of the frame
                 if length - 1 > start_bit {
+                     print!("fail one");
                      return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
                 }
 
@@ -48,6 +50,7 @@ impl Signal {
                 let byte_b = last_bit / 8;
 
                 if byte_a >= data.len() || byte_b >= data.len() {
+                    print!("faile two");
                     return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
                 }
             }
