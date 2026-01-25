@@ -1,5 +1,5 @@
 use super::Signal;
-use crate::{Error, Result};
+use crate::{Error, Result, ByteOrder};
 
 impl Signal {
     /// Decode the signal and return both raw and physical values in a single pass.
@@ -20,11 +20,39 @@ impl Signal {
     pub(crate) fn decode_raw(&self, data: &[u8]) -> Result<(i64, f64)> {
         let start_bit = self.start_bit as usize;
         let length = self.length as usize;
-        let end_byte = (start_bit + length - 1) / 8;
 
-        if end_byte >= data.len() {
-            return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+        match self.byte_order {
+            ByteOrder::LittleEndian => {
+                // Intel: Sequential counting upwards
+                let end_bit = start_bit + length - 1;
+                let end_byte = end_bit / 8;
+
+                if end_byte >= data.len() {
+                    return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+                }
+            }
+            ByteOrder::BigEndian => {
+                // Motorola: start_bit is the MSB.
+                // We need to ensure the signal doesn't underflow bit 0 of the frame
+                if length - 1 > start_bit {
+                     return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+                }
+
+                // In Motorola, the bits traverse "backwards" in bit index
+                // but can span multiple bytes.
+                let last_bit = start_bit - (length - 1);
+
+                // Find the byte range. Note: start_bit might be in a higher
+                // byte index than last_bit or vice versa depending on DBC convention.
+                let byte_a = start_bit / 8;
+                let byte_b = last_bit / 8;
+
+                if byte_a >= data.len() || byte_b >= data.len() {
+                    return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+                }
+            }
         }
+        
 
         let raw_bits = self.byte_order.extract_bits(data, start_bit, length);
 
