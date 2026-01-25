@@ -1,5 +1,5 @@
 use super::Signal;
-use crate::{Error, Result};
+use crate::{Error, Result, ByteOrder};
 
 impl Signal {
     /// Decode the signal and return both raw and physical values in a single pass.
@@ -20,11 +20,34 @@ impl Signal {
     pub(crate) fn decode_raw(&self, data: &[u8]) -> Result<(i64, f64)> {
         let start_bit = self.start_bit as usize;
         let length = self.length as usize;
-        let end_byte = (start_bit + length - 1) / 8;
 
-        if end_byte >= data.len() {
-            return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+        match self.byte_order {
+            ByteOrder::LittleEndian => {
+                // Intel: Sequential counting upwards
+                let end_bit = start_bit + length - 1;
+                let end_byte = end_bit / 8;
+
+                if end_byte >= data.len() {
+                    return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+                }
+            }
+            ByteOrder::BigEndian => {
+                // 1. Convert DBC start_bit to a linear index (0-63)
+                // For Motorola, the DBC start_bit is usually the MSB.
+                let byte_index = start_bit / 8;
+                let bit_in_byte = start_bit % 8;
+                let linear_start_bit = (byte_index * 8) + (7 - bit_in_byte); // Common Motorola conversion
+
+                // 2. A Motorola signal "grows" into higher linear bit indices 
+                // even though it's moving to "lower" bit significance.
+                let linear_end_bit = linear_start_bit + length - 1;
+
+                if (linear_end_bit / 8) >= data.len() {
+                    return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
+                }  
+            }
         }
+        
 
         let raw_bits = self.byte_order.extract_bits(data, start_bit, length);
 
