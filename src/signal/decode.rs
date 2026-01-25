@@ -33,26 +33,19 @@ impl Signal {
             }
             ByteOrder::BigEndian => {
                 print!("Big Endian Detected... ");
-                // Motorola: start_bit is the MSB.
-                // We need to ensure the signal doesn't underflow bit 0 of the frame
-                if length - 1 > start_bit {
-                     print!("fail one");
-                     return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
-                }
+                // 1. Convert DBC start_bit to a linear index (0-63)
+                // For Motorola, the DBC start_bit is usually the MSB.
+                let byte_index = start_bit / 8;
+                let bit_in_byte = start_bit % 8;
+                let linear_start_bit = (byte_index * 8) + (7 - bit_in_byte); // Common Motorola conversion
 
-                // In Motorola, the bits traverse "backwards" in bit index
-                // but can span multiple bytes.
-                let last_bit = start_bit - (length - 1);
+                // 2. A Motorola signal "grows" into higher linear bit indices 
+                // even though it's moving to "lower" bit significance.
+                let linear_end_bit = linear_start_bit + length - 1;
 
-                // Find the byte range. Note: start_bit might be in a higher
-                // byte index than last_bit or vice versa depending on DBC convention.
-                let byte_a = start_bit / 8;
-                let byte_b = last_bit / 8;
-
-                if byte_a >= data.len() || byte_b >= data.len() {
-                    print!("faile two");
+                if (linear_end_bit / 8) >= data.len() {
                     return Err(Error::Decoding(Error::SIGNAL_EXTENDS_BEYOND_DATA));
-                }
+                }  
             }
         }
         
